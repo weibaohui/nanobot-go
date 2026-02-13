@@ -665,12 +665,21 @@ var indexHTML = `<!DOCTYPE html>
         let connected = false;
         let streamingMessage = null;
         let streamingContent = '';
+        let isComposing = false; // 输入法组合状态
         const messagesDiv = document.getElementById('chatMessages');
         const chatInput = document.getElementById('chatInput');
         const sendButton = document.getElementById('sendButton');
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
         const typingIndicator = document.getElementById('typingIndicator');
+
+        // 监听输入法组合事件
+        chatInput.addEventListener('compositionstart', function() {
+            isComposing = true;
+        });
+        chatInput.addEventListener('compositionend', function() {
+            isComposing = false;
+        });
 
         // 自动调整输入框高度
         chatInput.addEventListener('input', function() {
@@ -896,6 +905,10 @@ var indexHTML = `<!DOCTYPE html>
         }
 
         function handleKeyDown(event) {
+            // 如果正在输入法组合中（如选中文本），不处理回车
+            if (isComposing) {
+                return;
+            }
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
                 sendMessage();
