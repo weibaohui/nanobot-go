@@ -467,10 +467,19 @@ func loadConfigAndWorkspace(logger *zap.Logger) (*config.Config, string) {
 func loadConfig(configPath, workspace string) (*config.Config, error) {
 	path := configPath
 	if path == "" {
+		// 获取用户主目录
+		homeDir, _ := os.UserHomeDir()
+
 		defaultPaths := []string{
 			filepath.Join(workspace, "nanobot.json"),
+			filepath.Join(workspace, "config.json"),
 			filepath.Join(workspace, "config", "nanobot.json"),
 			filepath.Join(workspace, ".nanobot", "config.json"),
+		}
+
+		// 添加用户主目录下的配置路径
+		if homeDir != "" {
+			defaultPaths = append(defaultPaths, filepath.Join(homeDir, ".nanobot", "config.json"))
 		}
 
 		for _, p := range defaultPaths {
