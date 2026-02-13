@@ -486,6 +486,6 @@ func (l *Loop) GetModeSelector() *eino_adapter.ModeSelector {
 }
 
 // GetADKAgent returns the ADK agent
-func (l *Loop) GetADKAgent() *eino_adapter.ChatModelAgent {
-	return nil
+func (l *Loop) GetADKAgent() *adk.ChatModelAgent {
+	return l.adkAgent
 }
