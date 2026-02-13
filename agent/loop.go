@@ -8,6 +8,7 @@ import (
 	"github.com/weibaohui/nanobot-go/agent/tools"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/cron"
+	einoadapter "github.com/weibaohui/nanobot-go/eino_adapter"
 	"github.com/weibaohui/nanobot-go/providers"
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
@@ -30,6 +31,10 @@ type Loop struct {
 	subagents           *SubagentManager
 	running             bool
 	logger              *zap.Logger
+
+	// Plan-Execute mode support
+	planAgent *einoadapter.PlanExecuteAgent
+	selector  *einoadapter.ModeSelector
 }
 
 // NewLoop 创建代理循环
@@ -162,6 +167,12 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 		zap.String("内容", preview),
 	)
 
+	// Check if we should use plan mode for complex tasks
+	if l.planAgent != nil && l.selector != nil && l.selector.ShouldUsePlanMode(msg.Content) {
+		l.logger.Info("使用计划执行模式处理复杂任务")
+		return l.processWithPlan(ctx, msg)
+	}
+
 	// 获取或创建会话
 	sessionKey := msg.SessionKey()
 	sess := l.sessions.GetOrCreate(sessionKey)
@@ -241,6 +252,24 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 	l.sessions.Save(sess)
 
 	return bus.NewOutboundMessage(msg.Channel, msg.ChatID, finalContent), nil
+}
+
+// processWithPlan 使用计划执行模式处理复杂任务
+func (l *Loop) processWithPlan(ctx context.Context, msg *bus.InboundMessage) (*bus.OutboundMessage, error) {
+	// 使用计划执行代理处理
+	response, err := l.planAgent.Execute(ctx, msg.Content)
+	if err != nil {
+		return nil, fmt.Errorf("计划执行失败: %w", err)
+	}
+
+	// 保存会话
+	sessionKey := msg.SessionKey()
+	sess := l.sessions.GetOrCreate(sessionKey)
+	sess.AddMessage("user", msg.Content)
+	sess.AddMessage("assistant", response)
+	l.sessions.Save(sess)
+
+	return bus.NewOutboundMessage(msg.Channel, msg.ChatID, response), nil
 }
 
 // processSystemMessage 处理系统消息
@@ -353,4 +382,38 @@ func (l *Loop) buildToolCallDicts(toolCalls []providers.ToolCallRequest) []map[s
 		})
 	}
 	return dicts
+}
+
+// GetTools returns all registered tools as a slice
+func (l *Loop) GetTools() []tools.Tool {
+	defs := l.tools.GetDefinitions()
+	result := make([]tools.Tool, 0, len(defs))
+	for _, def := range defs {
+		if name, ok := def["name"].(string); ok {
+			if t := l.tools.Get(name); t != nil {
+				result = append(result, t)
+			}
+		}
+	}
+	return result
+}
+
+// SetPlanAgent sets the plan-execute agent for complex task handling
+func (l *Loop) SetPlanAgent(planAgent *einoadapter.PlanExecuteAgent) {
+	l.planAgent = planAgent
+}
+
+// SetModeSelector sets the mode selector for automatic mode switching
+func (l *Loop) SetModeSelector(selector *einoadapter.ModeSelector) {
+	l.selector = selector
+}
+
+// GetPlanAgent returns the plan-execute agent
+func (l *Loop) GetPlanAgent() *einoadapter.PlanExecuteAgent {
+	return l.planAgent
+}
+
+// GetModeSelector returns the mode selector
+func (l *Loop) GetModeSelector() *einoadapter.ModeSelector {
+	return l.selector
 }

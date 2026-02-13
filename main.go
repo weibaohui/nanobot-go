@@ -15,6 +15,7 @@ import (
 	"github.com/weibaohui/nanobot-go/channels"
 	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/cron"
+	"github.com/weibaohui/nanobot-go/eino_adapter"
 	"github.com/weibaohui/nanobot-go/heartbeat"
 	"github.com/weibaohui/nanobot-go/providers"
 	"github.com/weibaohui/nanobot-go/session"
@@ -146,22 +147,63 @@ func runAgent(cmd *cobra.Command, args []string) {
 		logger,
 	)
 
+	// Initialize smart mode selector
+	selector := eino_adapter.NewModeSelector()
+
+	// Try to create plan-execute agent (optional, may fail if model doesn't support structured output)
+	var planAgent *eino_adapter.PlanExecuteAgent
 	ctx := context.Background()
+	planAgent, err := eino_adapter.NewPlanExecuteAgent(ctx, &eino_adapter.Config{
+		Provider:      provider,
+		Model:         cfg.Agents.Defaults.Model,
+		Tools:         loop.GetTools(),
+		Logger:        logger,
+		EnableStream:  false,
+		MaxIterations: maxIter,
+	})
+	if err != nil {
+		logger.Warn("无法创建计划执行代理，将仅使用普通模式", zap.Error(err))
+	}
 
 	if agentMessage != "" {
-		response, err := loop.ProcessDirect(ctx, agentMessage, agentSession, "cli", "default")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "错误: %s\n", err)
-			os.Exit(1)
+		// Check if we should use plan mode
+		usePlanMode := planAgent != nil && selector.ShouldUsePlanMode(agentMessage)
+		if usePlanMode {
+			if agentLogs {
+				fmt.Println("📋 [计划执行模式]")
+			}
+			logger.Info("使用计划执行模式", zap.String("input", agentMessage))
+			response, err := planAgent.Execute(ctx, agentMessage)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "错误: %s\n", err)
+				os.Exit(1)
+			}
+			fmt.Println(response)
+		} else {
+			if agentLogs {
+				fmt.Println("💬 [普通模式]")
+			}
+			logger.Info("使用普通模式", zap.String("input", agentMessage))
+			// Use normal single-turn mode
+			response, err := loop.ProcessDirect(ctx, agentMessage, agentSession, "cli", "default")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "错误: %s\n", err)
+				os.Exit(1)
+			}
+			fmt.Println(response)
 		}
-		fmt.Println(response)
 	} else {
-		runInteractiveMode(ctx, loop, logger)
+		runInteractiveMode(ctx, loop, planAgent, selector, logger)
 	}
 }
 
-func runInteractiveMode(ctx context.Context, loop *agent.Loop, logger *zap.Logger) {
+func runInteractiveMode(ctx context.Context, loop *agent.Loop, planAgent *eino_adapter.PlanExecuteAgent, selector *eino_adapter.ModeSelector, logger *zap.Logger) {
 	fmt.Println("🐈 nanobot 交互模式 (输入 'exit' 或按 Ctrl+C 退出)")
+	if planAgent != nil {
+		fmt.Println("   ✅ 智能模式已启用：复杂任务将自动使用计划执行模式")
+	} else {
+		fmt.Println("   ⚠️  计划模式不可用：仅使用普通模式")
+	}
 	fmt.Println()
 
 	sigChan := make(chan os.Signal, 1)
@@ -192,7 +234,22 @@ func runInteractiveMode(ctx context.Context, loop *agent.Loop, logger *zap.Logge
 			break
 		}
 
-		response, err := loop.ProcessDirect(ctx, input, agentSession, "cli", "default")
+		var response string
+		var err error
+
+		// Check if we should use plan mode
+		usePlanMode := planAgent != nil && selector.ShouldUsePlanMode(input)
+		if usePlanMode {
+			fmt.Println("   📋 [计划执行模式]")
+			logger.Info("使用计划执行模式", zap.String("input", input))
+			response, err = planAgent.Execute(ctx, input)
+		} else {
+			fmt.Println("   💬 [普通模式]")
+			logger.Info("使用普通模式", zap.String("input", input))
+			// Use normal mode
+			response, err = loop.ProcessDirect(ctx, input, agentSession, "cli", "default")
+		}
+
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "错误: %s\n", err)
 			continue
@@ -249,6 +306,25 @@ func runGateway(cmd *cobra.Command, args []string) {
 		sessionManager,
 		logger,
 	)
+
+	// Initialize smart mode selector and plan-execute agent
+	selector := eino_adapter.NewModeSelector()
+	ctx := context.Background()
+	planAgent, err := eino_adapter.NewPlanExecuteAgent(ctx, &eino_adapter.Config{
+		Provider:      provider,
+		Model:         cfg.Agents.Defaults.Model,
+		Tools:         loop.GetTools(),
+		Logger:        logger,
+		EnableStream:  false,
+		MaxIterations: maxIter,
+	})
+	if err != nil {
+		logger.Warn("无法创建计划执行代理，将仅使用普通模式", zap.Error(err))
+	} else {
+		loop.SetPlanAgent(planAgent)
+		loop.SetModeSelector(selector)
+		logger.Info("计划执行模式已启用")
+	}
 
 	channelManager := channels.NewManager(messageBus)
 
@@ -594,6 +670,22 @@ func getEnvOrDefault(key, defaultValue string) string {
 
 // registerChannels 根据配置注册启用的渠道
 func registerChannels(mgr *channels.Manager, cfg *config.Config, messageBus *bus.MessageBus, logger *zap.Logger) {
+	// WebSocket 渠道（默认启用）
+	if cfg.Channels.WebSocket.Enabled {
+		wsConfig := &channels.WebSocketConfig{
+			Addr:      cfg.Channels.WebSocket.Addr,
+			Path:      cfg.Channels.WebSocket.Path,
+			AllowFrom: cfg.Channels.WebSocket.AllowFrom,
+		}
+		ws := channels.NewWebSocketChannel(wsConfig, messageBus, logger)
+		mgr.Register(ws)
+		if wsConfig.Addr != "" {
+			logger.Info("已注册 WebSocket 渠道", zap.String("addr", wsConfig.Addr), zap.String("path", wsConfig.Path))
+		} else {
+			logger.Info("已注册 WebSocket 渠道", zap.String("addr", ":8088"), zap.String("path", "/ws"))
+		}
+	}
+
 	// 钉钉渠道
 	if cfg.Channels.DingTalk.Enabled {
 		dingtalkConfig := &channels.DingTalkConfig{

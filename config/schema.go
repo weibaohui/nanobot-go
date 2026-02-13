@@ -31,15 +31,24 @@ type AgentDefaults struct {
 
 // ChannelsConfig 渠道配置
 type ChannelsConfig struct {
-	WhatsApp WhatsAppConfig `json:"whatsapp"`
-	Telegram TelegramConfig `json:"telegram"`
-	Discord  DiscordConfig  `json:"discord"`
-	Feishu   FeishuConfig   `json:"feishu"`
-	Mochat   MochatConfig   `json:"mochat"`
-	DingTalk DingTalkConfig `json:"dingtalk"`
-	Email    EmailConfig    `json:"email"`
-	Slack    SlackConfig    `json:"slack"`
-	QQ       QQConfig       `json:"qq"`
+	WebSocket WebSocketConfig `json:"websocket"`
+	WhatsApp  WhatsAppConfig  `json:"whatsapp"`
+	Telegram  TelegramConfig  `json:"telegram"`
+	Discord   DiscordConfig   `json:"discord"`
+	Feishu    FeishuConfig    `json:"feishu"`
+	Mochat    MochatConfig    `json:"mochat"`
+	DingTalk  DingTalkConfig  `json:"dingtalk"`
+	Email     EmailConfig     `json:"email"`
+	Slack     SlackConfig     `json:"slack"`
+	QQ        QQConfig        `json:"qq"`
+}
+
+// WebSocketConfig WebSocket 渠道配置
+type WebSocketConfig struct {
+	Enabled   bool     `json:"enabled"`
+	Addr      string   `json:"addr"`      // 监听地址，如 ":8088"
+	Path      string   `json:"path"`      // WebSocket 路径，如 "/ws"
+	AllowFrom []string `json:"allowFrom"` // 允许的用户 ID 列表
 }
 
 // WhatsAppConfig WhatsApp 渠道配置
