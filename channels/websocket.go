@@ -649,7 +649,6 @@ var indexHTML = `<!DOCTYPE html>
                     id="chatInput"
                     placeholder="输入消息..."
                     rows="1"
-                    onkeydown="handleKeyDown(event)"
                 ></textarea>
                 <button class="send-button" id="sendButton" onclick="sendMessage()">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -679,6 +678,11 @@ var indexHTML = `<!DOCTYPE html>
         });
         chatInput.addEventListener('compositionend', function() {
             isComposing = false;
+        });
+
+        // 使用 addEventListener 监听键盘事件
+        chatInput.addEventListener('keydown', function(event) {
+            handleKeyDown(event);
         });
 
         // 自动调整输入框高度
@@ -906,7 +910,11 @@ var indexHTML = `<!DOCTYPE html>
 
         function handleKeyDown(event) {
             // 如果正在输入法组合中（如选中文本），不处理回车
-            if (isComposing) {
+            // 检测方式：
+            // 1. 自定义 isComposing 标记（compositionstart/end 事件）
+            // 2. 原生 event.isComposing 属性
+            // 3. keyCode === 229（IME 激活时的特殊码）
+            if (isComposing || event.isComposing || event.keyCode === 229) {
                 return;
             }
             if (event.key === 'Enter' && !event.shiftKey) {
