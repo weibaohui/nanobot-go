@@ -333,7 +333,7 @@ func toMarkdown(html string) string {
 	})
 
 	// 转换标题: <h1>text</h1> -> # text
-	re = regexp.MustCompile(`(?i)<h([1-6])[^>]*>([\s\S]*?)</h\1>`)
+	re = regexp.MustCompile(`(?i)<h([1-6])[^>]*>([\s\S]*?)</h[1-6]>`)
 	html = re.ReplaceAllStringFunc(html, func(match string) string {
 		submatches := re.FindStringSubmatch(match)
 		if len(submatches) >= 3 {
@@ -363,21 +363,21 @@ func toMarkdown(html string) string {
 	html = re.ReplaceAllString(html, "\n")
 
 	// 转换粗体
-	re = regexp.MustCompile(`(?i)<(strong|b)[^>]*>([\s\S]*?)</\1>`)
+	re = regexp.MustCompile(`(?i)<(?:strong|b)[^>]*>([\s\S]*?)</(?:strong|b)>`)
 	html = re.ReplaceAllStringFunc(html, func(match string) string {
 		submatches := re.FindStringSubmatch(match)
-		if len(submatches) >= 3 {
-			return fmt.Sprintf("**%s**", stripTags(submatches[2]))
+		if len(submatches) >= 2 {
+			return fmt.Sprintf("**%s**", stripTags(submatches[1]))
 		}
 		return match
 	})
 
 	// 转换斜体
-	re = regexp.MustCompile(`(?i)<(em|i)[^>]*>([\s\S]*?)</\1>`)
+	re = regexp.MustCompile(`(?i)<(?:em|i)[^>]*>([\s\S]*?)</(?:em|i)>`)
 	html = re.ReplaceAllStringFunc(html, func(match string) string {
 		submatches := re.FindStringSubmatch(match)
-		if len(submatches) >= 3 {
-			return fmt.Sprintf("*%s*", stripTags(submatches[2]))
+		if len(submatches) >= 2 {
+			return fmt.Sprintf("*%s*", stripTags(submatches[1]))
 		}
 		return match
 	})
