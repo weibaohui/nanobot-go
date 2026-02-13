@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/agent/tools"
 	"github.com/weibaohui/nanobot-go/bus"
@@ -32,7 +34,8 @@ type Loop struct {
 	logger              *zap.Logger
 
 	// ADK Agent
-	adkAgent *eino_adapter.ChatModelAgent
+	adkAgent  *adk.ChatModelAgent
+	adkRunner *adk.Runner
 
 	// Plan-Execute mode support
 	planAgent *eino_adapter.PlanExecuteAgent
@@ -80,18 +83,31 @@ func NewLoop(messageBus *bus.MessageBus, provider providers.LLMProvider, workspa
 
 	// 创建 ADK Agent
 	ctx := context.Background()
-	adkAgent, err := eino_adapter.NewChatModelAgent(ctx, &eino_adapter.ChatModelAgentConfig{
-		Provider:      provider,
-		Model:         model,
-		Tools:         registeredTools,
-		Logger:        logger,
+	adapter := eino_adapter.NewProviderAdapter(provider, model)
+	adkTools := loop.tools.GetADKTools()
+	var toolsConfig adk.ToolsConfig
+	if len(adkTools) > 0 {
+		toolsConfig = adk.ToolsConfig{
+			ToolsNodeConfig: compose.ToolsNodeConfig{
+				Tools: adkTools,
+			},
+		}
+	}
+	adkAgent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
+		Name:          "nanobot",
+		Description:   "nanobot AI assistant",
+		Model:         adapter,
+		ToolsConfig:   toolsConfig,
 		MaxIterations: maxIterations,
-		EnableStream:  true,
 	})
 	if err != nil {
 		logger.Error("创建 ADK Agent 失败，将使用回退模式", zap.Error(err))
 	} else {
 		loop.adkAgent = adkAgent
+		loop.adkRunner = adk.NewRunner(ctx, adk.RunnerConfig{
+			Agent:           adkAgent,
+			EnableStreaming: true,
+		})
 		logger.Info("ADK Agent 创建成功")
 	}
 
@@ -218,7 +234,7 @@ func (l *Loop) updateToolContext(channel, chatID string) {
 
 // processWithADK 使用 ADK Agent 处理消息
 func (l *Loop) processWithADK(ctx context.Context, msg *bus.InboundMessage) error {
-	if l.adkAgent == nil {
+	if l.adkAgent == nil || l.adkRunner == nil {
 		return fmt.Errorf("ADK Agent 未初始化")
 	}
 
@@ -227,10 +243,32 @@ func (l *Loop) processWithADK(ctx context.Context, msg *bus.InboundMessage) erro
 	sess := l.sessions.GetOrCreate(sessionKey)
 	history := l.convertHistory(sess.GetHistory(50))
 
-	// 执行
-	response, err := l.adkAgent.ExecuteWithHistory(ctx, msg.Content, history)
-	if err != nil {
-		return fmt.Errorf("ADK Agent 执行失败: %w", err)
+	messages := make([]*schema.Message, 0, len(history)+1)
+	if len(history) > 0 {
+		messages = append(messages, history...)
+	}
+	messages = append(messages, &schema.Message{
+		Role:    schema.User,
+		Content: msg.Content,
+	})
+
+	iter := l.adkRunner.Run(ctx, messages)
+	var response string
+	for {
+		event, ok := iter.Next()
+		if !ok {
+			break
+		}
+		if event.Err != nil {
+			return fmt.Errorf("ADK Agent 执行失败: %w", event.Err)
+		}
+		if event.Output != nil && event.Output.MessageOutput != nil {
+			msgOutput, err := event.Output.MessageOutput.GetMessage()
+			if err != nil {
+				continue
+			}
+			response = msgOutput.Content
+		}
 	}
 
 	// 发布响应
@@ -251,7 +289,7 @@ func (l *Loop) processWithADK(ctx context.Context, msg *bus.InboundMessage) erro
 
 // processWithStream 使用流式处理
 func (l *Loop) processWithStream(ctx context.Context, msg *bus.InboundMessage) error {
-	if l.adkAgent == nil {
+	if l.adkAgent == nil || l.adkRunner == nil {
 		return fmt.Errorf("ADK Agent 未初始化")
 	}
 
@@ -260,14 +298,38 @@ func (l *Loop) processWithStream(ctx context.Context, msg *bus.InboundMessage) e
 	sess := l.sessions.GetOrCreate(sessionKey)
 	history := l.convertHistory(sess.GetHistory(50))
 
-	// 流式执行
-	response, err := l.adkAgent.ExecuteStream(ctx, msg.Content, history, func(delta, fullContent string) error {
-		// 发布流式片段
-		l.bus.PublishStream(bus.NewStreamChunk(msg.Channel, msg.ChatID, delta, fullContent, false))
-		return nil
+	messages := make([]*schema.Message, 0, len(history)+1)
+	if len(history) > 0 {
+		messages = append(messages, history...)
+	}
+	messages = append(messages, &schema.Message{
+		Role:    schema.User,
+		Content: msg.Content,
 	})
-	if err != nil {
-		return fmt.Errorf("流式执行失败: %w", err)
+
+	iter := l.adkRunner.Run(ctx, messages)
+	var response string
+	var fullContent string
+	for {
+		event, ok := iter.Next()
+		if !ok {
+			break
+		}
+		if event.Err != nil {
+			return fmt.Errorf("流式执行失败: %w", event.Err)
+		}
+		if event.Output != nil && event.Output.MessageOutput != nil {
+			msgOutput, err := event.Output.MessageOutput.GetMessage()
+			if err != nil {
+				continue
+			}
+			delta := msgOutput.Content[len(fullContent):]
+			if delta != "" {
+				l.bus.PublishStream(bus.NewStreamChunk(msg.Channel, msg.ChatID, delta, msgOutput.Content, false))
+			}
+			fullContent = msgOutput.Content
+			response = msgOutput.Content
+		}
 	}
 
 	// 发送完成标记
@@ -336,7 +398,7 @@ func (l *Loop) ProcessDirect(ctx context.Context, content, sessionKey, channel, 
 	// 更新工具上下文
 	l.updateToolContext(channel, chatID)
 
-	if l.adkAgent == nil {
+	if l.adkAgent == nil || l.adkRunner == nil {
 		return "", fmt.Errorf("ADK Agent 未初始化")
 	}
 
@@ -344,10 +406,32 @@ func (l *Loop) ProcessDirect(ctx context.Context, content, sessionKey, channel, 
 	sess := l.sessions.GetOrCreate(sessionKey)
 	history := l.convertHistory(sess.GetHistory(50))
 
-	// 执行
-	response, err := l.adkAgent.ExecuteWithHistory(ctx, content, history)
-	if err != nil {
-		return "", err
+	messages := make([]*schema.Message, 0, len(history)+1)
+	if len(history) > 0 {
+		messages = append(messages, history...)
+	}
+	messages = append(messages, &schema.Message{
+		Role:    schema.User,
+		Content: content,
+	})
+
+	iter := l.adkRunner.Run(ctx, messages)
+	var response string
+	for {
+		event, ok := iter.Next()
+		if !ok {
+			break
+		}
+		if event.Err != nil {
+			return "", event.Err
+		}
+		if event.Output != nil && event.Output.MessageOutput != nil {
+			msgOutput, err := event.Output.MessageOutput.GetMessage()
+			if err != nil {
+				continue
+			}
+			response = msgOutput.Content
+		}
 	}
 
 	// 保存会话
@@ -403,5 +487,5 @@ func (l *Loop) GetModeSelector() *eino_adapter.ModeSelector {
 
 // GetADKAgent returns the ADK agent
 func (l *Loop) GetADKAgent() *eino_adapter.ChatModelAgent {
-	return l.adkAgent
+	return nil
 }

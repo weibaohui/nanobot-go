@@ -178,39 +178,3 @@ func (t *WebFetchTool) Run(ctx context.Context, argumentsInJSON string, opts ...
 func (t *WebFetchTool) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
 	return t.Run(ctx, argumentsInJSON, opts...)
 }
-
-func (t *SpawnTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
-	return toolInfoFromTool(t)
-}
-
-func (t *SpawnTool) Run(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
-	return runToolFromJSON(ctx, t, argumentsInJSON)
-}
-
-func (t *SpawnTool) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
-	return t.Run(ctx, argumentsInJSON, opts...)
-}
-
-func (t *CronTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
-	return toolInfoFromTool(t)
-}
-
-func (t *CronTool) Run(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
-	return runToolFromJSON(ctx, t, argumentsInJSON)
-}
-
-func (t *CronTool) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
-	return t.Run(ctx, argumentsInJSON, opts...)
-}
-
-func (t *MessageTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
-	return toolInfoFromTool(t)
-}
-
-func (t *MessageTool) Run(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
-	return runToolFromJSON(ctx, t, argumentsInJSON)
-}
-
-func (t *MessageTool) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
-	return t.Run(ctx, argumentsInJSON, opts...)
-}
