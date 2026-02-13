@@ -642,7 +642,7 @@ func createDefaultConfig() *config.Config {
 			RestrictToWorkspace: true,
 		},
 		Gateway: config.GatewayConfig{
-			Host: getEnvOrDefault("NANOBOT_HOST", "127.0.0.1"),
+			Host: getEnvOrDefault("NANOBOT_HOST", "0.0.0.0"),
 			Port: 8080,
 		},
 	}

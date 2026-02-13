@@ -274,11 +274,11 @@ func (c *WebSocketChannel) sendStreamChunk(chatID string, chunk *bus.StreamChunk
 	}
 
 	msg := struct {
-		Type   string `json:"type"`
-		Delta  string `json:"delta"`
-		Text   string `json:"text"`
-		Time   string `json:"time"`
-		Done   bool   `json:"done"`
+		Type  string `json:"type"`
+		Delta string `json:"delta"`
+		Text  string `json:"text"`
+		Time  string `json:"time"`
+		Done  bool   `json:"done"`
 	}{
 		Type:  "stream",
 		Delta: chunk.Delta,
@@ -316,11 +316,11 @@ func (c *WebSocketChannel) StreamToClient(chatID string, ch <-chan string) {
 		fullContent += delta
 
 		msg := struct {
-			Type   string `json:"type"`
-			Delta  string `json:"delta"`
-			Text   string `json:"text"`
-			Time   string `json:"time"`
-			Done   bool   `json:"done"`
+			Type  string `json:"type"`
+			Delta string `json:"delta"`
+			Text  string `json:"text"`
+			Time  string `json:"time"`
+			Done  bool   `json:"done"`
 		}{
 			Type:  "stream",
 			Delta: delta,
@@ -378,6 +378,8 @@ var indexHTML = `<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🐈 nanobot - AI 助手</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5.5.1/github-markdown.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
     <style>
         * {
             margin: 0;
@@ -470,6 +472,17 @@ var indexHTML = `<!DOCTYPE html>
             color: #1f2937;
             border-bottom-left-radius: 4px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .message.assistant .message-bubble.markdown-body {
+            white-space: normal;
+            color: #1f2937;
+            background: white;
+        }
+        .message.assistant .message-bubble.markdown-body pre {
+            overflow: auto;
+        }
+        .message.assistant .message-bubble.markdown-body code {
+            white-space: pre;
         }
         .message-time {
             font-size: 11px;
@@ -659,6 +672,8 @@ var indexHTML = `<!DOCTYPE html>
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/highlight.min.js"></script>
     <script>
         let ws = null;
         let connected = false;
@@ -671,6 +686,17 @@ var indexHTML = `<!DOCTYPE html>
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
         const typingIndicator = document.getElementById('typingIndicator');
+
+        marked.setOptions({
+            highlight: function(code, lang) {
+                if (lang && hljs.getLanguage(lang)) {
+                    return hljs.highlight(code, { language: lang }).value;
+                }
+                return hljs.highlightAuto(code).value;
+            },
+            breaks: true,
+            gfm: true
+        });
 
         // 监听输入法组合事件
         chatInput.addEventListener('compositionstart', function() {
@@ -765,7 +791,7 @@ var indexHTML = `<!DOCTYPE html>
             messageDiv.className = 'message ' + role;
 
             const bubbleDiv = document.createElement('div');
-            bubbleDiv.className = 'message-bubble';
+            bubbleDiv.className = role === 'assistant' ? 'message-bubble markdown-body' : 'message-bubble';
 
             // 添加闪烁光标
             const cursor = document.createElement('span');
@@ -781,10 +807,22 @@ var indexHTML = `<!DOCTYPE html>
             return { div: messageDiv, bubble: bubbleDiv };
         }
 
+        function renderMarkdown(content) {
+            return marked.parse(content || '');
+        }
+
+        function setBubbleContent(bubble, content) {
+            if (bubble.classList.contains('markdown-body')) {
+                bubble.innerHTML = renderMarkdown(content);
+            } else {
+                bubble.textContent = content;
+            }
+        }
+
         function updateMessageContent(msgObj, content) {
             // 保留光标
             const cursor = msgObj.bubble.querySelector('.cursor');
-            msgObj.bubble.textContent = content;
+            setBubbleContent(msgObj.bubble, content);
             if (cursor) {
                 msgObj.bubble.appendChild(cursor);
             }
@@ -835,8 +873,8 @@ var indexHTML = `<!DOCTYPE html>
             messageDiv.className = 'message ' + role;
 
             const bubbleDiv = document.createElement('div');
-            bubbleDiv.className = 'message-bubble';
-            bubbleDiv.textContent = content;
+            bubbleDiv.className = role === 'assistant' ? 'message-bubble markdown-body' : 'message-bubble';
+            setBubbleContent(bubbleDiv, content);
 
             const timeDiv = document.createElement('div');
             timeDiv.className = 'message-time';
@@ -864,7 +902,7 @@ var indexHTML = `<!DOCTYPE html>
             messageDiv.className = 'message ' + role;
 
             const bubbleDiv = document.createElement('div');
-            bubbleDiv.className = 'message-bubble';
+            bubbleDiv.className = role === 'assistant' ? 'message-bubble markdown-body' : 'message-bubble';
 
             // 添加闪烁光标
             const cursor = document.createElement('span');
@@ -893,6 +931,9 @@ var indexHTML = `<!DOCTYPE html>
                 } else {
                     // 完成，移除光标
                     cursor.remove();
+                    if (role === 'assistant') {
+                        setBubbleContent(bubbleDiv, content);
+                    }
                 }
             }
 

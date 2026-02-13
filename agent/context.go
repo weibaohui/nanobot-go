@@ -27,6 +27,11 @@ func NewContextBuilder(workspace string) *ContextBuilder {
 	}
 }
 
+// GetSkillsLoader 获取技能加载器
+func (c *ContextBuilder) GetSkillsLoader() *SkillsLoader {
+	return c.skills
+}
+
 // BuildSystemPrompt 构建系统提示
 func (c *ContextBuilder) BuildSystemPrompt(skillNames []string) string {
 	var parts []string
@@ -60,7 +65,8 @@ func (c *ContextBuilder) BuildSystemPrompt(skillNames []string) string {
 	if skillsSummary != "" {
 		parts = append(parts, `# 技能
 
-以下技能扩展了你的能力。要使用技能，请使用 read_file 工具读取其 SKILL.md 文件。
+以下技能扩展了你的能力。要使用技能，请调用 use_skill 工具并传入技能名称。
+例如：use_skill(name="github", action="workflow", params={"repo": "owner/repo"})
 available="false" 的技能需要先安装依赖 - 你可以尝试使用 apt/brew 安装。
 
 `+skillsSummary)
@@ -88,6 +94,7 @@ func (c *ContextBuilder) getIdentity() string {
 - 搜索网络和获取网页
 - 向用户发送消息到聊天渠道
 - 创建子代理处理后台任务
+- 加载并使用技能（use_skill 工具）
 
 ## 当前时间
 %s (%s)

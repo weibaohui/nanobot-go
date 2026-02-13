@@ -16,6 +16,7 @@ import (
 	"github.com/weibaohui/nanobot-go/agent/tools/listdir"
 	"github.com/weibaohui/nanobot-go/agent/tools/message"
 	"github.com/weibaohui/nanobot-go/agent/tools/readfile"
+	"github.com/weibaohui/nanobot-go/agent/tools/skill"
 	"github.com/weibaohui/nanobot-go/agent/tools/spawn"
 	"github.com/weibaohui/nanobot-go/agent/tools/webfetch"
 	"github.com/weibaohui/nanobot-go/agent/tools/websearch"
@@ -164,6 +165,39 @@ func (l *Loop) registerDefaultTools() {
 	if l.cronService != nil {
 		l.tools.Register(&toolcron.Tool{CronService: l.cronService})
 	}
+
+	// 动态注册所有技能为工具
+	l.registerSkillTools()
+}
+
+// registerSkillTools 扫描并注册所有技能为工具
+func (l *Loop) registerSkillTools() {
+	skillsLoader := l.context.GetSkillsLoader()
+	skills := skillsLoader.ListSkills(false)
+
+	loadSkillFunc := skillsLoader.LoadSkill
+
+	for _, sk := range skills {
+		// 获取技能描述
+		description := sk.Name
+		if meta := skillsLoader.GetSkillMetadata(sk.Name); meta != nil {
+			if desc, ok := meta["description"]; ok && desc != "" {
+				description = desc
+			}
+		}
+
+		// 为每个技能创建并注册工具
+		skillTool := skill.NewDynamicTool(sk.Name, description, loadSkillFunc)
+		l.tools.Register(skillTool)
+		l.logger.Debug("注册技能工具",
+			zap.String("name", sk.Name),
+			zap.String("source", sk.Source),
+		)
+	}
+
+	l.logger.Info("已注册技能工具",
+		zap.Int("数量", len(skills)),
+	)
 }
 
 // Run 运行代理循环
