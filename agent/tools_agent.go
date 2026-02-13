@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/cron"
 )
 
@@ -168,8 +169,35 @@ func (t *MessageTool) Parameters() map[string]any {
 		"required": []string{"content"},
 	}
 }
+
+// Execute 执行发送消息逻辑（含渠道与聊天上下文回退）
 func (t *MessageTool) Execute(ctx context.Context, params map[string]any) (string, error) {
-	return "消息工具需要在 loop 中重新实现", nil
+	content, _ := params["content"].(string)
+	channel, _ := params["channel"].(string)
+	chatID, _ := params["chat_id"].(string)
+
+	if channel == "" {
+		channel = t.DefaultChannel
+	}
+	if channel == "user" {
+		// 模型可能用 user 作为占位渠道，回退到当前会话的默认渠道
+		channel = t.DefaultChannel
+	}
+	if chatID == "" {
+		chatID = t.DefaultChatID
+	}
+	if channel == "" || chatID == "" {
+		return "错误: 没有目标渠道或聊天ID", nil
+	}
+	if t.SendCallback == nil {
+		return "错误: 消息发送未配置", nil
+	}
+
+	msg := bus.NewOutboundMessage(channel, chatID, content)
+	if err := t.SendCallback(msg); err != nil {
+		return fmt.Sprintf("错误: 发送消息失败: %s", err), nil
+	}
+	return fmt.Sprintf("消息已发送到 %s:%s", channel, chatID), nil
 }
 
 // SetContext 设置上下文
