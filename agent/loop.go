@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/compose"
@@ -323,7 +324,12 @@ func (l *Loop) processWithStream(ctx context.Context, msg *bus.InboundMessage) e
 			if err != nil {
 				continue
 			}
-			delta := msgOutput.Content[len(fullContent):]
+			delta := ""
+			if fullContent != "" && strings.HasPrefix(msgOutput.Content, fullContent) {
+				delta = msgOutput.Content[len(fullContent):]
+			} else {
+				delta = msgOutput.Content
+			}
 			if delta != "" {
 				l.bus.PublishStream(bus.NewStreamChunk(msg.Channel, msg.ChatID, delta, msgOutput.Content, false))
 			}
