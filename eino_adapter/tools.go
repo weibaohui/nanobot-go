@@ -147,8 +147,15 @@ func ConvertToolsFromRegistry(registry *agenttools.Registry) []tool.BaseTool {
 	result := make([]tool.BaseTool, 0, len(definitions))
 
 	for _, def := range definitions {
-		name, ok := def["name"].(string)
-		if !ok {
+		name := ""
+		if n, ok := def["name"].(string); ok {
+			name = n
+		} else if fn, ok := def["function"].(map[string]any); ok {
+			if n, ok := fn["name"].(string); ok {
+				name = n
+			}
+		}
+		if name == "" {
 			continue
 		}
 

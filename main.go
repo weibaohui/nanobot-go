@@ -292,6 +292,9 @@ func runGateway(cmd *cobra.Command, args []string) {
 		execTimeout = 120
 	}
 
+	callbacks := eino_adapter.NewEinoCallbacks(true, logger)
+	eino_adapter.RegisterGlobalCallbacks(callbacks)
+
 	loop := agent.NewLoop(
 		messageBus,
 		provider,

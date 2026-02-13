@@ -24,12 +24,12 @@ type ChatModelAgent struct {
 
 // ChatModelAgentConfig 配置
 type ChatModelAgentConfig struct {
-	Provider       providers.LLMProvider
-	Model          string
-	Tools          []agenttools.Tool
-	Logger         *zap.Logger
-	MaxIterations  int
-	EnableStream   bool
+	Provider      providers.LLMProvider
+	Model         string
+	Tools         []agenttools.Tool
+	Logger        *zap.Logger
+	MaxIterations int
+	EnableStream  bool
 }
 
 // NewChatModelAgent 创建基于 eino ADK 的 Agent
@@ -68,10 +68,10 @@ func NewChatModelAgent(ctx context.Context, cfg *ChatModelAgentConfig) (*ChatMod
 
 	// Create the ChatModelAgent
 	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
-		Name:         "nanobot",
-		Description:  "nanobot AI assistant",
-		Model:        adapter,
-		ToolsConfig:  toolsConfig,
+		Name:          "nanobot",
+		Description:   "nanobot AI assistant",
+		Model:         adapter,
+		ToolsConfig:   toolsConfig,
 		MaxIterations: maxIterations,
 	})
 	if err != nil {
@@ -84,7 +84,7 @@ func NewChatModelAgent(ctx context.Context, cfg *ChatModelAgentConfig) (*ChatMod
 		EnableStreaming: cfg.EnableStream,
 	})
 
-	logger.Info("ChatModelAgent created successfully",
+	logger.Info("ChatModelAgent 创建成功",
 		zap.Int("max_iterations", maxIterations),
 		zap.Int("tools_count", len(cfg.Tools)),
 	)
@@ -105,7 +105,7 @@ func (a *ChatModelAgent) Execute(ctx context.Context, input string) (string, err
 
 // ExecuteWithHistory 带历史记录执行
 func (a *ChatModelAgent) ExecuteWithHistory(ctx context.Context, input string, history []*schema.Message) (string, error) {
-	a.logger.Debug("Starting execution", zap.String("input", input))
+	a.logger.Debug("开始执行", zap.String("输入", input))
 
 	// Prepare messages
 	messages := make([]*schema.Message, 0)
@@ -131,7 +131,7 @@ func (a *ChatModelAgent) ExecuteWithHistory(ctx context.Context, input string, h
 		eventCount++
 
 		if event.Err != nil {
-			a.logger.Error("Agent error", zap.Error(event.Err))
+			a.logger.Error("Agent 执行出错", zap.Error(event.Err))
 			return "", event.Err
 		}
 
@@ -139,27 +139,27 @@ func (a *ChatModelAgent) ExecuteWithHistory(ctx context.Context, input string, h
 		if event.Output != nil && event.Output.MessageOutput != nil {
 			msg, err := event.Output.MessageOutput.GetMessage()
 			if err != nil {
-				a.logger.Error("Failed to get message", zap.Error(err))
+				a.logger.Error("获取消息失败", zap.Error(err))
 				continue
 			}
 			result = msg.Content
-			a.logger.Debug("Agent output",
-				zap.String("content", truncate(msg.Content, 100)),
-				zap.Int("tool_calls", len(msg.ToolCalls)),
+			a.logger.Debug("Agent 输出",
+				zap.String("内容预览", truncate(msg.Content, 100)),
+				zap.Int("工具调用次数", len(msg.ToolCalls)),
 			)
 		}
 
 		// Log actions
 		if event.Action != nil {
-			a.logger.Debug("Agent action",
-				zap.Bool("exit", event.Action.Exit),
+			a.logger.Debug("Agent 动作",
+				zap.Bool("退出", event.Action.Exit),
 			)
 		}
 	}
 
-	a.logger.Debug("Execution completed",
-		zap.Int("events", eventCount),
-		zap.Int("result_length", len(result)),
+	a.logger.Debug("执行完成",
+		zap.Int("事件数", eventCount),
+		zap.Int("结果长度", len(result)),
 	)
 
 	return result, nil
@@ -167,7 +167,7 @@ func (a *ChatModelAgent) ExecuteWithHistory(ctx context.Context, input string, h
 
 // ExecuteStream 流式执行，通过 callback 返回每个增量
 func (a *ChatModelAgent) ExecuteStream(ctx context.Context, input string, history []*schema.Message, onDelta func(delta, fullContent string) error) (string, error) {
-	a.logger.Debug("Starting stream execution", zap.String("input", input))
+	a.logger.Debug("开始流式执行", zap.String("输入", input))
 
 	// Prepare messages
 	messages := make([]*schema.Message, 0)
@@ -193,7 +193,7 @@ func (a *ChatModelAgent) ExecuteStream(ctx context.Context, input string, histor
 		eventCount++
 
 		if event.Err != nil {
-			a.logger.Error("Agent stream error", zap.Error(event.Err))
+			a.logger.Error("Agent 流式执行出错", zap.Error(event.Err))
 			return fullContent, event.Err
 		}
 
@@ -208,12 +208,12 @@ func (a *ChatModelAgent) ExecuteStream(ctx context.Context, input string, histor
 			delta := msg.Content[len(fullContent):]
 			if delta != "" && onDelta != nil {
 				if err := onDelta(delta, msg.Content); err != nil {
-					a.logger.Error("Delta callback error", zap.Error(err))
+					a.logger.Error("增量回调出错", zap.Error(err))
 				}
 			}
 			fullContent = msg.Content
 
-			a.logger.Debug("Stream chunk",
+			a.logger.Debug("流式片段",
 				zap.Int("delta_len", len(delta)),
 				zap.Int("total_len", len(fullContent)),
 			)

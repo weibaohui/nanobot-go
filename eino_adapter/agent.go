@@ -26,12 +26,13 @@ type PlanExecuteAgent struct {
 
 // Config holds configuration for the PlanExecuteAgent
 type Config struct {
-	Provider       providers.LLMProvider
-	Model          string
-	Tools          []agenttools.Tool
-	Logger         *zap.Logger
-	EnableStream   bool
-	MaxIterations  int
+	Provider        providers.LLMProvider
+	Model           string
+	Tools           []agenttools.Tool
+	Logger          *zap.Logger
+	EnableStream    bool
+	MaxIterations   int
+	EnableCallbacks bool // 是否启用回调日志
 }
 
 // NewPlanExecuteAgent creates a new Plan-Execute-Replan agent
@@ -52,6 +53,13 @@ func NewPlanExecuteAgent(ctx context.Context, cfg *Config) (*PlanExecuteAgent, e
 	maxIterations := cfg.MaxIterations
 	if maxIterations <= 0 {
 		maxIterations = 10
+	}
+
+	// 注册全局回调处理器
+	if cfg.EnableCallbacks {
+		callbacks := NewEinoCallbacks(true, logger)
+		RegisterGlobalCallbacks(callbacks)
+		logger.Info("已启用 Eino 回调日志")
 	}
 
 	// Create the provider adapter

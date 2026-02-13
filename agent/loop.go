@@ -66,12 +66,24 @@ func NewLoop(messageBus *bus.MessageBus, provider providers.LLMProvider, workspa
 	// 注册默认工具
 	loop.registerDefaultTools()
 
+	registeredTools := loop.GetTools()
+	toolNames := make([]string, 0, len(registeredTools))
+	for _, t := range registeredTools {
+		if t != nil {
+			toolNames = append(toolNames, t.Name())
+		}
+	}
+	logger.Info("已注册工具",
+		zap.Int("数量", len(registeredTools)),
+		zap.Strings("工具列表", toolNames),
+	)
+
 	// 创建 ADK Agent
 	ctx := context.Background()
 	adkAgent, err := eino_adapter.NewChatModelAgent(ctx, &eino_adapter.ChatModelAgentConfig{
 		Provider:      provider,
 		Model:         model,
-		Tools:         loop.GetTools(),
+		Tools:         registeredTools,
 		Logger:        logger,
 		MaxIterations: maxIterations,
 		EnableStream:  true,
@@ -351,10 +363,19 @@ func (l *Loop) GetTools() []tools.Tool {
 	defs := l.tools.GetDefinitions()
 	result := make([]tools.Tool, 0, len(defs))
 	for _, def := range defs {
-		if name, ok := def["name"].(string); ok {
-			if t := l.tools.Get(name); t != nil {
-				result = append(result, t)
+		name := ""
+		if n, ok := def["name"].(string); ok {
+			name = n
+		} else if fn, ok := def["function"].(map[string]any); ok {
+			if n, ok := fn["name"].(string); ok {
+				name = n
 			}
+		}
+		if name == "" {
+			continue
+		}
+		if t := l.tools.Get(name); t != nil {
+			result = append(result, t)
 		}
 	}
 	return result
