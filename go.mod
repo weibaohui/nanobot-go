@@ -4,6 +4,7 @@ go 1.21
 
 require (
 	github.com/cloudwego/eino v0.7.32
+	github.com/gorilla/websocket v1.5.0
 	github.com/open-dingtalk/dingtalk-stream-sdk-go v0.9.1
 	github.com/spf13/cobra v1.10.2
 	go.uber.org/zap v1.26.0
@@ -21,7 +22,6 @@ require (
 	github.com/eino-contrib/jsonschema v1.0.3 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/goph/emperror v0.17.2 // indirect
-	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.9 // indirect

@@ -89,12 +89,17 @@ func (c *WebSocketChannel) Start(ctx context.Context) error {
 	// 静态页面
 	mux.HandleFunc("/", c.handleIndex)
 
-	// 订阅出站消息
+	// 订阅出站消息（用于非流式响应）
 	c.SubscribeOutbound(ctx, func(msg *bus.OutboundMessage) {
 		if msg.Channel != "websocket" {
 			return
 		}
 		c.sendToClient(msg.ChatID, msg.Content)
+	})
+
+	// 订阅流式消息（用于打字机效果）
+	c.bus.SubscribeStream("websocket", func(chunk *bus.StreamChunk) error {
+		return c.sendStreamChunk(chunk.ChatID, chunk)
 	})
 
 	c.server = &http.Server{
@@ -105,6 +110,7 @@ func (c *WebSocketChannel) Start(ctx context.Context) error {
 	c.logger.Info("WebSocket 渠道启动",
 		zap.String("addr", c.config.Addr),
 		zap.String("path", c.config.Path),
+		zap.Bool("streaming", true),
 	)
 
 	// 在后台启动服务器
@@ -255,6 +261,44 @@ func (c *WebSocketChannel) sendToClient(chatID, content string) {
 	if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 		c.logger.Error("发送消息失败", zap.Error(err))
 	}
+}
+
+// sendStreamChunk 发送流式片段给客户端（打字机效果）
+func (c *WebSocketChannel) sendStreamChunk(chatID string, chunk *bus.StreamChunk) error {
+	c.clientsMu.RLock()
+	conn, ok := c.clients[chatID]
+	c.clientsMu.RUnlock()
+
+	if !ok {
+		return nil
+	}
+
+	msg := struct {
+		Type   string `json:"type"`
+		Delta  string `json:"delta"`
+		Text   string `json:"text"`
+		Time   string `json:"time"`
+		Done   bool   `json:"done"`
+	}{
+		Type:  "stream",
+		Delta: chunk.Delta,
+		Text:  chunk.Content,
+		Time:  time.Now().Format("15:04:05"),
+		Done:  chunk.Done,
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		c.logger.Error("序列化流式消息失败", zap.Error(err))
+		return err
+	}
+
+	if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
+		c.logger.Error("发送流式消息失败", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
 // StreamToClient 流式发送消息给客户端（打字机效果）

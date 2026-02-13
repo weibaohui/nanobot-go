@@ -127,6 +127,15 @@ func (l *Loop) Run(ctx context.Context) error {
 			return err
 		}
 
+		// 检查是否使用流式处理
+		if l.ShouldUseStream(msg.Channel) {
+			if err := l.ProcessWithStream(ctx, msg); err != nil {
+				l.logger.Error("流式处理消息失败", zap.Error(err))
+				l.bus.PublishOutbound(bus.NewOutboundMessage(msg.Channel, msg.ChatID, fmt.Sprintf("抱歉，我遇到了错误: %s", err)))
+			}
+			continue
+		}
+
 		// 处理消息
 		response, err := l.processMessage(ctx, msg)
 		if err != nil {
@@ -416,4 +425,124 @@ func (l *Loop) GetPlanAgent() *einoadapter.PlanExecuteAgent {
 // GetModeSelector returns the mode selector
 func (l *Loop) GetModeSelector() *einoadapter.ModeSelector {
 	return l.selector
+}
+
+// ProcessWithStream 流式处理消息并推送打字机效果
+func (l *Loop) ProcessWithStream(ctx context.Context, msg *bus.InboundMessage) error {
+	// 获取或创建会话
+	sessionKey := msg.SessionKey()
+	sess := l.sessions.GetOrCreate(sessionKey)
+
+	// 更新工具上下文
+	if mt, ok := l.tools.Get("message").(*MessageTool); ok {
+		mt.SetContext(msg.Channel, msg.ChatID)
+	}
+	if st, ok := l.tools.Get("spawn").(*SpawnTool); ok {
+		st.SetContext(msg.Channel, msg.ChatID)
+	}
+	if ct, ok := l.tools.Get("cron").(*CronTool); ok {
+		ct.SetContext(msg.Channel, msg.ChatID)
+	}
+
+	// 构建消息
+	messages := l.context.BuildMessages(sess.GetHistory(50), msg.Content, nil, msg.Media, msg.Channel, msg.ChatID)
+
+	l.logger.Info("开始流式处理",
+		zap.String("渠道", msg.Channel),
+		zap.String("chat_id", msg.ChatID),
+	)
+
+	// 代理循环
+	var finalContent string
+	var totalContent string
+
+	for i := 0; i < l.maxIterations; i++ {
+		// 使用流式 API
+		streamCh, err := l.provider.ChatStream(ctx, messages, l.tools.GetDefinitions(), l.model, 4096, 0.7)
+		if err != nil {
+			return fmt.Errorf("LLM 流式调用失败: %w", err)
+		}
+
+		var iterationContent string
+		var hasToolCalls bool
+		var toolCalls []providers.ToolCallRequest
+
+		// 处理流式响应
+		for chunk := range streamCh {
+			if chunk.Delta != "" {
+				iterationContent += chunk.Delta
+				totalContent += chunk.Delta
+
+				// 发布流式片段到 bus
+				l.bus.PublishStream(bus.NewStreamChunk(msg.Channel, msg.ChatID, chunk.Delta, totalContent, false))
+			}
+
+			if len(chunk.ToolCalls) > 0 {
+				hasToolCalls = true
+				toolCalls = append(toolCalls, chunk.ToolCalls...)
+			}
+
+			if chunk.Done {
+				break
+			}
+		}
+
+		if hasToolCalls {
+			// 添加助手消息
+			toolCallDicts := l.buildToolCallDicts(toolCalls)
+			messages = l.context.AddAssistantMessage(messages, iterationContent, toolCallDicts, "")
+
+			// 执行工具
+			for _, tc := range toolCalls {
+				argsJSON, _ := json.Marshal(tc.Arguments)
+				l.logger.Info("工具调用",
+					zap.String("工具", tc.Name),
+					zap.String("参数", string(argsJSON)),
+				)
+
+				result, err := l.tools.Execute(ctx, tc.Name, tc.Arguments)
+				if err != nil {
+					result = fmt.Sprintf("错误: %s", err)
+				}
+				messages = l.context.AddToolResult(messages, tc.ID, tc.Name, result)
+			}
+
+			// 重置 totalContent 用于下一轮
+			totalContent = ""
+
+			// 添加反思提示
+			messages = append(messages, map[string]any{
+				"role":    "user",
+				"content": "反思结果并决定下一步。",
+			})
+		} else {
+			finalContent = iterationContent
+			break
+		}
+	}
+
+	if finalContent == "" {
+		finalContent = "我已完成处理但没有响应内容。"
+	}
+
+	// 发送完成标记
+	l.bus.PublishStream(bus.NewStreamChunk(msg.Channel, msg.ChatID, "", finalContent, true))
+
+	l.logger.Info("流式处理完成",
+		zap.String("渠道", msg.Channel),
+		zap.Int("内容长度", len(finalContent)),
+	)
+
+	// 保存会话
+	sess.AddMessage("user", msg.Content)
+	sess.AddMessage("assistant", finalContent)
+	l.sessions.Save(sess)
+
+	return nil
+}
+
+// ShouldUseStream 判断是否应该使用流式处理
+func (l *Loop) ShouldUseStream(channel string) bool {
+	// 目前只有 websocket 渠道支持流式
+	return channel == "websocket"
 }
