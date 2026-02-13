@@ -2,15 +2,15 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/weibaohui/nanobot-go/agent/tools"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/cron"
-	einoadapter "github.com/weibaohui/nanobot-go/eino_adapter"
+	"github.com/weibaohui/nanobot-go/eino_adapter"
 	"github.com/weibaohui/nanobot-go/providers"
 	"github.com/weibaohui/nanobot-go/session"
+	"github.com/cloudwego/eino/schema"
 	"go.uber.org/zap"
 )
 
@@ -32,9 +32,12 @@ type Loop struct {
 	running             bool
 	logger              *zap.Logger
 
+	// ADK Agent
+	adkAgent *eino_adapter.ChatModelAgent
+
 	// Plan-Execute mode support
-	planAgent *einoadapter.PlanExecuteAgent
-	selector  *einoadapter.ModeSelector
+	planAgent *eino_adapter.PlanExecuteAgent
+	selector  *eino_adapter.ModeSelector
 }
 
 // NewLoop 创建代理循环
@@ -64,6 +67,23 @@ func NewLoop(messageBus *bus.MessageBus, provider providers.LLMProvider, workspa
 
 	// 注册默认工具
 	loop.registerDefaultTools()
+
+	// 创建 ADK Agent
+	ctx := context.Background()
+	adkAgent, err := eino_adapter.NewChatModelAgent(ctx, &eino_adapter.ChatModelAgentConfig{
+		Provider:      provider,
+		Model:         model,
+		Tools:         loop.GetTools(),
+		Logger:        logger,
+		MaxIterations: maxIterations,
+		EnableStream:  true,
+	})
+	if err != nil {
+		logger.Error("创建 ADK Agent 失败，将使用回退模式", zap.Error(err))
+	} else {
+		loop.adkAgent = adkAgent
+		logger.Info("ADK Agent 创建成功")
+	}
 
 	return loop
 }
@@ -127,26 +147,10 @@ func (l *Loop) Run(ctx context.Context) error {
 			return err
 		}
 
-		// 检查是否使用流式处理
-		if l.ShouldUseStream(msg.Channel) {
-			if err := l.ProcessWithStream(ctx, msg); err != nil {
-				l.logger.Error("流式处理消息失败", zap.Error(err))
-				l.bus.PublishOutbound(bus.NewOutboundMessage(msg.Channel, msg.ChatID, fmt.Sprintf("抱歉，我遇到了错误: %s", err)))
-			}
-			continue
-		}
-
 		// 处理消息
-		response, err := l.processMessage(ctx, msg)
-		if err != nil {
+		if err := l.processMessage(ctx, msg); err != nil {
 			l.logger.Error("处理消息失败", zap.Error(err))
-			// 发送错误响应
 			l.bus.PublishOutbound(bus.NewOutboundMessage(msg.Channel, msg.ChatID, fmt.Sprintf("抱歉，我遇到了错误: %s", err)))
-			continue
-		}
-
-		if response != nil {
-			l.bus.PublishOutbound(response)
 		}
 	}
 
@@ -160,12 +164,7 @@ func (l *Loop) Stop() {
 }
 
 // processMessage 处理单条消息
-func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bus.OutboundMessage, error) {
-	// 处理系统消息（子代理公告）
-	if msg.Channel == "system" {
-		return l.processSystemMessage(ctx, msg)
-	}
-
+func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) error {
 	preview := msg.Content
 	if len(preview) > 80 {
 		preview = preview[:80] + "..."
@@ -176,100 +175,116 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 		zap.String("内容", preview),
 	)
 
-	// Check if we should use plan mode for complex tasks
+	// 更新工具上下文
+	l.updateToolContext(msg.Channel, msg.ChatID)
+
+	// 检查是否使用计划模式
 	if l.planAgent != nil && l.selector != nil && l.selector.ShouldUsePlanMode(msg.Content) {
-		l.logger.Info("使用计划执行模式处理复杂任务")
+		l.logger.Info("使用计划执行模式")
 		return l.processWithPlan(ctx, msg)
 	}
 
-	// 获取或创建会话
-	sessionKey := msg.SessionKey()
-	sess := l.sessions.GetOrCreate(sessionKey)
+	// 检查是否使用流式处理
+	if l.ShouldUseStream(msg.Channel) {
+		return l.processWithStream(ctx, msg)
+	}
 
-	// 更新工具上下文
+	// 使用普通模式
+	return l.processWithADK(ctx, msg)
+}
+
+// updateToolContext 更新工具上下文
+func (l *Loop) updateToolContext(channel, chatID string) {
 	if mt, ok := l.tools.Get("message").(*MessageTool); ok {
-		mt.SetContext(msg.Channel, msg.ChatID)
+		mt.SetContext(channel, chatID)
 	}
 	if st, ok := l.tools.Get("spawn").(*SpawnTool); ok {
-		st.SetContext(msg.Channel, msg.ChatID)
+		st.SetContext(channel, chatID)
 	}
 	if ct, ok := l.tools.Get("cron").(*CronTool); ok {
-		ct.SetContext(msg.Channel, msg.ChatID)
+		ct.SetContext(channel, chatID)
+	}
+}
+
+// processWithADK 使用 ADK Agent 处理消息
+func (l *Loop) processWithADK(ctx context.Context, msg *bus.InboundMessage) error {
+	if l.adkAgent == nil {
+		return fmt.Errorf("ADK Agent 未初始化")
 	}
 
-	// 构建消息
-	messages := l.context.BuildMessages(sess.GetHistory(50), msg.Content, nil, msg.Media, msg.Channel, msg.ChatID)
+	// 获取会话历史
+	sessionKey := msg.SessionKey()
+	sess := l.sessions.GetOrCreate(sessionKey)
+	history := l.convertHistory(sess.GetHistory(50))
 
-	// 代理循环
-	var finalContent string
-
-	for i := 0; i < l.maxIterations; i++ {
-		response, err := l.provider.Chat(ctx, messages, l.tools.GetDefinitions(), l.model, 4096, 0.7)
-		if err != nil {
-			return nil, fmt.Errorf("LLM 调用失败: %w", err)
-		}
-
-		if response.HasToolCalls() {
-			// 添加助手消息
-			toolCallDicts := l.buildToolCallDicts(response.ToolCalls)
-			messages = l.context.AddAssistantMessage(messages, response.Content, toolCallDicts, response.ReasoningContent)
-
-			// 执行工具
-			for _, tc := range response.ToolCalls {
-				argsJSON, _ := json.Marshal(tc.Arguments)
-				l.logger.Info("工具调用",
-					zap.String("工具", tc.Name),
-					zap.String("参数", string(argsJSON)),
-				)
-
-				result, err := l.tools.Execute(ctx, tc.Name, tc.Arguments)
-				if err != nil {
-					result = fmt.Sprintf("错误: %s", err)
-				}
-				messages = l.context.AddToolResult(messages, tc.ID, tc.Name, result)
-			}
-
-			// 添加反思提示
-			messages = append(messages, map[string]any{
-				"role":    "user",
-				"content": "反思结果并决定下一步。",
-			})
-		} else {
-			finalContent = response.Content
-			break
-		}
+	// 执行
+	response, err := l.adkAgent.ExecuteWithHistory(ctx, msg.Content, history)
+	if err != nil {
+		return fmt.Errorf("ADK Agent 执行失败: %w", err)
 	}
 
-	if finalContent == "" {
-		finalContent = "我已完成处理但没有响应内容。"
-	}
-
-	// 记录响应预览
-	preview = finalContent
-	if len(preview) > 120 {
-		preview = preview[:120] + "..."
-	}
-	l.logger.Info("响应",
-		zap.String("渠道", msg.Channel),
-		zap.String("发送者", msg.SenderID),
-		zap.String("内容", preview),
-	)
+	// 发布响应
+	l.bus.PublishOutbound(bus.NewOutboundMessage(msg.Channel, msg.ChatID, response))
 
 	// 保存会话
 	sess.AddMessage("user", msg.Content)
-	sess.AddMessage("assistant", finalContent)
+	sess.AddMessage("assistant", response)
 	l.sessions.Save(sess)
 
-	return bus.NewOutboundMessage(msg.Channel, msg.ChatID, finalContent), nil
+	l.logger.Info("响应完成",
+		zap.String("渠道", msg.Channel),
+		zap.Int("内容长度", len(response)),
+	)
+
+	return nil
 }
 
-// processWithPlan 使用计划执行模式处理复杂任务
-func (l *Loop) processWithPlan(ctx context.Context, msg *bus.InboundMessage) (*bus.OutboundMessage, error) {
-	// 使用计划执行代理处理
+// processWithStream 使用流式处理
+func (l *Loop) processWithStream(ctx context.Context, msg *bus.InboundMessage) error {
+	if l.adkAgent == nil {
+		return fmt.Errorf("ADK Agent 未初始化")
+	}
+
+	// 获取会话历史
+	sessionKey := msg.SessionKey()
+	sess := l.sessions.GetOrCreate(sessionKey)
+	history := l.convertHistory(sess.GetHistory(50))
+
+	// 流式执行
+	response, err := l.adkAgent.ExecuteStream(ctx, msg.Content, history, func(delta, fullContent string) error {
+		// 发布流式片段
+		l.bus.PublishStream(bus.NewStreamChunk(msg.Channel, msg.ChatID, delta, fullContent, false))
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("流式执行失败: %w", err)
+	}
+
+	// 发送完成标记
+	l.bus.PublishStream(bus.NewStreamChunk(msg.Channel, msg.ChatID, "", response, true))
+
+	// 保存会话
+	sess.AddMessage("user", msg.Content)
+	sess.AddMessage("assistant", response)
+	l.sessions.Save(sess)
+
+	l.logger.Info("流式响应完成",
+		zap.String("渠道", msg.Channel),
+		zap.Int("内容长度", len(response)),
+	)
+
+	return nil
+}
+
+// processWithPlan 使用计划执行模式
+func (l *Loop) processWithPlan(ctx context.Context, msg *bus.InboundMessage) error {
 	response, err := l.planAgent.Execute(ctx, msg.Content)
 	if err != nil {
-		return nil, fmt.Errorf("计划执行失败: %w", err)
+		return fmt.Errorf("计划执行失败: %w", err)
 	}
+
+	// 发布响应
+	l.bus.PublishOutbound(bus.NewOutboundMessage(msg.Channel, msg.ChatID, response))
 
 	// 保存会话
 	sessionKey := msg.SessionKey()
@@ -278,119 +293,59 @@ func (l *Loop) processWithPlan(ctx context.Context, msg *bus.InboundMessage) (*b
 	sess.AddMessage("assistant", response)
 	l.sessions.Save(sess)
 
-	return bus.NewOutboundMessage(msg.Channel, msg.ChatID, response), nil
+	return nil
 }
 
-// processSystemMessage 处理系统消息
-func (l *Loop) processSystemMessage(ctx context.Context, msg *bus.InboundMessage) (*bus.OutboundMessage, error) {
-	l.logger.Info("处理系统消息", zap.String("发送者", msg.SenderID))
-
-	// 解析来源
-	var originChannel, originChatID string
-	if idx := len(msg.ChatID) - len(msg.ChatID) - 1; idx > 0 {
-		// 查找冒号位置
-		for i, c := range msg.ChatID {
-			if c == ':' {
-				originChannel = msg.ChatID[:i]
-				originChatID = msg.ChatID[i+1:]
-				break
-			}
+// convertHistory 转换会话历史为 eino Message 格式
+func (l *Loop) convertHistory(history []map[string]any) []*schema.Message {
+	result := make([]*schema.Message, 0, len(history))
+	for _, h := range history {
+		role := schema.User
+		if r, ok := h["role"].(string); ok && r == "assistant" {
+			role = schema.Assistant
 		}
-	}
-	if originChannel == "" {
-		originChannel = "cli"
-		originChatID = msg.ChatID
-	}
-
-	// 使用来源会话
-	sessionKey := originChannel + ":" + originChatID
-	sess := l.sessions.GetOrCreate(sessionKey)
-
-	// 更新工具上下文
-	if mt, ok := l.tools.Get("message").(*MessageTool); ok {
-		mt.SetContext(originChannel, originChatID)
-	}
-	if st, ok := l.tools.Get("spawn").(*SpawnTool); ok {
-		st.SetContext(originChannel, originChatID)
-	}
-	if ct, ok := l.tools.Get("cron").(*CronTool); ok {
-		ct.SetContext(originChannel, originChatID)
-	}
-
-	// 构建消息
-	messages := l.context.BuildMessages(sess.GetHistory(50), msg.Content, nil, nil, originChannel, originChatID)
-
-	// 代理循环
-	var finalContent string
-
-	for i := 0; i < l.maxIterations; i++ {
-		response, err := l.provider.Chat(ctx, messages, l.tools.GetDefinitions(), l.model, 4096, 0.7)
-		if err != nil {
-			return nil, fmt.Errorf("LLM 调用失败: %w", err)
+		content := ""
+		if c, ok := h["content"].(string); ok {
+			content = c
 		}
-
-		if response.HasToolCalls() {
-			toolCallDicts := l.buildToolCallDicts(response.ToolCalls)
-			messages = l.context.AddAssistantMessage(messages, response.Content, toolCallDicts, response.ReasoningContent)
-
-			for _, tc := range response.ToolCalls {
-				result, err := l.tools.Execute(ctx, tc.Name, tc.Arguments)
-				if err != nil {
-					result = fmt.Sprintf("错误: %s", err)
-				}
-				messages = l.context.AddToolResult(messages, tc.ID, tc.Name, result)
-			}
-
-			messages = append(messages, map[string]any{
-				"role":    "user",
-				"content": "反思结果并决定下一步。",
-			})
-		} else {
-			finalContent = response.Content
-			break
-		}
+		result = append(result, &schema.Message{
+			Role:    role,
+			Content: content,
+		})
 	}
+	return result
+}
 
-	if finalContent == "" {
-		finalContent = "后台任务已完成。"
-	}
-
-	// 保存会话
-	sess.AddMessage("user", fmt.Sprintf("[系统: %s] %s", msg.SenderID, msg.Content))
-	sess.AddMessage("assistant", finalContent)
-	l.sessions.Save(sess)
-
-	return bus.NewOutboundMessage(originChannel, originChatID, finalContent), nil
+// ShouldUseStream 判断是否应该使用流式处理
+func (l *Loop) ShouldUseStream(channel string) bool {
+	return channel == "websocket"
 }
 
 // ProcessDirect 直接处理消息（用于 CLI 或 cron）
 func (l *Loop) ProcessDirect(ctx context.Context, content, sessionKey, channel, chatID string) (string, error) {
-	msg := bus.NewInboundMessage(channel, "user", chatID, content)
-	response, err := l.processMessage(ctx, msg)
+	// 更新工具上下文
+	l.updateToolContext(channel, chatID)
+
+	if l.adkAgent == nil {
+		return "", fmt.Errorf("ADK Agent 未初始化")
+	}
+
+	// 获取会话历史
+	sess := l.sessions.GetOrCreate(sessionKey)
+	history := l.convertHistory(sess.GetHistory(50))
+
+	// 执行
+	response, err := l.adkAgent.ExecuteWithHistory(ctx, content, history)
 	if err != nil {
 		return "", err
 	}
-	if response == nil {
-		return "", nil
-	}
-	return response.Content, nil
-}
 
-// buildToolCallDicts 构建工具调用字典
-func (l *Loop) buildToolCallDicts(toolCalls []providers.ToolCallRequest) []map[string]any {
-	var dicts []map[string]any
-	for _, tc := range toolCalls {
-		argsJSON, _ := json.Marshal(tc.Arguments)
-		dicts = append(dicts, map[string]any{
-			"id":   tc.ID,
-			"type": "function",
-			"function": map[string]any{
-				"name":      tc.Name,
-				"arguments": string(argsJSON),
-			},
-		})
-	}
-	return dicts
+	// 保存会话
+	sess.AddMessage("user", content)
+	sess.AddMessage("assistant", response)
+	l.sessions.Save(sess)
+
+	return response, nil
 }
 
 // GetTools returns all registered tools as a slice
@@ -408,141 +363,26 @@ func (l *Loop) GetTools() []tools.Tool {
 }
 
 // SetPlanAgent sets the plan-execute agent for complex task handling
-func (l *Loop) SetPlanAgent(planAgent *einoadapter.PlanExecuteAgent) {
+func (l *Loop) SetPlanAgent(planAgent *eino_adapter.PlanExecuteAgent) {
 	l.planAgent = planAgent
 }
 
 // SetModeSelector sets the mode selector for automatic mode switching
-func (l *Loop) SetModeSelector(selector *einoadapter.ModeSelector) {
+func (l *Loop) SetModeSelector(selector *eino_adapter.ModeSelector) {
 	l.selector = selector
 }
 
 // GetPlanAgent returns the plan-execute agent
-func (l *Loop) GetPlanAgent() *einoadapter.PlanExecuteAgent {
+func (l *Loop) GetPlanAgent() *eino_adapter.PlanExecuteAgent {
 	return l.planAgent
 }
 
 // GetModeSelector returns the mode selector
-func (l *Loop) GetModeSelector() *einoadapter.ModeSelector {
+func (l *Loop) GetModeSelector() *eino_adapter.ModeSelector {
 	return l.selector
 }
 
-// ProcessWithStream 流式处理消息并推送打字机效果
-func (l *Loop) ProcessWithStream(ctx context.Context, msg *bus.InboundMessage) error {
-	// 获取或创建会话
-	sessionKey := msg.SessionKey()
-	sess := l.sessions.GetOrCreate(sessionKey)
-
-	// 更新工具上下文
-	if mt, ok := l.tools.Get("message").(*MessageTool); ok {
-		mt.SetContext(msg.Channel, msg.ChatID)
-	}
-	if st, ok := l.tools.Get("spawn").(*SpawnTool); ok {
-		st.SetContext(msg.Channel, msg.ChatID)
-	}
-	if ct, ok := l.tools.Get("cron").(*CronTool); ok {
-		ct.SetContext(msg.Channel, msg.ChatID)
-	}
-
-	// 构建消息
-	messages := l.context.BuildMessages(sess.GetHistory(50), msg.Content, nil, msg.Media, msg.Channel, msg.ChatID)
-
-	l.logger.Info("开始流式处理",
-		zap.String("渠道", msg.Channel),
-		zap.String("chat_id", msg.ChatID),
-	)
-
-	// 代理循环
-	var finalContent string
-	var totalContent string
-
-	for i := 0; i < l.maxIterations; i++ {
-		// 使用流式 API
-		streamCh, err := l.provider.ChatStream(ctx, messages, l.tools.GetDefinitions(), l.model, 4096, 0.7)
-		if err != nil {
-			return fmt.Errorf("LLM 流式调用失败: %w", err)
-		}
-
-		var iterationContent string
-		var hasToolCalls bool
-		var toolCalls []providers.ToolCallRequest
-
-		// 处理流式响应
-		for chunk := range streamCh {
-			if chunk.Delta != "" {
-				iterationContent += chunk.Delta
-				totalContent += chunk.Delta
-
-				// 发布流式片段到 bus
-				l.bus.PublishStream(bus.NewStreamChunk(msg.Channel, msg.ChatID, chunk.Delta, totalContent, false))
-			}
-
-			if len(chunk.ToolCalls) > 0 {
-				hasToolCalls = true
-				toolCalls = append(toolCalls, chunk.ToolCalls...)
-			}
-
-			if chunk.Done {
-				break
-			}
-		}
-
-		if hasToolCalls {
-			// 添加助手消息
-			toolCallDicts := l.buildToolCallDicts(toolCalls)
-			messages = l.context.AddAssistantMessage(messages, iterationContent, toolCallDicts, "")
-
-			// 执行工具
-			for _, tc := range toolCalls {
-				argsJSON, _ := json.Marshal(tc.Arguments)
-				l.logger.Info("工具调用",
-					zap.String("工具", tc.Name),
-					zap.String("参数", string(argsJSON)),
-				)
-
-				result, err := l.tools.Execute(ctx, tc.Name, tc.Arguments)
-				if err != nil {
-					result = fmt.Sprintf("错误: %s", err)
-				}
-				messages = l.context.AddToolResult(messages, tc.ID, tc.Name, result)
-			}
-
-			// 重置 totalContent 用于下一轮
-			totalContent = ""
-
-			// 添加反思提示
-			messages = append(messages, map[string]any{
-				"role":    "user",
-				"content": "反思结果并决定下一步。",
-			})
-		} else {
-			finalContent = iterationContent
-			break
-		}
-	}
-
-	if finalContent == "" {
-		finalContent = "我已完成处理但没有响应内容。"
-	}
-
-	// 发送完成标记
-	l.bus.PublishStream(bus.NewStreamChunk(msg.Channel, msg.ChatID, "", finalContent, true))
-
-	l.logger.Info("流式处理完成",
-		zap.String("渠道", msg.Channel),
-		zap.Int("内容长度", len(finalContent)),
-	)
-
-	// 保存会话
-	sess.AddMessage("user", msg.Content)
-	sess.AddMessage("assistant", finalContent)
-	l.sessions.Save(sess)
-
-	return nil
-}
-
-// ShouldUseStream 判断是否应该使用流式处理
-func (l *Loop) ShouldUseStream(channel string) bool {
-	// 目前只有 websocket 渠道支持流式
-	return channel == "websocket"
+// GetADKAgent returns the ADK agent
+func (l *Loop) GetADKAgent() *eino_adapter.ChatModelAgent {
+	return l.adkAgent
 }
