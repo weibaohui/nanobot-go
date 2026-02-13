@@ -14,4 +14,5 @@ require (
 	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/stretchr/testify v1.8.4 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
+	nhooyr.io/websocket v1.8.17 // indirect
 )
