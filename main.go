@@ -467,6 +467,11 @@ func loadConfigAndWorkspace(logger *zap.Logger) (*config.Config, string) {
 		logger.Fatal("加载配置失败", zap.Error(err))
 	}
 
+	// 如果配置文件中指定了 workspace 且命令行未指定，使用配置中的路径
+	if agentWorkspace == "" && cfg.Agents.Defaults.Workspace != "" {
+		workspacePath = config.GetWorkspacePath(cfg.Agents.Defaults.Workspace)
+	}
+
 	return cfg, workspacePath
 }
 
