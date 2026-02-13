@@ -233,6 +233,37 @@ func (l *Loop) updateToolContext(channel, chatID string) {
 	}
 }
 
+// buildMessagesWithSystem 构建包含系统提示词的消息列表
+func (l *Loop) buildMessagesWithSystem(history []*schema.Message, userInput, channel, chatID string) []*schema.Message {
+	// 构建系统提示词
+	systemPrompt := l.context.BuildSystemPrompt(nil)
+	if channel != "" && chatID != "" {
+		systemPrompt += fmt.Sprintf("\n\n## 当前会话\n渠道: %s\n聊天 ID: %s", channel, chatID)
+	}
+
+	// 构建消息列表
+	messages := make([]*schema.Message, 0, len(history)+2)
+
+	// 添加系统消息
+	messages = append(messages, &schema.Message{
+		Role:    schema.System,
+		Content: systemPrompt,
+	})
+
+	// 添加历史消息
+	if len(history) > 0 {
+		messages = append(messages, history...)
+	}
+
+	// 添加当前用户消息
+	messages = append(messages, &schema.Message{
+		Role:    schema.User,
+		Content: userInput,
+	})
+
+	return messages
+}
+
 // processWithADK 使用 ADK Agent 处理消息
 func (l *Loop) processWithADK(ctx context.Context, msg *bus.InboundMessage) error {
 	if l.adkAgent == nil || l.adkRunner == nil {
@@ -244,14 +275,8 @@ func (l *Loop) processWithADK(ctx context.Context, msg *bus.InboundMessage) erro
 	sess := l.sessions.GetOrCreate(sessionKey)
 	history := l.convertHistory(sess.GetHistory(50))
 
-	messages := make([]*schema.Message, 0, len(history)+1)
-	if len(history) > 0 {
-		messages = append(messages, history...)
-	}
-	messages = append(messages, &schema.Message{
-		Role:    schema.User,
-		Content: msg.Content,
-	})
+	// 构建消息（包含系统提示词）
+	messages := l.buildMessagesWithSystem(history, msg.Content, msg.Channel, msg.ChatID)
 
 	iter := l.adkRunner.Run(ctx, messages)
 	var response string
@@ -299,14 +324,8 @@ func (l *Loop) processWithStream(ctx context.Context, msg *bus.InboundMessage) e
 	sess := l.sessions.GetOrCreate(sessionKey)
 	history := l.convertHistory(sess.GetHistory(50))
 
-	messages := make([]*schema.Message, 0, len(history)+1)
-	if len(history) > 0 {
-		messages = append(messages, history...)
-	}
-	messages = append(messages, &schema.Message{
-		Role:    schema.User,
-		Content: msg.Content,
-	})
+	// 构建消息（包含系统提示词）
+	messages := l.buildMessagesWithSystem(history, msg.Content, msg.Channel, msg.ChatID)
 
 	iter := l.adkRunner.Run(ctx, messages)
 	var response string
