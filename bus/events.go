@@ -28,6 +28,15 @@ type OutboundMessage struct {
 	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
+// StreamChunk 表示流式输出的一个片段
+type StreamChunk struct {
+	Channel  string `json:"channel"`
+	ChatID   string `json:"chat_id"`
+	Delta    string `json:"delta"`    // 增量内容
+	Content  string `json:"content"`  // 累积内容
+	Done     bool   `json:"done"`     // 是否完成
+}
+
 // NewInboundMessage 创建一个新的入站消息
 func NewInboundMessage(channel, senderID, chatID, content string) *InboundMessage {
 	return &InboundMessage{
@@ -49,5 +58,16 @@ func NewOutboundMessage(channel, chatID, content string) *OutboundMessage {
 		Content:  content,
 		Media:    []string{},
 		Metadata: make(map[string]any),
+	}
+}
+
+// NewStreamChunk 创建一个新的流式片段
+func NewStreamChunk(channel, chatID, delta, content string, done bool) *StreamChunk {
+	return &StreamChunk{
+		Channel: channel,
+		ChatID:  chatID,
+		Delta:   delta,
+		Content: content,
+		Done:    done,
 	}
 }
