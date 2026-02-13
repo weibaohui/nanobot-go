@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
 
+	"github.com/weibaohui/nanobot-go/agent/tools"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/cron"
 	"github.com/weibaohui/nanobot-go/providers"
@@ -26,70 +26,10 @@ type Loop struct {
 	cronService         *cron.Service
 	context             *ContextBuilder
 	sessions            *session.Manager
-	tools               *ToolRegistry
+	tools               *tools.Registry
 	subagents           *SubagentManager
 	running             bool
 	logger              *zap.Logger
-}
-
-// ToolRegistry 工具注册表（本地定义避免循环导入）
-type ToolRegistry struct {
-	tools map[string]Tool
-	mu    sync.RWMutex
-}
-
-// Tool 工具接口（本地定义）
-type Tool interface {
-	Name() string
-	Description() string
-	Parameters() map[string]any
-	Execute(ctx context.Context, params map[string]any) (string, error)
-	ToSchema() map[string]any
-}
-
-// NewToolRegistry 创建工具注册表
-func NewToolRegistry() *ToolRegistry {
-	return &ToolRegistry{
-		tools: make(map[string]Tool),
-	}
-}
-
-// Register 注册工具
-func (r *ToolRegistry) Register(tool Tool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.tools[tool.Name()] = tool
-}
-
-// Get 获取工具
-func (r *ToolRegistry) Get(name string) Tool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.tools[name]
-}
-
-// GetDefinitions 获取所有工具定义
-func (r *ToolRegistry) GetDefinitions() []map[string]any {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	var defs []map[string]any
-	for _, tool := range r.tools {
-		defs = append(defs, tool.ToSchema())
-	}
-	return defs
-}
-
-// Execute 执行工具
-func (r *ToolRegistry) Execute(ctx context.Context, name string, params map[string]any) (string, error) {
-	r.mu.RLock()
-	tool, ok := r.tools[name]
-	r.mu.RUnlock()
-
-	if !ok {
-		return "", fmt.Errorf("工具 '%s' 不存在", name)
-	}
-	return tool.Execute(ctx, params)
 }
 
 // NewLoop 创建代理循环
@@ -110,7 +50,7 @@ func NewLoop(messageBus *bus.MessageBus, provider providers.LLMProvider, workspa
 		cronService:         cronService,
 		context:             NewContextBuilder(workspace),
 		sessions:            sessionManager,
-		tools:               NewToolRegistry(),
+		tools:               tools.NewRegistry(),
 		logger:              logger,
 	}
 
@@ -131,21 +71,23 @@ func (l *Loop) registerDefaultTools() {
 	}
 
 	// 文件工具
-	l.tools.Register(&ReadFileTool{AllowedDir: allowedDir})
-	l.tools.Register(&WriteFileTool{AllowedDir: allowedDir})
-	l.tools.Register(&EditFileTool{AllowedDir: allowedDir})
-	l.tools.Register(&ListDirTool{AllowedDir: allowedDir})
+	l.tools.Register(&tools.ReadFileTool{AllowedDir: allowedDir})
+	l.tools.Register(&tools.WriteFileTool{AllowedDir: allowedDir})
+	l.tools.Register(&tools.EditFileTool{AllowedDir: allowedDir})
+	l.tools.Register(&tools.ListDirTool{AllowedDir: allowedDir})
 
 	// Shell 工具
-	l.tools.Register(&ExecTool{Timeout: l.execTimeout, WorkingDir: l.workspace, RestrictToWorkspace: l.restrictToWorkspace})
+	l.tools.Register(&tools.ExecTool{Timeout: l.execTimeout, WorkingDir: l.workspace, RestrictToWorkspace: l.restrictToWorkspace})
 
 	// Web 工具
-	l.tools.Register(&WebSearchTool{APIKey: l.braveAPIKey, MaxResults: 5})
-	l.tools.Register(&WebFetchTool{MaxChars: 50000})
+	l.tools.Register(&tools.WebSearchTool{APIKey: l.braveAPIKey, MaxResults: 5})
+	l.tools.Register(&tools.WebFetchTool{MaxChars: 50000})
 
 	// 消息工具
-	l.tools.Register(&MessageTool{SendCallback: func(msg *bus.OutboundMessage) error {
-		l.bus.PublishOutbound(msg)
+	l.tools.Register(&MessageTool{SendCallback: func(msg any) error {
+		if outMsg, ok := msg.(*bus.OutboundMessage); ok {
+			l.bus.PublishOutbound(outMsg)
+		}
 		return nil
 	}})
 

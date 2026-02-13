@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/weibaohui/nanobot-go/agent/tools"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/providers"
 	"go.uber.org/zap"
@@ -87,19 +88,19 @@ func (m *SubagentManager) runSubagent(ctx context.Context, taskID, task, label, 
 		zap.String("标签", label),
 	)
 
-	registry := NewToolRegistry()
+	registry := tools.NewRegistry()
 	allowedDir := ""
 	if m.restrictToWorkspace {
 		allowedDir = m.workspace
 	}
 
-	registry.Register(&ReadFileTool{AllowedDir: allowedDir})
-	registry.Register(&WriteFileTool{AllowedDir: allowedDir})
-	registry.Register(&EditFileTool{AllowedDir: allowedDir})
-	registry.Register(&ListDirTool{AllowedDir: allowedDir})
-	registry.Register(&ExecTool{Timeout: m.execTimeout, WorkingDir: m.workspace, RestrictToWorkspace: m.restrictToWorkspace})
-	registry.Register(&WebSearchTool{APIKey: m.braveAPIKey, MaxResults: 5})
-	registry.Register(&WebFetchTool{MaxChars: 50000})
+	registry.Register(&tools.ReadFileTool{AllowedDir: allowedDir})
+	registry.Register(&tools.WriteFileTool{AllowedDir: allowedDir})
+	registry.Register(&tools.EditFileTool{AllowedDir: allowedDir})
+	registry.Register(&tools.ListDirTool{AllowedDir: allowedDir})
+	registry.Register(&tools.ExecTool{Timeout: m.execTimeout, WorkingDir: m.workspace, RestrictToWorkspace: m.restrictToWorkspace})
+	registry.Register(&tools.WebSearchTool{APIKey: m.braveAPIKey, MaxResults: 5})
+	registry.Register(&tools.WebFetchTool{MaxChars: 50000})
 
 	systemPrompt := m.buildSubagentPrompt(task)
 	messages := []map[string]any{

@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/weibaohui/nanobot-go/agent"
 	"github.com/weibaohui/nanobot-go/bus"
-	"github.com/weibaohui/nanobot-go/channel"
+	"github.com/weibaohui/nanobot-go/channels"
 	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/cron"
 	"github.com/weibaohui/nanobot-go/providers"
@@ -249,9 +249,9 @@ func runGateway(cmd *cobra.Command, args []string) {
 		logger,
 	)
 
-	channelManager := channel.NewManager(messageBus)
+	channelManager := channels.NewManager(messageBus)
 
-	cliChannel := channel.NewCLIChannel(messageBus, "default", logger)
+	cliChannel := channels.NewCLIChannel(messageBus, "default", logger)
 	channelManager.Register(cliChannel)
 
 	cronService.SetOnJobCallback(func(job *cron.Job) (string, error) {
