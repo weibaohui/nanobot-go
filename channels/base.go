@@ -46,23 +46,12 @@ func (c *BaseChannel) PublishInbound(msg *bus.InboundMessage) {
 }
 
 // SubscribeOutbound 订阅出站消息
+// 使用 MessageBus 的订阅机制，确保所有渠道都能收到消息
 func (c *BaseChannel) SubscribeOutbound(ctx context.Context, handler func(msg *bus.OutboundMessage)) {
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				msg, err := c.bus.ConsumeOutbound(ctx)
-				if err != nil {
-					continue
-				}
-				if msg.Channel == c.name {
-					handler(msg)
-				}
-			}
-		}
-	}()
+	c.bus.SubscribeOutbound(c.name, func(msg *bus.OutboundMessage) error {
+		handler(msg)
+		return nil
+	})
 }
 
 // Manager 渠道管理器

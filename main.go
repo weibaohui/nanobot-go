@@ -265,6 +265,9 @@ func runGateway(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// 启动消息分发器，将出站消息分发给各渠道
+	messageBus.StartDispatcher(ctx)
+
 	if err := cronService.Start(ctx); err != nil {
 		logger.Error("启动定时任务服务失败", zap.Error(err))
 	}
