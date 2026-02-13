@@ -19,7 +19,7 @@ func NewSkillsLoader(workspace string) *SkillsLoader {
 	return &SkillsLoader{
 		workspace:       workspace,
 		workspaceSkills: filepath.Join(workspace, "skills"),
-		builtinSkills:   "", // Go 版本暂不内置技能
+		builtinSkills:   detectBuiltinSkillsDir(),
 	}
 }
 
@@ -300,4 +300,49 @@ func escapeXML(s string) string {
 	s = strings.ReplaceAll(s, "<", "&lt;")
 	s = strings.ReplaceAll(s, ">", "&gt;")
 	return s
+}
+
+// detectBuiltinSkillsDir 解析内置技能目录
+func detectBuiltinSkillsDir() string {
+	if env := strings.TrimSpace(os.Getenv("NANOBOT_SKILLS_DIR")); env != "" {
+		return env
+	}
+	if dir := findSkillsDirFromCWD(); dir != "" {
+		return dir
+	}
+	if dir := findSkillsDirFromExecutable(); dir != "" {
+		return dir
+	}
+	return ""
+}
+
+// findSkillsDirFromCWD 从当前工作目录查找 skills
+func findSkillsDirFromCWD() string {
+	if cwd, err := os.Getwd(); err == nil {
+		dir := filepath.Join(cwd, "skills")
+		if isDir(dir) {
+			return dir
+		}
+	}
+	return ""
+}
+
+// findSkillsDirFromExecutable 从可执行文件目录查找 skills
+func findSkillsDirFromExecutable() string {
+	if exe, err := os.Executable(); err == nil {
+		dir := filepath.Join(filepath.Dir(exe), "skills")
+		if isDir(dir) {
+			return dir
+		}
+	}
+	return ""
+}
+
+// isDir 判断路径是否为目录
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return info.IsDir()
 }
