@@ -15,6 +15,7 @@ import (
 	"github.com/weibaohui/nanobot-go/channels"
 	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/cron"
+	"github.com/weibaohui/nanobot-go/heartbeat"
 	"github.com/weibaohui/nanobot-go/providers"
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
@@ -272,6 +273,20 @@ func runGateway(cmd *cobra.Command, args []string) {
 		logger.Error("启动定时任务服务失败", zap.Error(err))
 	}
 
+	// 创建并启动心跳服务
+	heartbeatService := heartbeat.NewService(
+		workspacePath,
+		func(ctx context.Context, prompt string) (string, error) {
+			return loop.ProcessDirect(ctx, prompt, "heartbeat", "heartbeat", "heartbeat")
+		},
+		0,    // 使用默认间隔（30分钟）
+		true, // 启用心跳
+		logger,
+	)
+	if err := heartbeatService.Start(ctx); err != nil {
+		logger.Error("启动心跳服务失败", zap.Error(err))
+	}
+
 	if err := channelManager.StartAll(ctx); err != nil {
 		logger.Fatal("启动渠道失败", zap.Error(err))
 	}
@@ -289,6 +304,7 @@ func runGateway(cmd *cobra.Command, args []string) {
 	logger.Info("正在关闭...")
 	cancel()
 	cronService.Stop()
+	heartbeatService.Stop()
 	channelManager.StopAll()
 	logger.Info("已关闭")
 }
