@@ -214,7 +214,6 @@ type GatewayConfig struct {
 
 // WebSearchConfig 网络搜索工具配置
 type WebSearchConfig struct {
-	APIKey     string `json:"apiKey"`
 	MaxResults int    `json:"maxResults"`
 }
 
@@ -233,8 +232,6 @@ type ToolsConfig struct {
 	Web                 WebToolsConfig `json:"web"`
 	Exec                ExecToolConfig `json:"exec"`
 	RestrictToWorkspace bool           `json:"restrictToWorkspace"`
-	BraveAPIKey         string         `json:"braveApiKey"`
-	ExecTimeout         int            `json:"execTimeout"`
 }
 
 // DefaultConfig 返回默认配置

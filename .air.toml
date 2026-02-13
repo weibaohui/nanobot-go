@@ -1,0 +1,14 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "go build -o ./tmp/nanobot ."
+include_ext = ["go"]
+exclude_dir = ["tmp", "vendor"]
+
+
+# 这是现在唯一可靠的运行方式
+full_bin = "./tmp/nanobot gateway --debug"
+
+[log]
+time = true

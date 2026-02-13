@@ -128,7 +128,7 @@ func runAgent(cmd *cobra.Command, args []string) {
 	if maxIter <= 0 {
 		maxIter = 15
 	}
-	execTimeout := cfg.Tools.ExecTimeout
+	execTimeout := cfg.Tools.Exec.Timeout
 	if execTimeout <= 0 {
 		execTimeout = 120
 	}
@@ -139,7 +139,6 @@ func runAgent(cmd *cobra.Command, args []string) {
 		workspacePath,
 		cfg.Agents.Defaults.Model,
 		maxIter,
-		cfg.Tools.BraveAPIKey,
 		execTimeout,
 		cfg.Tools.RestrictToWorkspace,
 		nil,
@@ -288,7 +287,7 @@ func runGateway(cmd *cobra.Command, args []string) {
 	if maxIter <= 0 {
 		maxIter = 15
 	}
-	execTimeout := cfg.Tools.ExecTimeout
+	execTimeout := cfg.Tools.Exec.Timeout
 	if execTimeout <= 0 {
 		execTimeout = 120
 	}
@@ -299,7 +298,6 @@ func runGateway(cmd *cobra.Command, args []string) {
 		workspacePath,
 		cfg.Agents.Defaults.Model,
 		maxIter,
-		cfg.Tools.BraveAPIKey,
 		execTimeout,
 		cfg.Tools.RestrictToWorkspace,
 		cronService,
@@ -630,8 +628,14 @@ func createDefaultConfig() *config.Config {
 			},
 		},
 		Tools: config.ToolsConfig{
-			BraveAPIKey:         os.Getenv("BRAVE_API_KEY"),
-			ExecTimeout:         120,
+			Web: config.WebToolsConfig{
+				Search: config.WebSearchConfig{
+					MaxResults: 5,
+				},
+			},
+			Exec: config.ExecToolConfig{
+				Timeout: 120,
+			},
 			RestrictToWorkspace: true,
 		},
 		Gateway: config.GatewayConfig{

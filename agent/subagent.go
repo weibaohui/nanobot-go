@@ -19,7 +19,6 @@ type SubagentManager struct {
 	workspace           string
 	bus                 *bus.MessageBus
 	model               string
-	braveAPIKey         string
 	execTimeout         int
 	restrictToWorkspace bool
 	runningTasks        map[string]context.CancelFunc
@@ -28,7 +27,7 @@ type SubagentManager struct {
 }
 
 // NewSubagentManager 创建子代理管理器
-func NewSubagentManager(provider providers.LLMProvider, workspace string, messageBus *bus.MessageBus, model, braveAPIKey string, execTimeout int, restrictToWorkspace bool, logger *zap.Logger) *SubagentManager {
+func NewSubagentManager(provider providers.LLMProvider, workspace string, messageBus *bus.MessageBus, model string, execTimeout int, restrictToWorkspace bool, logger *zap.Logger) *SubagentManager {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
@@ -37,7 +36,6 @@ func NewSubagentManager(provider providers.LLMProvider, workspace string, messag
 		workspace:           workspace,
 		bus:                 messageBus,
 		model:               model,
-		braveAPIKey:         braveAPIKey,
 		execTimeout:         execTimeout,
 		restrictToWorkspace: restrictToWorkspace,
 		runningTasks:        make(map[string]context.CancelFunc),

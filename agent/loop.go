@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/agent/tools"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/cron"
 	"github.com/weibaohui/nanobot-go/eino_adapter"
 	"github.com/weibaohui/nanobot-go/providers"
 	"github.com/weibaohui/nanobot-go/session"
-	"github.com/cloudwego/eino/schema"
 	"go.uber.org/zap"
 )
 
@@ -21,7 +21,6 @@ type Loop struct {
 	workspace           string
 	model               string
 	maxIterations       int
-	braveAPIKey         string
 	execTimeout         int
 	restrictToWorkspace bool
 	cronService         *cron.Service
@@ -41,7 +40,7 @@ type Loop struct {
 }
 
 // NewLoop 创建代理循环
-func NewLoop(messageBus *bus.MessageBus, provider providers.LLMProvider, workspace string, model string, maxIterations int, braveAPIKey string, execTimeout int, restrictToWorkspace bool, cronService *cron.Service, sessionManager *session.Manager, logger *zap.Logger) *Loop {
+func NewLoop(messageBus *bus.MessageBus, provider providers.LLMProvider, workspace string, model string, maxIterations int, execTimeout int, restrictToWorkspace bool, cronService *cron.Service, sessionManager *session.Manager, logger *zap.Logger) *Loop {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
@@ -52,7 +51,6 @@ func NewLoop(messageBus *bus.MessageBus, provider providers.LLMProvider, workspa
 		workspace:           workspace,
 		model:               model,
 		maxIterations:       maxIterations,
-		braveAPIKey:         braveAPIKey,
 		execTimeout:         execTimeout,
 		restrictToWorkspace: restrictToWorkspace,
 		cronService:         cronService,
@@ -63,7 +61,7 @@ func NewLoop(messageBus *bus.MessageBus, provider providers.LLMProvider, workspa
 	}
 
 	// 创建子代理管理器
-	loop.subagents = NewSubagentManager(provider, workspace, messageBus, model, braveAPIKey, execTimeout, restrictToWorkspace, logger)
+	loop.subagents = NewSubagentManager(provider, workspace, messageBus, model, execTimeout, restrictToWorkspace, logger)
 
 	// 注册默认工具
 	loop.registerDefaultTools()
