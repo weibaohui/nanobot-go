@@ -23,10 +23,22 @@ func (r *LLMResponse) HasToolCalls() bool {
 	return len(r.ToolCalls) > 0
 }
 
+// StreamChunk 流式响应片段
+type StreamChunk struct {
+	Content      string            `json:"content"`
+	Delta        string            `json:"delta"`        // 增量内容
+	ToolCalls    []ToolCallRequest `json:"toolCalls"`    // 工具调用（可能有）
+	FinishReason string            `json:"finishReason"` // 完成原因
+	Done         bool              `json:"done"`         // 是否完成
+}
+
 // LLMProvider LLM 提供商接口
 type LLMProvider interface {
 	// Chat 发送聊天完成请求
 	Chat(ctx context.Context, messages []map[string]any, tools []map[string]any, model string, maxTokens int, temperature float64) (*LLMResponse, error)
+
+	// ChatStream 发送流式聊天请求
+	ChatStream(ctx context.Context, messages []map[string]any, tools []map[string]any, model string, maxTokens int, temperature float64) (<-chan StreamChunk, error)
 
 	// GetDefaultModel 获取默认模型
 	GetDefaultModel() string

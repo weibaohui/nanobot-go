@@ -85,7 +85,7 @@ func (l *Loop) registerDefaultTools() {
 	l.tools.Register(&tools.ExecTool{Timeout: l.execTimeout, WorkingDir: l.workspace, RestrictToWorkspace: l.restrictToWorkspace})
 
 	// Web 工具
-	l.tools.Register(&tools.WebSearchTool{APIKey: l.braveAPIKey, MaxResults: 5})
+	l.tools.Register(&tools.WebSearchTool{MaxResults: 5})
 	l.tools.Register(&tools.WebFetchTool{MaxChars: 50000})
 
 	// 消息工具

@@ -99,7 +99,7 @@ func (m *SubagentManager) runSubagent(ctx context.Context, taskID, task, label, 
 	registry.Register(&tools.EditFileTool{AllowedDir: allowedDir})
 	registry.Register(&tools.ListDirTool{AllowedDir: allowedDir})
 	registry.Register(&tools.ExecTool{Timeout: m.execTimeout, WorkingDir: m.workspace, RestrictToWorkspace: m.restrictToWorkspace})
-	registry.Register(&tools.WebSearchTool{APIKey: m.braveAPIKey, MaxResults: 5})
+	registry.Register(&tools.WebSearchTool{MaxResults: 5})
 	registry.Register(&tools.WebFetchTool{MaxChars: 50000})
 
 	systemPrompt := m.buildSubagentPrompt(task)

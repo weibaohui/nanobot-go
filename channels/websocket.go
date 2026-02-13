@@ -10,6 +10,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/weibaohui/nanobot-go/bus"
+	"github.com/weibaohui/nanobot-go/providers"
 	"go.uber.org/zap"
 )
 
@@ -21,6 +22,8 @@ type WebSocketConfig struct {
 	Path string
 	// AllowFrom 允许的用户 ID 列表（为空表示允许所有）
 	AllowFrom []string
+	// EnableStreaming 是否启用流式输出（打字机效果）
+	EnableStreaming bool
 }
 
 // WebSocketChannel WebSocket 渠道
@@ -32,6 +35,16 @@ type WebSocketChannel struct {
 	clients   map[string]*websocket.Conn // chatID -> conn
 	clientsMu sync.RWMutex
 	logger    *zap.Logger
+
+	// 用于流式处理
+	provider providers.LLMProvider
+	model    string
+}
+
+// SetProvider 设置 LLM 提供者（用于流式处理）
+func (c *WebSocketChannel) SetProvider(provider providers.LLMProvider, model string) {
+	c.provider = provider
+	c.model = model
 }
 
 // NewWebSocketChannel 创建 WebSocket 渠道
@@ -244,6 +257,63 @@ func (c *WebSocketChannel) sendToClient(chatID, content string) {
 	}
 }
 
+// StreamToClient 流式发送消息给客户端（打字机效果）
+func (c *WebSocketChannel) StreamToClient(chatID string, ch <-chan string) {
+	c.clientsMu.RLock()
+	conn, ok := c.clients[chatID]
+	c.clientsMu.RUnlock()
+
+	if !ok {
+		return
+	}
+
+	var fullContent string
+	for delta := range ch {
+		fullContent += delta
+
+		msg := struct {
+			Type   string `json:"type"`
+			Delta  string `json:"delta"`
+			Text   string `json:"text"`
+			Time   string `json:"time"`
+			Done   bool   `json:"done"`
+		}{
+			Type:  "stream",
+			Delta: delta,
+			Text:  fullContent,
+			Time:  time.Now().Format("15:04:05"),
+			Done:  false,
+		}
+
+		data, err := json.Marshal(msg)
+		if err != nil {
+			c.logger.Error("序列化流式消息失败", zap.Error(err))
+			continue
+		}
+
+		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
+			c.logger.Error("发送流式消息失败", zap.Error(err))
+			return
+		}
+	}
+
+	// 发送完成消息
+	doneMsg := struct {
+		Type    string `json:"type"`
+		Content string `json:"content"`
+		Time    string `json:"time"`
+		Done    bool   `json:"done"`
+	}{
+		Type:    "stream",
+		Content: fullContent,
+		Time:    time.Now().Format("15:04:05"),
+		Done:    true,
+	}
+
+	data, _ := json.Marshal(doneMsg)
+	conn.WriteMessage(websocket.TextMessage, data)
+}
+
 // generateChatID 生成 chatID
 func generateChatID(r *http.Request) string {
 	return fmt.Sprintf("ws_%s", r.RemoteAddr)
@@ -257,7 +327,7 @@ func truncate(s string, maxLen int) string {
 	return s[:maxLen] + "..."
 }
 
-// indexHTML 是聊天页面的 HTML
+// indexHTML 是聊天页面的 HTML（带打字机效果）
 var indexHTML = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -342,7 +412,7 @@ var indexHTML = `<!DOCTYPE html>
             max-width: 80%;
             padding: 12px 18px;
             border-radius: 18px;
-            line-height: 1.5;
+            line-height: 1.6;
             word-wrap: break-word;
             white-space: pre-wrap;
         }
@@ -363,17 +433,18 @@ var indexHTML = `<!DOCTYPE html>
             margin-top: 4px;
             padding: 0 4px;
         }
-        .message-mode {
-            font-size: 11px;
-            color: #9ca3af;
-            margin-top: 2px;
-            padding: 0 4px;
+        .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 18px;
+            background: #667eea;
+            animation: blink 1s infinite;
+            vertical-align: text-bottom;
+            margin-left: 2px;
         }
-        .message-mode.plan {
-            color: #8b5cf6;
-        }
-        .message-mode.normal {
-            color: #10b981;
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
         }
         .chat-input-container {
             padding: 20px;
@@ -516,7 +587,7 @@ var indexHTML = `<!DOCTYPE html>
         <div class="chat-messages" id="chatMessages">
             <div class="welcome-message">
                 <h2>🐾 欢迎使用 nanobot</h2>
-                <p>我是一个 AI 助手，可以帮助你完成各种任务。<br>支持复杂任务自动规划执行！</p>
+                <p>我是一个 AI 助手，可以帮助你完成各种任务。<br>支持打字机效果实时输出！</p>
                 <div class="tips">
                     <span class="tip" onclick="sendTip('你好')">👋 打个招呼</span>
                     <span class="tip" onclick="sendTip('帮我规划一次旅行')">🗺️ 规划任务</span>
@@ -548,6 +619,8 @@ var indexHTML = `<!DOCTYPE html>
     <script>
         let ws = null;
         let connected = false;
+        let streamingMessage = null;
+        let streamingContent = '';
         const messagesDiv = document.getElementById('chatMessages');
         const chatInput = document.getElementById('chatInput');
         const sendButton = document.getElementById('sendButton');
@@ -590,11 +663,91 @@ var indexHTML = `<!DOCTYPE html>
 
             ws.onmessage = function(event) {
                 const data = JSON.parse(event.data);
-                hideTyping();
-                if (data.type === 'message') {
-                    addMessage('assistant', data.content, data.time);
+
+                if (data.type === 'stream') {
+                    // 真正的流式消息（打字机效果）
+                    handleStreamMessage(data);
+                } else if (data.type === 'message') {
+                    // 完整消息 - 使用前端打字机效果
+                    typewriterMessage('assistant', data.content, data.time);
                 }
             };
+        }
+
+        function handleStreamMessage(data) {
+            // 如果是新消息开始，创建消息气泡
+            if (!streamingMessage) {
+                hideTyping();
+                streamingMessage = createMessageBubble('assistant');
+                streamingContent = '';
+            }
+
+            // 追加内容
+            if (data.delta) {
+                streamingContent += data.delta;
+                updateMessageContent(streamingMessage, streamingContent);
+            }
+
+            // 如果消息完成
+            if (data.done) {
+                // 移除光标，添加时间戳
+                finishMessage(streamingMessage, data.time || new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+                streamingMessage = null;
+                streamingContent = '';
+            }
+        }
+
+        function createMessageBubble(role) {
+            // 移除欢迎消息
+            const welcome = document.querySelector('.welcome-message');
+            if (welcome) {
+                welcome.remove();
+            }
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message ' + role;
+
+            const bubbleDiv = document.createElement('div');
+            bubbleDiv.className = 'message-bubble';
+
+            // 添加闪烁光标
+            const cursor = document.createElement('span');
+            cursor.className = 'cursor';
+            bubbleDiv.appendChild(cursor);
+
+            messageDiv.appendChild(bubbleDiv);
+            messagesDiv.appendChild(messageDiv);
+
+            // 滚动到底部
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+            return { div: messageDiv, bubble: bubbleDiv };
+        }
+
+        function updateMessageContent(msgObj, content) {
+            // 保留光标
+            const cursor = msgObj.bubble.querySelector('.cursor');
+            msgObj.bubble.textContent = content;
+            if (cursor) {
+                msgObj.bubble.appendChild(cursor);
+            }
+
+            // 滚动到底部
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function finishMessage(msgObj, time) {
+            // 移除光标
+            const cursor = msgObj.bubble.querySelector('.cursor');
+            if (cursor) {
+                cursor.remove();
+            }
+
+            // 添加时间戳
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = time;
+            msgObj.div.appendChild(timeDiv);
         }
 
         function sendMessage() {
@@ -638,6 +791,55 @@ var indexHTML = `<!DOCTYPE html>
 
             // 滚动到底部
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // 打字机效果显示消息
+        function typewriterMessage(role, content, time) {
+            hideTyping();
+
+            // 移除欢迎消息
+            const welcome = document.querySelector('.welcome-message');
+            if (welcome) {
+                welcome.remove();
+            }
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message ' + role;
+
+            const bubbleDiv = document.createElement('div');
+            bubbleDiv.className = 'message-bubble';
+
+            // 添加闪烁光标
+            const cursor = document.createElement('span');
+            cursor.className = 'cursor';
+            bubbleDiv.appendChild(cursor);
+
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = time || new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+            messageDiv.appendChild(bubbleDiv);
+            messageDiv.appendChild(timeDiv);
+            messagesDiv.appendChild(messageDiv);
+
+            // 打字机效果
+            let index = 0;
+            const speed = 20; // 每个字符的延迟（毫秒）
+
+            function type() {
+                if (index < content.length) {
+                    bubbleDiv.textContent = content.substring(0, index + 1);
+                    bubbleDiv.appendChild(cursor);
+                    index++;
+                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                    setTimeout(type, speed);
+                } else {
+                    // 完成，移除光标
+                    cursor.remove();
+                }
+            }
+
+            type();
         }
 
         function showTyping() {
