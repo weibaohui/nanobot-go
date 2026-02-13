@@ -143,30 +143,5 @@ func ConvertTools(tools []agenttools.Tool) []tool.BaseTool {
 
 // ConvertToolsFromRegistry converts all tools from a registry to eino tools
 func ConvertToolsFromRegistry(registry *agenttools.Registry) []tool.BaseTool {
-	definitions := registry.GetDefinitions()
-	result := make([]tool.BaseTool, 0, len(definitions))
-
-	for _, def := range definitions {
-		name := ""
-		if n, ok := def["name"].(string); ok {
-			name = n
-		} else if fn, ok := def["function"].(map[string]any); ok {
-			if n, ok := fn["name"].(string); ok {
-				name = n
-			}
-		}
-		if name == "" {
-			continue
-		}
-
-		// Get the tool from the registry
-		t := registry.Get(name)
-		if t == nil {
-			continue
-		}
-
-		result = append(result, NewToolAdapter(t))
-	}
-
-	return result
+	return registry.GetADKTools()
 }

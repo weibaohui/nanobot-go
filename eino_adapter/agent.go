@@ -7,11 +7,11 @@ import (
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/adk/prebuilt/planexecute"
 	"github.com/cloudwego/eino/components/model"
+	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 	"go.uber.org/zap"
 
-	agenttools "github.com/weibaohui/nanobot-go/agent/tools"
 	"github.com/weibaohui/nanobot-go/providers"
 )
 
@@ -20,7 +20,7 @@ type PlanExecuteAgent struct {
 	agent   adk.ResumableAgent
 	runner  *adk.Runner
 	adapter *ProviderAdapter
-	tools   []agenttools.Tool
+	tools   []tool.BaseTool
 	logger  *zap.Logger
 }
 
@@ -28,7 +28,7 @@ type PlanExecuteAgent struct {
 type Config struct {
 	Provider        providers.LLMProvider
 	Model           string
-	Tools           []agenttools.Tool
+	Tools           []tool.BaseTool
 	Logger          *zap.Logger
 	EnableStream    bool
 	MaxIterations   int
@@ -78,10 +78,9 @@ func NewPlanExecuteAgent(ctx context.Context, cfg *Config) (*PlanExecuteAgent, e
 	// Convert tools to eino format and create tools config
 	var toolsConfig adk.ToolsConfig
 	if len(cfg.Tools) > 0 {
-		einoTools := ConvertTools(cfg.Tools)
 		toolsConfig = adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{
-				Tools: einoTools,
+				Tools: cfg.Tools,
 			},
 		}
 	}
@@ -246,6 +245,6 @@ func (a *PlanExecuteAgent) GetChatModel() model.ToolCallingChatModel {
 }
 
 // GetTools returns the configured tools
-func (a *PlanExecuteAgent) GetTools() []agenttools.Tool {
+func (a *PlanExecuteAgent) GetTools() []tool.BaseTool {
 	return a.tools
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/weibaohui/nanobot-go/agent/tools/common"
 )
 
+// DuckDuckGoResponse DuckDuckGo Instant Answer API 响应结构
 type DuckDuckGoResponse struct {
 	AbstractText   string `json:"AbstractText"`
 	AbstractSource string `json:"AbstractSource"`
@@ -34,14 +35,17 @@ type DuckDuckGoResponse struct {
 	} `json:"Results"`
 }
 
+// Tool 网络搜索工具
 type Tool struct {
 	MaxResults int
 }
 
+// Name 返回工具名称
 func (t *Tool) Name() string {
 	return "web_search"
 }
 
+// Info 返回工具信息
 func (t *Tool) Info(ctx context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: t.Name(),
@@ -56,6 +60,7 @@ func (t *Tool) Info(ctx context.Context) (*schema.ToolInfo, error) {
 	}, nil
 }
 
+// Run 执行工具逻辑
 func (t *Tool) Run(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
 	var args struct {
 		Query string `json:"query"`
@@ -131,6 +136,7 @@ func (t *Tool) Run(ctx context.Context, argumentsInJSON string, opts ...tool.Opt
 	return strings.Join(results, "\n\n"), nil
 }
 
+// InvokableRun 可直接调用的执行入口
 func (t *Tool) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
 	return t.Run(ctx, argumentsInJSON, opts...)
 }

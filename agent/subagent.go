@@ -8,6 +8,13 @@ import (
 	"time"
 
 	"github.com/weibaohui/nanobot-go/agent/tools"
+	"github.com/weibaohui/nanobot-go/agent/tools/editfile"
+	"github.com/weibaohui/nanobot-go/agent/tools/exec"
+	"github.com/weibaohui/nanobot-go/agent/tools/listdir"
+	"github.com/weibaohui/nanobot-go/agent/tools/readfile"
+	"github.com/weibaohui/nanobot-go/agent/tools/webfetch"
+	"github.com/weibaohui/nanobot-go/agent/tools/websearch"
+	"github.com/weibaohui/nanobot-go/agent/tools/writefile"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/providers"
 	"go.uber.org/zap"
@@ -92,13 +99,13 @@ func (m *SubagentManager) runSubagent(ctx context.Context, taskID, task, label, 
 		allowedDir = m.workspace
 	}
 
-	registry.Register(&tools.ReadFileTool{AllowedDir: allowedDir})
-	registry.Register(&tools.WriteFileTool{AllowedDir: allowedDir})
-	registry.Register(&tools.EditFileTool{AllowedDir: allowedDir})
-	registry.Register(&tools.ListDirTool{AllowedDir: allowedDir})
-	registry.Register(&tools.ExecTool{Timeout: m.execTimeout, WorkingDir: m.workspace, RestrictToWorkspace: m.restrictToWorkspace})
-	registry.Register(&tools.WebSearchTool{MaxResults: 5})
-	registry.Register(&tools.WebFetchTool{MaxChars: 50000})
+	registry.Register(&readfile.Tool{AllowedDir: allowedDir})
+	registry.Register(&writefile.Tool{AllowedDir: allowedDir})
+	registry.Register(&editfile.Tool{AllowedDir: allowedDir})
+	registry.Register(&listdir.Tool{AllowedDir: allowedDir})
+	registry.Register(&exec.Tool{Timeout: m.execTimeout, WorkingDir: m.workspace, RestrictToWorkspace: m.restrictToWorkspace})
+	registry.Register(&websearch.Tool{MaxResults: 5})
+	registry.Register(&webfetch.Tool{MaxChars: 50000})
 
 	systemPrompt := m.buildSubagentPrompt(task)
 	messages := []map[string]any{
@@ -117,7 +124,7 @@ func (m *SubagentManager) runSubagent(ctx context.Context, taskID, task, label, 
 		default:
 		}
 
-		response, err := m.provider.Chat(ctx, messages, registry.GetDefinitions(), m.model, 4096, 0.7)
+		response, err := m.provider.Chat(ctx, messages, registry.GetDefinitions(ctx), m.model, 4096, 0.7)
 		if err != nil {
 			m.logger.Error("子代理 LLM 调用失败", zap.Error(err))
 			m.announceResult(taskID, label, task, fmt.Sprintf("错误: %s", err), originChannel, originChatID, "error")

@@ -6,9 +6,20 @@ import (
 	"strings"
 
 	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/agent/tools"
+	toolcron "github.com/weibaohui/nanobot-go/agent/tools/cron"
+	"github.com/weibaohui/nanobot-go/agent/tools/editfile"
+	"github.com/weibaohui/nanobot-go/agent/tools/exec"
+	"github.com/weibaohui/nanobot-go/agent/tools/listdir"
+	"github.com/weibaohui/nanobot-go/agent/tools/message"
+	"github.com/weibaohui/nanobot-go/agent/tools/readfile"
+	"github.com/weibaohui/nanobot-go/agent/tools/spawn"
+	"github.com/weibaohui/nanobot-go/agent/tools/webfetch"
+	"github.com/weibaohui/nanobot-go/agent/tools/websearch"
+	"github.com/weibaohui/nanobot-go/agent/tools/writefile"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/cron"
 	"github.com/weibaohui/nanobot-go/eino_adapter"
@@ -74,7 +85,10 @@ func NewLoop(messageBus *bus.MessageBus, provider providers.LLMProvider, workspa
 	toolNames := make([]string, 0, len(registeredTools))
 	for _, t := range registeredTools {
 		if t != nil {
-			toolNames = append(toolNames, t.Name())
+			info, err := t.Info(context.Background())
+			if err == nil && info != nil && info.Name != "" {
+				toolNames = append(toolNames, info.Name)
+			}
 		}
 	}
 	logger.Info("已注册工具",
@@ -123,20 +137,20 @@ func (l *Loop) registerDefaultTools() {
 	}
 
 	// 文件工具
-	l.tools.Register(&tools.ReadFileTool{AllowedDir: allowedDir})
-	l.tools.Register(&tools.WriteFileTool{AllowedDir: allowedDir})
-	l.tools.Register(&tools.EditFileTool{AllowedDir: allowedDir})
-	l.tools.Register(&tools.ListDirTool{AllowedDir: allowedDir})
+	l.tools.Register(&readfile.Tool{AllowedDir: allowedDir})
+	l.tools.Register(&writefile.Tool{AllowedDir: allowedDir})
+	l.tools.Register(&editfile.Tool{AllowedDir: allowedDir})
+	l.tools.Register(&listdir.Tool{AllowedDir: allowedDir})
 
 	// Shell 工具
-	l.tools.Register(&tools.ExecTool{Timeout: l.execTimeout, WorkingDir: l.workspace, RestrictToWorkspace: l.restrictToWorkspace})
+	l.tools.Register(&exec.Tool{Timeout: l.execTimeout, WorkingDir: l.workspace, RestrictToWorkspace: l.restrictToWorkspace})
 
 	// Web 工具
-	l.tools.Register(&tools.WebSearchTool{MaxResults: 5})
-	l.tools.Register(&tools.WebFetchTool{MaxChars: 50000})
+	l.tools.Register(&websearch.Tool{MaxResults: 5})
+	l.tools.Register(&webfetch.Tool{MaxChars: 50000})
 
 	// 消息工具
-	l.tools.Register(&MessageTool{SendCallback: func(msg any) error {
+	l.tools.Register(&message.Tool{SendCallback: func(msg any) error {
 		if outMsg, ok := msg.(*bus.OutboundMessage); ok {
 			l.bus.PublishOutbound(outMsg)
 		}
@@ -144,11 +158,11 @@ func (l *Loop) registerDefaultTools() {
 	}})
 
 	// Spawn 工具
-	l.tools.Register(&SpawnTool{Manager: l.subagents})
+	l.tools.Register(&spawn.Tool{Manager: l.subagents})
 
 	// Cron 工具
 	if l.cronService != nil {
-		l.tools.Register(&CronTool{CronService: l.cronService})
+		l.tools.Register(&toolcron.Tool{CronService: l.cronService})
 	}
 }
 
@@ -222,13 +236,13 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 
 // updateToolContext 更新工具上下文
 func (l *Loop) updateToolContext(channel, chatID string) {
-	if mt, ok := l.tools.Get("message").(*MessageTool); ok {
+	if mt, ok := l.tools.Get("message").(tools.ContextSetter); ok {
 		mt.SetContext(channel, chatID)
 	}
-	if st, ok := l.tools.Get("spawn").(*SpawnTool); ok {
+	if st, ok := l.tools.Get("spawn").(tools.ContextSetter); ok {
 		st.SetContext(channel, chatID)
 	}
-	if ct, ok := l.tools.Get("cron").(*CronTool); ok {
+	if ct, ok := l.tools.Get("cron").(tools.ContextSetter); ok {
 		ct.SetContext(channel, chatID)
 	}
 }
@@ -431,14 +445,8 @@ func (l *Loop) ProcessDirect(ctx context.Context, content, sessionKey, channel, 
 	sess := l.sessions.GetOrCreate(sessionKey)
 	history := l.convertHistory(sess.GetHistory(50))
 
-	messages := make([]*schema.Message, 0, len(history)+1)
-	if len(history) > 0 {
-		messages = append(messages, history...)
-	}
-	messages = append(messages, &schema.Message{
-		Role:    schema.User,
-		Content: content,
-	})
+	// 构建消息（包含系统提示词）
+	messages := l.buildMessagesWithSystem(history, content, channel, chatID)
 
 	iter := l.adkRunner.Run(ctx, messages)
 	var response string
@@ -468,26 +476,8 @@ func (l *Loop) ProcessDirect(ctx context.Context, content, sessionKey, channel, 
 }
 
 // GetTools returns all registered tools as a slice
-func (l *Loop) GetTools() []tools.Tool {
-	defs := l.tools.GetDefinitions()
-	result := make([]tools.Tool, 0, len(defs))
-	for _, def := range defs {
-		name := ""
-		if n, ok := def["name"].(string); ok {
-			name = n
-		} else if fn, ok := def["function"].(map[string]any); ok {
-			if n, ok := fn["name"].(string); ok {
-				name = n
-			}
-		}
-		if name == "" {
-			continue
-		}
-		if t := l.tools.Get(name); t != nil {
-			result = append(result, t)
-		}
-	}
-	return result
+func (l *Loop) GetTools() []tool.BaseTool {
+	return l.tools.GetADKTools()
 }
 
 // SetPlanAgent sets the plan-execute agent for complex task handling

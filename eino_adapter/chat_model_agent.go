@@ -5,11 +5,11 @@ import (
 	"fmt"
 
 	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 	"go.uber.org/zap"
 
-	agenttools "github.com/weibaohui/nanobot-go/agent/tools"
 	"github.com/weibaohui/nanobot-go/providers"
 )
 
@@ -18,7 +18,7 @@ type ChatModelAgent struct {
 	agent   *adk.ChatModelAgent
 	runner  *adk.Runner
 	adapter *ProviderAdapter
-	tools   []agenttools.Tool
+	tools   []tool.BaseTool
 	logger  *zap.Logger
 }
 
@@ -26,7 +26,7 @@ type ChatModelAgent struct {
 type ChatModelAgentConfig struct {
 	Provider      providers.LLMProvider
 	Model         string
-	Tools         []agenttools.Tool
+	Tools         []tool.BaseTool
 	Logger        *zap.Logger
 	MaxIterations int
 	EnableStream  bool
@@ -58,10 +58,9 @@ func NewChatModelAgent(ctx context.Context, cfg *ChatModelAgentConfig) (*ChatMod
 	// Convert tools to eino format
 	var toolsConfig adk.ToolsConfig
 	if len(cfg.Tools) > 0 {
-		einoTools := ConvertTools(cfg.Tools)
 		toolsConfig = adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{
-				Tools: einoTools,
+				Tools: cfg.Tools,
 			},
 		}
 	}
@@ -267,7 +266,7 @@ func (a *ChatModelAgent) GetAdapter() *ProviderAdapter {
 }
 
 // GetTools 获取配置的工具
-func (a *ChatModelAgent) GetTools() []agenttools.Tool {
+func (a *ChatModelAgent) GetTools() []tool.BaseTool {
 	return a.tools
 }
 
