@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"sync"
+
+	"github.com/cloudwego/eino/components/tool"
 )
 
 // Registry 工具注册表
@@ -43,6 +45,19 @@ func (r *Registry) GetDefinitions() []map[string]any {
 		defs = append(defs, tool.ToSchema())
 	}
 	return defs
+}
+
+func (r *Registry) GetADKTools() []tool.BaseTool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	result := make([]tool.BaseTool, 0, len(r.tools))
+	for _, t := range r.tools {
+		if adkTool, ok := t.(tool.BaseTool); ok {
+			result = append(result, adkTool)
+		}
+	}
+	return result
 }
 
 // Execute 执行工具
