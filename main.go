@@ -254,6 +254,9 @@ func runGateway(cmd *cobra.Command, args []string) {
 	cliChannel := channels.NewCLIChannel(messageBus, "default", logger)
 	channelManager.Register(cliChannel)
 
+	// 注册配置中启用的渠道
+	registerChannels(channelManager, cfg, messageBus, logger)
+
 	cronService.SetOnJobCallback(func(job *cron.Job) (string, error) {
 		ctx := context.Background()
 		return loop.ProcessDirect(ctx, job.Payload.Message, job.Payload.Channel+":"+job.Payload.To, job.Payload.Channel, job.Payload.To)
@@ -563,4 +566,146 @@ func getEnvOrDefault(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// registerChannels 根据配置注册启用的渠道
+func registerChannels(mgr *channels.Manager, cfg *config.Config, messageBus *bus.MessageBus, logger *zap.Logger) {
+	// 钉钉渠道
+	if cfg.Channels.DingTalk.Enabled {
+		dingtalkConfig := &channels.DingTalkConfig{
+			ClientID:     cfg.Channels.DingTalk.ClientID,
+			ClientSecret: cfg.Channels.DingTalk.ClientSecret,
+			AllowFrom:    cfg.Channels.DingTalk.AllowFrom,
+		}
+		dingtalk := channels.NewDingTalkChannel(dingtalkConfig, messageBus, logger)
+		mgr.Register(dingtalk)
+		logger.Info("已注册钉钉渠道")
+	}
+
+	// Telegram 渠道
+	if cfg.Channels.Telegram.Enabled && cfg.Channels.Telegram.Token != "" {
+		telegramConfig := &channels.TelegramConfig{
+			Token:     cfg.Channels.Telegram.Token,
+			Proxy:     cfg.Channels.Telegram.Proxy,
+			AllowFrom: cfg.Channels.Telegram.AllowFrom,
+		}
+		telegram := channels.NewTelegramChannel(telegramConfig, messageBus, logger)
+		mgr.Register(telegram)
+		logger.Info("已注册 Telegram 渠道")
+	}
+
+	// Discord 渠道
+	if cfg.Channels.Discord.Enabled && cfg.Channels.Discord.Token != "" {
+		discordConfig := &channels.DiscordConfig{
+			Token:      cfg.Channels.Discord.Token,
+			GatewayURL: cfg.Channels.Discord.GatewayURL,
+			AllowFrom:  cfg.Channels.Discord.AllowFrom,
+		}
+		discord := channels.NewDiscordChannel(discordConfig, messageBus, logger)
+		mgr.Register(discord)
+		logger.Info("已注册 Discord 渠道")
+	}
+
+	// 飞书渠道
+	if cfg.Channels.Feishu.Enabled && cfg.Channels.Feishu.AppID != "" {
+		feishuConfig := &channels.FeishuConfig{
+			AppID:             cfg.Channels.Feishu.AppID,
+			AppSecret:         cfg.Channels.Feishu.AppSecret,
+			EncryptKey:        cfg.Channels.Feishu.EncryptKey,
+			VerificationToken: cfg.Channels.Feishu.VerificationToken,
+			AllowFrom:         cfg.Channels.Feishu.AllowFrom,
+		}
+		feishu := channels.NewFeishuChannel(feishuConfig, messageBus, logger)
+		mgr.Register(feishu)
+		logger.Info("已注册飞书渠道")
+	}
+
+	// Slack 渠道
+	if cfg.Channels.Slack.Enabled && cfg.Channels.Slack.BotToken != "" {
+		slackConfig := &channels.SlackConfig{
+			BotToken:       cfg.Channels.Slack.BotToken,
+			AppToken:       cfg.Channels.Slack.AppToken,
+			Mode:           cfg.Channels.Slack.Mode,
+			GroupPolicy:    cfg.Channels.Slack.GroupPolicy,
+			GroupAllowFrom: cfg.Channels.Slack.GroupAllowFrom,
+		}
+		slack := channels.NewSlackChannel(slackConfig, messageBus, logger)
+		mgr.Register(slack)
+		logger.Info("已注册 Slack 渠道")
+	}
+
+	// QQ 渠道
+	if cfg.Channels.QQ.Enabled && cfg.Channels.QQ.AppID != "" {
+		qqConfig := &channels.QQConfig{
+			AppID:     cfg.Channels.QQ.AppID,
+			Secret:    cfg.Channels.QQ.Secret,
+			AllowFrom: cfg.Channels.QQ.AllowFrom,
+		}
+		qq := channels.NewQQChannel(qqConfig, messageBus, logger)
+		mgr.Register(qq)
+		logger.Info("已注册 QQ 渠道")
+	}
+
+	// Email 渠道
+	if cfg.Channels.Email.Enabled && cfg.Channels.Email.ConsentGranted {
+		emailConfig := &channels.EmailConfig{
+			IMAPHost:         cfg.Channels.Email.IMAPHost,
+			IMAPPort:         cfg.Channels.Email.IMAPPort,
+			IMAPUsername:     cfg.Channels.Email.IMAPUsername,
+			IMAPPassword:     cfg.Channels.Email.IMAPPassword,
+			IMAPUseSSL:       cfg.Channels.Email.IMAPUseSSL,
+			IMAPMailbox:      cfg.Channels.Email.IMAPMailbox,
+			SMTPHost:         cfg.Channels.Email.SMTPHost,
+			SMTPPort:         cfg.Channels.Email.SMTPPort,
+			SMTPUsername:     cfg.Channels.Email.SMTPUsername,
+			SMTPPassword:     cfg.Channels.Email.SMTPPassword,
+			SMTPUseSSL:       cfg.Channels.Email.SMTPUseSSL,
+			SMTPUseTLS:       cfg.Channels.Email.SMTPUseTLS,
+			FromAddress:      cfg.Channels.Email.FromAddress,
+			PollInterval:     cfg.Channels.Email.PollIntervalSeconds,
+			MarkSeen:         cfg.Channels.Email.MarkSeen,
+			MaxBodyChars:     cfg.Channels.Email.MaxBodyChars,
+			ConsentGranted:   cfg.Channels.Email.ConsentGranted,
+			AutoReplyEnabled: cfg.Channels.Email.AutoReplyEnabled,
+			SubjectPrefix:    cfg.Channels.Email.SubjectPrefix,
+			AllowFrom:        cfg.Channels.Email.AllowFrom,
+		}
+		email := channels.NewEmailChannel(emailConfig, messageBus, logger)
+		mgr.Register(email)
+		logger.Info("已注册 Email 渠道")
+	}
+
+	// WhatsApp 渠道
+	if cfg.Channels.WhatsApp.Enabled && cfg.Channels.WhatsApp.BridgeURL != "" {
+		whatsappConfig := &channels.WhatsAppConfig{
+			BridgeURL: cfg.Channels.WhatsApp.BridgeURL,
+			AllowFrom: cfg.Channels.WhatsApp.AllowFrom,
+		}
+		whatsapp := channels.NewWhatsAppChannel(whatsappConfig, messageBus, logger)
+		mgr.Register(whatsapp)
+		logger.Info("已注册 WhatsApp 渠道")
+	}
+
+	// Mochat 渠道
+	if cfg.Channels.Mochat.Enabled && cfg.Channels.Mochat.ClawToken != "" {
+		mochatConfig := &channels.MochatConfig{
+			ClawToken:               cfg.Channels.Mochat.ClawToken,
+			BaseURL:                 cfg.Channels.Mochat.BaseURL,
+			SocketURL:               cfg.Channels.Mochat.SocketURL,
+			SocketPath:              cfg.Channels.Mochat.SocketPath,
+			SocketDisableMsgpack:    cfg.Channels.Mochat.SocketDisableMsgpack,
+			SocketReconnectDelay:    cfg.Channels.Mochat.SocketReconnectDelayMs,
+			SocketMaxReconnectDelay: cfg.Channels.Mochat.SocketMaxReconnectDelayMs,
+			SocketConnectTimeout:    cfg.Channels.Mochat.SocketConnectTimeoutMs,
+			MaxRetryAttempts:        cfg.Channels.Mochat.MaxRetryAttempts,
+			Sessions:                cfg.Channels.Mochat.Sessions,
+			Panels:                  cfg.Channels.Mochat.Panels,
+			WatchLimit:              cfg.Channels.Mochat.WatchLimit,
+			RefreshInterval:         cfg.Channels.Mochat.RefreshIntervalMs,
+			AllowFrom:               cfg.Channels.Mochat.AllowFrom,
+		}
+		mochat := channels.NewMochatChannel(mochatConfig, messageBus, logger)
+		mgr.Register(mochat)
+		logger.Info("已注册 Mochat 渠道")
+	}
 }
