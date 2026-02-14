@@ -231,7 +231,7 @@ func buildExecutorInputFn(workspace string, toolDescriptions []string, logger *z
 
 // Name 返回 Agent 名称
 func (a *PlanSubAgent) Name() string {
-	return "plan_agent"
+	return string(AgentTypePlan)
 }
 
 // Description 返回 Agent 描述

@@ -154,7 +154,7 @@ func buildReActInstruction(workspace string) string {
 
 // Name 返回 Agent 名称
 func (a *ReActSubAgent) Name() string {
-	return "react_agent"
+	return string(AgentTypeReAct)
 }
 
 // Description 返回 Agent 描述

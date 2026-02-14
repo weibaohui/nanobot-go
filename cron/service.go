@@ -297,9 +297,9 @@ func (s *Service) Status() map[string]any {
 	}
 
 	return map[string]any{
-		"enabled":       s.running,
-		"jobs":          jobCount,
-		"nextWakeAtMs":  s.getNextWakeMs(),
+		"enabled":      s.running,
+		"jobs":         jobCount,
+		"nextWakeAtMs": s.getNextWakeMs(),
 	}
 }
 

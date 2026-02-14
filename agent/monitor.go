@@ -14,17 +14,17 @@ type Monitor struct {
 	logger *zap.Logger
 
 	// 指标收集
-	metrics     *MonitorMetrics
-	metricsMu   sync.RWMutex
+	metrics   *MonitorMetrics
+	metricsMu sync.RWMutex
 
 	// 事件日志
-	eventLog     []*MonitorEvent
-	eventLogMu   sync.RWMutex
-	maxEventLog  int
+	eventLog    []*MonitorEvent
+	eventLogMu  sync.RWMutex
+	maxEventLog int
 
 	// 告警规则
-	alertRules   []*AlertRule
-	alertChan    chan *Alert
+	alertRules []*AlertRule
+	alertChan  chan *Alert
 
 	// 健康检查
 	healthChecks map[string]HealthCheckFunc
@@ -40,42 +40,42 @@ type MonitorMetrics struct {
 	RequestRate        float64
 
 	// 响应时间
-	AvgResponseTime    time.Duration
-	MinResponseTime    time.Duration
-	MaxResponseTime    time.Duration
-	P95ResponseTime    time.Duration
-	P99ResponseTime    time.Duration
+	AvgResponseTime time.Duration
+	MinResponseTime time.Duration
+	MaxResponseTime time.Duration
+	P95ResponseTime time.Duration
+	P99ResponseTime time.Duration
 
 	// Agent 统计
-	AgentInvocations   map[string]int64
-	AgentSuccessRate   map[string]float64
-	AgentAvgLatency    map[string]time.Duration
+	AgentInvocations map[string]int64
+	AgentSuccessRate map[string]float64
+	AgentAvgLatency  map[string]time.Duration
 
 	// 错误统计
-	ErrorsByType       map[string]int64
-	LastErrorTime      time.Time
+	ErrorsByType  map[string]int64
+	LastErrorTime time.Time
 
 	// 资源使用
-	ActiveSessions     int64
-	PendingTasks       int64
-	QueueLength        int64
+	ActiveSessions int64
+	PendingTasks   int64
+	QueueLength    int64
 
 	// 时间戳
-	StartTime          time.Time
-	LastUpdateTime     time.Time
+	StartTime      time.Time
+	LastUpdateTime time.Time
 }
 
 // MonitorEvent 监控事件
 type MonitorEvent struct {
-	Timestamp   time.Time              `json:"timestamp"`
-	EventType   string                 `json:"event_type"`
-	AgentType   string                 `json:"agent_type,omitempty"`
-	SessionID   string                 `json:"session_id,omitempty"`
-	Level       string                 `json:"level"`
-	Message     string                 `json:"message"`
-	Details     map[string]interface{} `json:"details,omitempty"`
-	Duration    time.Duration          `json:"duration,omitempty"`
-	Error       string                 `json:"error,omitempty"`
+	Timestamp time.Time              `json:"timestamp"`
+	EventType string                 `json:"event_type"`
+	AgentType string                 `json:"agent_type,omitempty"`
+	SessionID string                 `json:"session_id,omitempty"`
+	Level     string                 `json:"level"`
+	Message   string                 `json:"message"`
+	Details   map[string]interface{} `json:"details,omitempty"`
+	Duration  time.Duration          `json:"duration,omitempty"`
+	Error     string                 `json:"error,omitempty"`
 }
 
 // AlertRule 告警规则
@@ -102,9 +102,9 @@ type HealthCheckFunc func(ctx context.Context) error
 
 // MonitorConfig 监控配置
 type MonitorConfig struct {
-	Logger       *zap.Logger
-	MaxEventLog  int
-	AlertChan    chan *Alert
+	Logger      *zap.Logger
+	MaxEventLog int
+	AlertChan   chan *Alert
 }
 
 // NewMonitor 创建监控器
@@ -120,19 +120,19 @@ func NewMonitor(config *MonitorConfig) *Monitor {
 	}
 
 	return &Monitor{
-		logger:       logger,
-		metrics:      &MonitorMetrics{
+		logger: logger,
+		metrics: &MonitorMetrics{
 			AgentInvocations: make(map[string]int64),
 			AgentSuccessRate: make(map[string]float64),
 			AgentAvgLatency:  make(map[string]time.Duration),
 			ErrorsByType:     make(map[string]int64),
 			StartTime:        time.Now(),
 		},
-		eventLog:      make([]*MonitorEvent, 0, maxEventLog),
-		maxEventLog:   maxEventLog,
-		alertRules:    make([]*AlertRule, 0),
-		alertChan:     config.AlertChan,
-		healthChecks:  make(map[string]HealthCheckFunc),
+		eventLog:     make([]*MonitorEvent, 0, maxEventLog),
+		maxEventLog:  maxEventLog,
+		alertRules:   make([]*AlertRule, 0),
+		alertChan:    config.AlertChan,
+		healthChecks: make(map[string]HealthCheckFunc),
 	}
 }
 
@@ -477,7 +477,7 @@ func (m *Monitor) GetSummary() map[string]interface{} {
 		"active_sessions":   metrics.ActiveSessions,
 		"pending_tasks":     metrics.PendingTasks,
 		"agent_stats": map[string]interface{}{
-			"invocations": metrics.AgentInvocations,
+			"invocations":  metrics.AgentInvocations,
 			"success_rate": metrics.AgentSuccessRate,
 			"avg_latency":  metrics.AgentAvgLatency,
 		},

@@ -138,7 +138,7 @@ func buildChatInstruction() string {
 
 // Name 返回 Agent 名称
 func (a *ChatSubAgent) Name() string {
-	return "chat_agent"
+	return string(AgentTypeChat)
 }
 
 // Description 返回 Agent 描述

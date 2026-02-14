@@ -48,17 +48,17 @@ type PerformanceManager struct {
 	logger *zap.Logger
 
 	// 并发控制
-	taskSemaphore chan struct{}
+	taskSemaphore  chan struct{}
 	agentSemaphore chan struct{}
 
 	// 缓存
-	cache     map[string]*CacheEntry
-	cacheMu   sync.RWMutex
-	cacheTTL  time.Duration
+	cache    map[string]*CacheEntry
+	cacheMu  sync.RWMutex
+	cacheTTL time.Duration
 
 	// 指标收集
-	metrics     *PerformanceMetrics
-	metricsMu   sync.RWMutex
+	metrics   *PerformanceMetrics
+	metricsMu sync.RWMutex
 }
 
 // CacheEntry 缓存条目
@@ -71,34 +71,34 @@ type CacheEntry struct {
 // PerformanceMetrics 性能指标
 type PerformanceMetrics struct {
 	// 任务统计
-	TotalTasks       int64
-	SuccessfulTasks  int64
-	FailedTasks      int64
-	AverageTaskTime  time.Duration
+	TotalTasks      int64
+	SuccessfulTasks int64
+	FailedTasks     int64
+	AverageTaskTime time.Duration
 
 	// Agent 统计
-	AgentCalls       map[string]int64
-	AgentAvgTime     map[string]time.Duration
-	AgentErrors      map[string]int64
+	AgentCalls   map[string]int64
+	AgentAvgTime map[string]time.Duration
+	AgentErrors  map[string]int64
 
 	// 路由统计
-	RouteDecisions   int64
-	RouteAvgTime     time.Duration
-	RouteByAgent     map[string]int64
+	RouteDecisions int64
+	RouteAvgTime   time.Duration
+	RouteByAgent   map[string]int64
 
 	// 缓存统计
-	CacheHits        int64
-	CacheMisses      int64
-	CacheSize        int
+	CacheHits   int64
+	CacheMisses int64
+	CacheSize   int
 
 	// 中断统计
-	TotalInterrupts  int64
+	TotalInterrupts    int64
 	ResolvedInterrupts int64
-	AverageWaitTime  time.Duration
+	AverageWaitTime    time.Duration
 
 	// 时间窗口统计
-	LastHourTasks    int64
-	LastHourErrors   int64
+	LastHourTasks  int64
+	LastHourErrors int64
 }
 
 // NewPerformanceManager 创建性能管理器
@@ -113,12 +113,12 @@ func NewPerformanceManager(config *PerformanceConfig) *PerformanceManager {
 	}
 
 	pm := &PerformanceManager{
-		config:        config,
-		logger:        logger,
-		taskSemaphore: make(chan struct{}, config.MaxConcurrentTasks),
+		config:         config,
+		logger:         logger,
+		taskSemaphore:  make(chan struct{}, config.MaxConcurrentTasks),
 		agentSemaphore: make(chan struct{}, config.MaxConcurrentAgent),
-		cache:         make(map[string]*CacheEntry),
-		cacheTTL:      config.CacheTTL,
+		cache:          make(map[string]*CacheEntry),
+		cacheTTL:       config.CacheTTL,
 		metrics: &PerformanceMetrics{
 			AgentCalls:   make(map[string]int64),
 			AgentAvgTime: make(map[string]time.Duration),
@@ -287,8 +287,8 @@ func (pm *PerformanceManager) GetCacheStats() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"size":      len(pm.cache),
-		"max_size":  pm.config.MaxCacheSize,
+		"size":       len(pm.cache),
+		"max_size":   pm.config.MaxCacheSize,
 		"total_hits": totalHits,
 		"enabled":    pm.config.CacheEnabled,
 	}
@@ -390,22 +390,22 @@ func (pm *PerformanceManager) GetMetrics() *PerformanceMetrics {
 
 	// 复制指标
 	metrics := &PerformanceMetrics{
-		TotalTasks:        pm.metrics.TotalTasks,
-		SuccessfulTasks:   pm.metrics.SuccessfulTasks,
-		FailedTasks:       pm.metrics.FailedTasks,
-		AverageTaskTime:   pm.metrics.AverageTaskTime,
-		RouteDecisions:    pm.metrics.RouteDecisions,
-		RouteAvgTime:      pm.metrics.RouteAvgTime,
-		CacheHits:         pm.metrics.CacheHits,
-		CacheMisses:       pm.metrics.CacheMisses,
-		CacheSize:         len(pm.cache),
-		TotalInterrupts:   pm.metrics.TotalInterrupts,
+		TotalTasks:         pm.metrics.TotalTasks,
+		SuccessfulTasks:    pm.metrics.SuccessfulTasks,
+		FailedTasks:        pm.metrics.FailedTasks,
+		AverageTaskTime:    pm.metrics.AverageTaskTime,
+		RouteDecisions:     pm.metrics.RouteDecisions,
+		RouteAvgTime:       pm.metrics.RouteAvgTime,
+		CacheHits:          pm.metrics.CacheHits,
+		CacheMisses:        pm.metrics.CacheMisses,
+		CacheSize:          len(pm.cache),
+		TotalInterrupts:    pm.metrics.TotalInterrupts,
 		ResolvedInterrupts: pm.metrics.ResolvedInterrupts,
-		AverageWaitTime:   pm.metrics.AverageWaitTime,
-		AgentCalls:        make(map[string]int64),
-		AgentAvgTime:      make(map[string]time.Duration),
-		AgentErrors:       make(map[string]int64),
-		RouteByAgent:      make(map[string]int64),
+		AverageWaitTime:    pm.metrics.AverageWaitTime,
+		AgentCalls:         make(map[string]int64),
+		AgentAvgTime:       make(map[string]time.Duration),
+		AgentErrors:        make(map[string]int64),
+		RouteByAgent:       make(map[string]int64),
 	}
 
 	// 复制 map
@@ -447,22 +447,22 @@ func (pm *PerformanceManager) GetSummary() map[string]interface{} {
 
 	return map[string]interface{}{
 		"tasks": map[string]interface{}{
-			"total":      metrics.TotalTasks,
-			"successful": metrics.SuccessfulTasks,
-			"failed":     metrics.FailedTasks,
+			"total":        metrics.TotalTasks,
+			"successful":   metrics.SuccessfulTasks,
+			"failed":       metrics.FailedTasks,
 			"success_rate": fmt.Sprintf("%.2f%%", successRate),
-			"avg_time":   metrics.AverageTaskTime.String(),
+			"avg_time":     metrics.AverageTaskTime.String(),
 		},
 		"routing": map[string]interface{}{
-			"decisions":    metrics.RouteDecisions,
-			"avg_time":     metrics.RouteAvgTime.String(),
-			"by_agent":     metrics.RouteByAgent,
+			"decisions": metrics.RouteDecisions,
+			"avg_time":  metrics.RouteAvgTime.String(),
+			"by_agent":  metrics.RouteByAgent,
 		},
 		"cache": map[string]interface{}{
-			"hits":        metrics.CacheHits,
-			"misses":      metrics.CacheMisses,
-			"hit_rate":    fmt.Sprintf("%.2f%%", cacheHitRate),
-			"size":        metrics.CacheSize,
+			"hits":     metrics.CacheHits,
+			"misses":   metrics.CacheMisses,
+			"hit_rate": fmt.Sprintf("%.2f%%", cacheHitRate),
+			"size":     metrics.CacheSize,
 		},
 		"interrupts": map[string]interface{}{
 			"total":         metrics.TotalInterrupts,

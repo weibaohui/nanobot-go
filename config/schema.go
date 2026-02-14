@@ -225,7 +225,7 @@ type GatewayConfig struct {
 
 // WebSearchConfig 网络搜索工具配置
 type WebSearchConfig struct {
-	MaxResults int    `json:"maxResults"`
+	MaxResults int `json:"maxResults"`
 }
 
 // WebToolsConfig Web 工具配置

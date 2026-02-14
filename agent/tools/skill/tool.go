@@ -116,9 +116,9 @@ type SkillInfo struct {
 
 // Registry 技能工具注册器
 type Registry struct {
-	loader    SkillLoaderFunc
-	skills    []SkillInfo
-	tools     map[string]*DynamicTool
+	loader SkillLoaderFunc
+	skills []SkillInfo
+	tools  map[string]*DynamicTool
 }
 
 // NewRegistry 创建技能注册器

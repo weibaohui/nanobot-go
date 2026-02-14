@@ -4,7 +4,7 @@ package agent
 type AgentType string
 
 const (
-	AgentTypeReAct AgentType = "react"
-	AgentTypePlan  AgentType = "plan"
-	AgentTypeChat  AgentType = "chat"
+	AgentTypeReAct AgentType = "react_agent"
+	AgentTypePlan  AgentType = "plan_agent"
+	AgentTypeChat  AgentType = "chat_agent"
 )

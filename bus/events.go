@@ -4,13 +4,13 @@ import "time"
 
 // InboundMessage 表示从聊天渠道接收的消息
 type InboundMessage struct {
-	Channel   string            `json:"channel"`   // telegram, discord, slack, whatsapp
-	SenderID  string            `json:"sender_id"` // 用户标识符
-	ChatID    string            `json:"chat_id"`   // 聊天/频道标识符
-	Content   string            `json:"content"`   // 消息文本
-	Timestamp time.Time         `json:"timestamp"` // 时间戳
-	Media     []string          `json:"media"`     // 媒体 URL 列表
-	Metadata  map[string]any    `json:"metadata"`  // 渠道特定数据
+	Channel   string         `json:"channel"`   // telegram, discord, slack, whatsapp
+	SenderID  string         `json:"sender_id"` // 用户标识符
+	ChatID    string         `json:"chat_id"`   // 聊天/频道标识符
+	Content   string         `json:"content"`   // 消息文本
+	Timestamp time.Time      `json:"timestamp"` // 时间戳
+	Media     []string       `json:"media"`     // 媒体 URL 列表
+	Metadata  map[string]any `json:"metadata"`  // 渠道特定数据
 }
 
 // SessionKey 返回会话的唯一标识符
@@ -30,11 +30,11 @@ type OutboundMessage struct {
 
 // StreamChunk 表示流式输出的一个片段
 type StreamChunk struct {
-	Channel  string `json:"channel"`
-	ChatID   string `json:"chat_id"`
-	Delta    string `json:"delta"`    // 增量内容
-	Content  string `json:"content"`  // 累积内容
-	Done     bool   `json:"done"`     // 是否完成
+	Channel string `json:"channel"`
+	ChatID  string `json:"chat_id"`
+	Delta   string `json:"delta"`   // 增量内容
+	Content string `json:"content"` // 累积内容
+	Done    bool   `json:"done"`    // 是否完成
 }
 
 // InterruptRequest 表示中断请求（需要用户输入）

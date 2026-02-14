@@ -32,15 +32,15 @@ type State struct {
 
 // Job 定时任务
 type Job struct {
-	ID              string    `json:"id"`
-	Name            string    `json:"name"`
-	Enabled         bool      `json:"enabled"`
-	Schedule        Schedule  `json:"schedule"`
-	Payload         Payload   `json:"payload"`
-	State           State     `json:"state"`
-	CreatedAtMs     int       `json:"createdAtMs"`
-	UpdatedAtMs     int       `json:"updatedAtMs"`
-	DeleteAfterRun  bool      `json:"deleteAfterRun"`
+	ID             string   `json:"id"`
+	Name           string   `json:"name"`
+	Enabled        bool     `json:"enabled"`
+	Schedule       Schedule `json:"schedule"`
+	Payload        Payload  `json:"payload"`
+	State          State    `json:"state"`
+	CreatedAtMs    int      `json:"createdAtMs"`
+	UpdatedAtMs    int      `json:"updatedAtMs"`
+	DeleteAfterRun bool     `json:"deleteAfterRun"`
 }
 
 // Store 任务存储
