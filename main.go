@@ -666,6 +666,7 @@ func registerChannels(mgr *channels.Manager, cfg *config.Config, messageBus *bus
 			UserID:     cfg.Channels.Matrix.UserID,
 			Token:      cfg.Channels.Matrix.Token,
 			AllowFrom:  cfg.Channels.Matrix.AllowFrom,
+			DataDir:    cfg.Channels.Matrix.DataDir,
 		}
 		matrix := channels.NewMatrixChannel(matrixConfig, messageBus, logger)
 		mgr.Register(matrix)

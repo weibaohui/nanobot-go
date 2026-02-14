@@ -156,6 +156,7 @@ func NewLoop(messageBus *bus.MessageBus, provider providers.LLMProvider, workspa
 		Logger:          logger,
 		Sessions:        sessionManager,
 		Bus:             messageBus,
+		Context:         loop.context, // 传入上下文构建器，复用基础系统提示词
 		InterruptMgr:    loop.interruptManager,
 		CheckpointStore: loop.interruptManager.GetCheckpointStore(),
 		MaxIterations:   maxIterations,
@@ -334,37 +335,37 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 		return nil
 	}
 
-	// 回退到传统模式
-	// 检查是否使用计划模式
-	if l.planAgent != nil && l.selector != nil && l.selector.ShouldUsePlanMode(msg.Content) {
-		l.logger.Info("使用计划执行模式")
-		if err := l.processWithPlan(ctx, msg); err != nil {
-			if strings.HasPrefix(err.Error(), "INTERRUPT:") {
-				return nil
-			}
-			return err
-		}
-		return nil
-	}
+	// // 回退到传统模式
+	// // 检查是否使用计划模式
+	// if l.planAgent != nil && l.selector != nil && l.selector.ShouldUsePlanMode(msg.Content) {
+	// 	l.logger.Info("使用计划执行模式")
+	// 	if err := l.processWithPlan(ctx, msg); err != nil {
+	// 		if strings.HasPrefix(err.Error(), "INTERRUPT:") {
+	// 			return nil
+	// 		}
+	// 		return err
+	// 	}
+	// 	return nil
+	// }
 
-	// 检查是否使用流式处理
-	if l.ShouldUseStream(msg.Channel) {
-		if err := l.processWithADKStream(ctx, msg); err != nil {
-			if strings.HasPrefix(err.Error(), "INTERRUPT:") {
-				return nil
-			}
-			return err
-		}
-		return nil
-	}
+	// // 检查是否使用流式处理
+	// if l.ShouldUseStream(msg.Channel) {
+	// 	if err := l.processWithADKStream(ctx, msg); err != nil {
+	// 		if strings.HasPrefix(err.Error(), "INTERRUPT:") {
+	// 			return nil
+	// 		}
+	// 		return err
+	// 	}
+	// 	return nil
+	// }
 
-	// 使用普通模式
-	if err := l.processWithADK(ctx, msg); err != nil {
-		if strings.HasPrefix(err.Error(), "INTERRUPT:") {
-			return nil
-		}
-		return err
-	}
+	// // 使用普通模式
+	// if err := l.processWithADK(ctx, msg); err != nil {
+	// 	if strings.HasPrefix(err.Error(), "INTERRUPT:") {
+	// 		return nil
+	// 	}
+	// 	return err
+	// }
 	return nil
 }
 
@@ -388,31 +389,8 @@ func (l *Loop) updateToolContext(channel, chatID string) {
 func (l *Loop) buildMessagesWithSystem(history []*schema.Message, userInput, channel, chatID string) []*schema.Message {
 	// 构建系统提示词
 	systemPrompt := l.context.BuildSystemPrompt(nil)
-	if channel != "" && chatID != "" {
-		systemPrompt += fmt.Sprintf("\n\n## 当前会话\n渠道: %s\n聊天 ID: %s", channel, chatID)
-	}
-
-	// 构建消息列表
-	messages := make([]*schema.Message, 0, len(history)+2)
-
-	// 添加系统消息
-	messages = append(messages, &schema.Message{
-		Role:    schema.System,
-		Content: systemPrompt,
-	})
-
-	// 添加历史消息
-	if len(history) > 0 {
-		messages = append(messages, history...)
-	}
-
-	// 添加当前用户消息
-	messages = append(messages, &schema.Message{
-		Role:    schema.User,
-		Content: userInput,
-	})
-
-	return messages
+	// 复用公共方法构建消息列表
+	return BuildMessageList(systemPrompt, history, userInput, channel, chatID)
 }
 
 // processWithADK 使用 ADK Agent 处理消息

@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/cloudwego/eino/schema"
 )
 
 // ContextBuilder 上下文构建器
@@ -93,7 +95,6 @@ func (c *ContextBuilder) getIdentity() string {
 - 执行 shell 命令
 - 搜索网络和获取网页
 - 向用户发送消息到聊天渠道
-- 创建子代理处理后台任务
 - 加载并使用技能（use_skill 工具）
 
 ## 当前时间
@@ -237,4 +238,35 @@ func (c *ContextBuilder) AddAssistantMessage(messages []map[string]any, content 
 func HasBinary(name string) bool {
 	_, err := exec.LookPath(name)
 	return err == nil
+}
+
+// BuildMessageList 构建消息列表（使用 schema.Message 类型）
+// 这是一个公共方法，供 Loop 和 SupervisorAgent 复用
+func BuildMessageList(systemPrompt string, history []*schema.Message, userInput, channel, chatID string) []*schema.Message {
+	// 添加会话信息
+	if channel != "" && chatID != "" {
+		systemPrompt += fmt.Sprintf("\n\n## 当前会话\n渠道: %s\n聊天 ID: %s", channel, chatID)
+	}
+
+	// 构建消息列表
+	messages := make([]*schema.Message, 0, len(history)+2)
+
+	// 添加系统消息
+	messages = append(messages, &schema.Message{
+		Role:    schema.System,
+		Content: systemPrompt,
+	})
+
+	// 添加历史消息
+	if len(history) > 0 {
+		messages = append(messages, history...)
+	}
+
+	// 添加当前用户消息
+	messages = append(messages, &schema.Message{
+		Role:    schema.User,
+		Content: userInput,
+	})
+
+	return messages
 }

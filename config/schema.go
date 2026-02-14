@@ -190,6 +190,7 @@ type MatrixConfig struct {
 	UserID     string   `json:"userId"`     // 用户 ID，如 @nanobot:example.com
 	Token      string   `json:"token"`      // 访问令牌
 	AllowFrom  []string `json:"allowFrom"`  // 允许的用户白名单
+	DataDir    string   `json:"dataDir"`    // 数据存储目录，用于持久化同步状态
 }
 
 // ProvidersConfig LLM 提供商配置

@@ -33,14 +33,15 @@ type SubAgent interface {
 // SupervisorAgent 监督者 Agent
 // 作为统一入口，根据用户输入自动路由到合适的子 Agent
 type SupervisorAgent struct {
-	provider     providers.LLMProvider
-	model        string
-	workspace    string
-	tools        []tool.BaseTool
-	logger       *zap.Logger
-	router       *Router
-	sessions     *session.Manager
-	bus          *bus.MessageBus
+	provider  providers.LLMProvider
+	model     string
+	workspace string
+	tools     []tool.BaseTool
+	logger    *zap.Logger
+	router    *Router
+	sessions  *session.Manager
+	bus       *bus.MessageBus
+	context   *ContextBuilder // 上下文构建器，用于复用基础系统提示词
 
 	// 子 Agent
 	reactAgent SubAgent
@@ -69,6 +70,7 @@ type SupervisorConfig struct {
 	Logger          *zap.Logger
 	Sessions        *session.Manager
 	Bus             *bus.MessageBus
+	Context         *ContextBuilder // 上下文构建器
 	InterruptMgr    *InterruptManager
 	CheckpointStore compose.CheckPointStore
 	MaxIterations   int
@@ -100,6 +102,7 @@ func NewSupervisorAgent(ctx context.Context, cfg *SupervisorConfig) (*Supervisor
 		router:           NewRouter(&RouterConfig{Logger: logger}),
 		sessions:         cfg.Sessions,
 		bus:              cfg.Bus,
+		context:          cfg.Context,
 		interruptManager: cfg.InterruptMgr,
 		checkpointStore:  cfg.CheckpointStore,
 		maxIterations:    maxIter,
@@ -459,41 +462,21 @@ func (sa *SupervisorAgent) handleInterrupt(msg *bus.InboundMessage, checkpointID
 func (sa *SupervisorAgent) buildMessages(history []*schema.Message, userInput, channel, chatID string) []*schema.Message {
 	// 构建系统提示
 	systemPrompt := sa.buildSystemPrompt()
-	if channel != "" && chatID != "" {
-		systemPrompt += fmt.Sprintf("\n\n## 当前会话\n渠道: %s\n聊天 ID: %s", channel, chatID)
-	}
-
-	messages := make([]*schema.Message, 0, len(history)+2)
-
-	// 添加系统消息
-	messages = append(messages, &schema.Message{
-		Role:    schema.System,
-		Content: systemPrompt,
-	})
-
-	// 添加历史消息
-	if len(history) > 0 {
-		messages = append(messages, history...)
-	}
-
-	// 添加当前用户消息
-	messages = append(messages, &schema.Message{
-		Role:    schema.User,
-		Content: userInput,
-	})
-
-	return messages
+	// 复用公共方法构建消息列表
+	return BuildMessageList(systemPrompt, history, userInput, channel, chatID)
 }
 
 // buildSystemPrompt 构建系统提示
+// 复用基础系统提示词，并添加 Supervisor 特有的角色说明
 func (sa *SupervisorAgent) buildSystemPrompt() string {
-	now := time.Now().Format("2006-01-02 15:04 (Monday)")
-	tz, _ := time.Now().Zone()
+	// 获取基础系统提示词（包含身份、时间、环境、工作区、内存、技能等）
+	var basePrompt string
+	if sa.context != nil {
+		basePrompt = sa.context.BuildSystemPrompt(nil)
+	}
 
-	return fmt.Sprintf(`# nanobot Supervisor
-
-## 当前时间
-%s (%s)
+	// Supervisor 特有的角色说明
+	supervisorPrompt := `# Supervisor 角色
 
 你是 nanobot 的统一入口 Agent。你的职责是分析用户请求，并将其路由到最合适的子 Agent。
 
@@ -503,7 +486,13 @@ func (sa *SupervisorAgent) buildSystemPrompt() string {
 3. 委托任务给子 Agent
 4. 汇总结果返回给用户
 
-记住：不要自己执行具体任务，总是委托给专业的子 Agent。`, now, tz)
+记住：不要自己执行具体任务，总是委托给专业的子 Agent。`
+
+	// 组合提示词
+	if basePrompt != "" {
+		return basePrompt + "\n\n---\n\n" + supervisorPrompt
+	}
+	return supervisorPrompt
 }
 
 // convertHistory 转换会话历史

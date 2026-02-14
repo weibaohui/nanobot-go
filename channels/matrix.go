@@ -2,7 +2,10 @@ package channels
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -28,7 +31,7 @@ type MatrixChannel struct {
 	syncer *mautrix.DefaultSyncer
 
 	// 存储
-	store *mautrix.MemorySyncStore
+	store *FileSyncStore
 
 	// 后台任务管理
 	bgTasks sync.WaitGroup
@@ -45,6 +48,7 @@ type MatrixConfig struct {
 	UserID     string   `json:"userId"`     // 用户 ID，如 @nanobot:example.com
 	Token      string   `json:"token"`      // 访问令牌
 	AllowFrom  []string `json:"allowFrom"`  // 允许的用户白名单
+	DataDir    string   `json:"dataDir"`    // 数据存储目录，用于持久化同步状态
 }
 
 // NewMatrixChannel 创建 Matrix 渠道
@@ -85,14 +89,58 @@ func (c *MatrixChannel) Start(ctx context.Context) error {
 		return fmt.Errorf("创建 Matrix 客户端失败: %w", err)
 	}
 
-	// 创建存储
-	c.store = mautrix.NewMemorySyncStore()
+	// 创建持久化存储
+	storePath := c.getStorePath()
+	c.store, err = NewFileSyncStore(storePath, userID)
+	if err != nil {
+		c.logger.Error("创建 Matrix 存储失败", zap.Error(err))
+		return fmt.Errorf("创建 Matrix 存储失败: %w", err)
+	}
 	c.client.Store = c.store
 
 	// 创建同步器
 	c.syncer = mautrix.NewDefaultSyncer()
 	c.syncer.ParseEventContent = true
 	c.client.Syncer = c.syncer
+
+	// 设置过滤器，只获取新消息，不同步历史状态和成员
+	// 这样可以大幅减少启动时的数据量
+	c.syncer.FilterJSON = &mautrix.Filter{
+		Room: &mautrix.RoomFilter{
+			// 时间线过滤器：只获取新消息，不获取历史
+			Timeline: &mautrix.FilterPart{
+				Limit: 10, // 限制历史消息数量
+				Types: []event.Type{
+					event.EventMessage,
+					event.EventEncrypted,
+				},
+			},
+			// 状态过滤器：不同步房间状态（成员列表、房间名等）
+			State: &mautrix.FilterPart{
+				Limit: 0, // 不获取状态事件
+				LazyLoadMembers: true, // 只在需要时懒加载成员信息
+			},
+			// ephemeral 事件（打字状态、已读标记等）
+			Ephemeral: &mautrix.FilterPart{
+				Limit: 0, // 不获取
+			},
+			// 账户数据
+			AccountData: &mautrix.FilterPart{
+				Limit: 0, // 不获取
+			},
+		},
+		// 全局账户数据
+		AccountData: &mautrix.FilterPart{
+			Limit: 0, // 不获取
+		},
+		// 在线状态
+		Presence: &mautrix.FilterPart{
+			Limit: 0, // 不获取
+		},
+	}
+
+	// 注册忽略旧消息的处理器（机器人只处理启动后收到的消息）
+	c.syncer.OnSync(c.client.DontProcessOldEvents)
 
 	// 注册消息事件处理器
 	c.syncer.OnEventType(event.EventMessage, c.onMessage)
@@ -108,6 +156,7 @@ func (c *MatrixChannel) Start(ctx context.Context) error {
 	c.logger.Info("Matrix 渠道已启动",
 		zap.String("homeserver", c.config.Homeserver),
 		zap.String("user_id", string(userID)),
+		zap.String("store_path", storePath),
 	)
 
 	// 启动同步
@@ -115,6 +164,16 @@ func (c *MatrixChannel) Start(ctx context.Context) error {
 	go c.runSync()
 
 	return nil
+}
+
+// getStorePath 获取存储路径
+func (c *MatrixChannel) getStorePath() string {
+	if c.config.DataDir != "" {
+		return filepath.Join(c.config.DataDir, "matrix_sync.json")
+	}
+	// 默认使用 ~/.nanobot/matrix_sync.json
+	homeDir, _ := os.UserHomeDir()
+	return filepath.Join(homeDir, ".nanobot", "matrix_sync.json")
 }
 
 // runSync 运行 Matrix 同步
@@ -197,7 +256,7 @@ func (c *MatrixChannel) onMessage(ctx context.Context, evt *event.Event) {
 		SenderID:  string(evt.Sender),
 		Content:   text,
 		Timestamp: time.UnixMilli(evt.Timestamp),
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"event_id":  string(evt.ID),
 			"room_id":   string(evt.RoomID),
 			"sender":    string(evt.Sender),
@@ -228,6 +287,13 @@ func (c *MatrixChannel) Stop() {
 
 	if c.cancel != nil {
 		c.cancel()
+	}
+
+	// 保存同步状态
+	if c.store != nil {
+		if err := c.store.Save(); err != nil {
+			c.logger.Warn("保存 Matrix 同步状态失败", zap.Error(err))
+		}
 	}
 
 	// 等待后台任务完成
@@ -390,4 +456,110 @@ func (c *MatrixChannel) SetPresence(presence event.Presence, statusMsg string) e
 		zap.String("presence", string(presence)),
 	)
 	return nil
+}
+
+// ========== FileSyncStore 文件持久化存储 ==========
+
+// FileSyncStore 基于文件的同步状态存储
+type FileSyncStore struct {
+	filePath string
+	userID   id.UserID
+
+	mu        sync.RWMutex
+	filterID  string
+	nextBatch string
+}
+
+// syncData 用于 JSON 序列化的数据结构
+type syncData struct {
+	FilterID  string `json:"filter_id"`
+	NextBatch string `json:"next_batch"`
+}
+
+// NewFileSyncStore 创建文件同步存储
+func NewFileSyncStore(filePath string, userID id.UserID) (*FileSyncStore, error) {
+	store := &FileSyncStore{
+		filePath: filePath,
+		userID:   userID,
+	}
+
+	// 尝试加载现有数据
+	if err := store.load(); err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+
+	return store, nil
+}
+
+// load 从文件加载数据
+func (s *FileSyncStore) load() error {
+	data, err := os.ReadFile(s.filePath)
+	if err != nil {
+		return err
+	}
+
+	var sd syncData
+	if err := json.Unmarshal(data, &sd); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	s.filterID = sd.FilterID
+	s.nextBatch = sd.NextBatch
+	s.mu.Unlock()
+
+	return nil
+}
+
+// Save 保存数据到文件
+func (s *FileSyncStore) Save() error {
+	s.mu.RLock()
+	sd := syncData{
+		FilterID:  s.filterID,
+		NextBatch: s.nextBatch,
+	}
+	s.mu.RUnlock()
+
+	data, err := json.MarshalIndent(sd, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	// 确保目录存在
+	dir := filepath.Dir(s.filePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	return os.WriteFile(s.filePath, data, 0644)
+}
+
+// LoadFilterID 实现 mautrix.SyncStore 接口
+func (s *FileSyncStore) LoadFilterID(ctx context.Context, userID id.UserID) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.filterID, nil
+}
+
+// SaveFilterID 实现 mautrix.SyncStore 接口
+func (s *FileSyncStore) SaveFilterID(ctx context.Context, userID id.UserID, filterID string) error {
+	s.mu.Lock()
+	s.filterID = filterID
+	s.mu.Unlock()
+	return s.Save()
+}
+
+// LoadNextBatch 实现 mautrix.SyncStore 接口
+func (s *FileSyncStore) LoadNextBatch(ctx context.Context, userID id.UserID) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.nextBatch, nil
+}
+
+// SaveNextBatch 实现 mautrix.SyncStore 接口
+func (s *FileSyncStore) SaveNextBatch(ctx context.Context, userID id.UserID, nextBatchToken string) error {
+	s.mu.Lock()
+	s.nextBatch = nextBatchToken
+	s.mu.Unlock()
+	return s.Save()
 }
