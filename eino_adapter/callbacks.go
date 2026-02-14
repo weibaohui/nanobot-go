@@ -88,10 +88,9 @@ func (ec *EinoCallbacks) onEnd(ctx context.Context, info *callbacks.RunInfo, out
 	}
 
 	nodeKey := ec.nodeKey(info)
-	startTime, exists := ec.startTimes[nodeKey]
-	duration := time.Since(startTime)
-	if !exists {
-		duration = 0
+	duration := time.Duration(0)
+	if startTime, exists := ec.startTimes[nodeKey]; exists {
+		duration = time.Since(startTime)
 	}
 
 	ec.logger.Info("[EinoCallback] 节点执行完成",
@@ -122,10 +121,9 @@ func (ec *EinoCallbacks) onError(ctx context.Context, info *callbacks.RunInfo, e
 	}
 
 	nodeKey := ec.nodeKey(info)
-	startTime, exists := ec.startTimes[nodeKey]
-	duration := time.Since(startTime)
-	if !exists {
-		duration = 0
+	duration := time.Duration(0)
+	if startTime, exists := ec.startTimes[nodeKey]; exists {
+		duration = time.Since(startTime)
 	}
 
 	ec.logger.Error("[EinoCallback] 节点执行出错",
@@ -179,9 +177,15 @@ func (ec *EinoCallbacks) logModelInput(input callbacks.CallbackInput, info *call
 	toolCount := len(modelInput.Tools)
 	toolNames := make([]string, 0, toolCount)
 	for _, t := range modelInput.Tools {
-		if t != nil {
-			toolNames = append(toolNames, t.Name)
+		if t == nil {
+			continue
 		}
+		toolNames = append(toolNames, t.Name)
+	}
+
+	marshalJSON := func(v any) string {
+		data, _ := json.Marshal(v)
+		return string(data)
 	}
 
 	// 在第一条日志中显示关键信息：Messages 和 Tools 摘要
@@ -192,20 +196,19 @@ func (ec *EinoCallbacks) logModelInput(input callbacks.CallbackInput, info *call
 	)
 
 	// 记录 Prompt/Messages 详情
-	if len(modelInput.Messages) > 0 {
-		for _, msg := range modelInput.Messages {
-			if msg != nil {
-				// 在调试级别下记录完整内容
-				ec.logger.Debug("[EinoCallback]   Message Content",
-					zap.String("role", string(msg.Role)),
-					zap.String("content", msg.Content),
-				)
-			}
+	for _, msg := range modelInput.Messages {
+		if msg == nil {
+			continue
 		}
+		// 在调试级别下记录完整内容
+		ec.logger.Debug("[EinoCallback]   Message Content",
+			zap.String("role", string(msg.Role)),
+			zap.String("content", msg.Content),
+		)
 	}
 
 	// 记录 Tools 详情
-	if toolCount > 0 {
+	if len(toolNames) > 0 {
 		ec.logger.Info("[EinoCallback] Model 输入 Tools",
 			zap.Strings("tool_names", toolNames),
 		)
@@ -213,9 +216,8 @@ func (ec *EinoCallbacks) logModelInput(input callbacks.CallbackInput, info *call
 
 	// 记录 ToolChoice
 	if modelInput.ToolChoice != nil {
-		toolChoiceJSON, _ := json.Marshal(modelInput.ToolChoice)
 		ec.logger.Info("[EinoCallback] Model 输入 ToolChoice",
-			zap.String("tool_choice", string(toolChoiceJSON)),
+			zap.String("tool_choice", marshalJSON(modelInput.ToolChoice)),
 		)
 	}
 
@@ -231,9 +233,8 @@ func (ec *EinoCallbacks) logModelInput(input callbacks.CallbackInput, info *call
 
 	// 记录 Extra
 	if len(modelInput.Extra) > 0 {
-		extraJSON, _ := json.Marshal(modelInput.Extra)
 		ec.logger.Debug("[EinoCallback] Model 输入 Extra",
-			zap.String("extra", string(extraJSON)),
+			zap.String("extra", marshalJSON(modelInput.Extra)),
 		)
 	}
 }
@@ -257,15 +258,13 @@ func (ec *EinoCallbacks) logModelOutput(output callbacks.CallbackOutput, info *c
 		)
 
 		// 记录工具调用
-		if len(modelOutput.Message.ToolCalls) > 0 {
-			for i, tc := range modelOutput.Message.ToolCalls {
-				ec.logger.Info("[EinoCallback] 调用工具 ToolCall",
-					zap.Int("index", i),
-					zap.String("type", tc.Type),
-					zap.String("function_name", tc.Function.Name),
-					zap.String("function_arguments", tc.Function.Arguments),
-				)
-			}
+		for i, tc := range modelOutput.Message.ToolCalls {
+			ec.logger.Info("[EinoCallback] 调用工具 ToolCall",
+				zap.Int("index", i),
+				zap.String("type", tc.Type),
+				zap.String("function_name", tc.Function.Name),
+				zap.String("function_arguments", tc.Function.Arguments),
+			)
 		}
 	}
 
