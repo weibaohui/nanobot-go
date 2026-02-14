@@ -261,7 +261,7 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 		}
 
 		// 恢复执行
-		result, err := l.ResumeExecution(ctx, pendingInterrupt.CheckpointID, pendingInterrupt.InterruptID, msg.Content, msg.Channel, msg.ChatID, sessionKey, pendingInterrupt.IsAskUser)
+		result, err := l.ResumeExecution(ctx, pendingInterrupt.CheckpointID, pendingInterrupt.InterruptID, msg.Content, msg.Channel, msg.ChatID, sessionKey, pendingInterrupt.IsAskUser, pendingInterrupt.IsPlan)
 		if err != nil {
 			// 检查是否是新的中断
 			if strings.HasPrefix(err.Error(), "INTERRUPT:") {
@@ -410,7 +410,7 @@ func (l *Loop) processWithADK(ctx context.Context, msg *bus.InboundMessage) erro
 
 	// 检查是否被中断
 	if lastEvent != nil && lastEvent.Action != nil && lastEvent.Action.Interrupted != nil {
-		if err := l.handleInterrupt(ctx, msg, checkpointID, lastEvent, sess, sessionKey); err != nil {
+		if err := l.handleInterrupt(ctx, msg, checkpointID, lastEvent, sess, sessionKey, false); err != nil {
 			if strings.HasPrefix(err.Error(), "INTERRUPT:") {
 				return nil
 			}
@@ -487,7 +487,7 @@ func (l *Loop) processWithADKStream(ctx context.Context, msg *bus.InboundMessage
 
 	// 检查是否被中断
 	if lastEvent != nil && lastEvent.Action != nil && lastEvent.Action.Interrupted != nil {
-		return l.handleInterrupt(ctx, msg, checkpointID, lastEvent, sess, sessionKey)
+		return l.handleInterrupt(ctx, msg, checkpointID, lastEvent, sess, sessionKey, false)
 	}
 
 	// 发送完成标记
@@ -507,7 +507,7 @@ func (l *Loop) processWithADKStream(ctx context.Context, msg *bus.InboundMessage
 }
 
 // handleInterrupt 处理中断
-func (l *Loop) handleInterrupt(ctx context.Context, msg *bus.InboundMessage, checkpointID string, event *adk.AgentEvent, sess *session.Session, sessionKey string) error {
+func (l *Loop) handleInterrupt(ctx context.Context, msg *bus.InboundMessage, checkpointID string, event *adk.AgentEvent, sess *session.Session, sessionKey string, isPlan bool) error {
 	if event.Action == nil || event.Action.Interrupted == nil {
 		return nil
 	}
@@ -554,6 +554,7 @@ func (l *Loop) handleInterrupt(ctx context.Context, msg *bus.InboundMessage, che
 		Options:      options,
 		SessionKey:   sessionKey,
 		IsAskUser:    isAskUser,
+		IsPlan:       isPlan,
 	})
 
 	l.logger.Info("等待用户输入以恢复执行",
@@ -568,7 +569,7 @@ func (l *Loop) handleInterrupt(ctx context.Context, msg *bus.InboundMessage, che
 }
 
 // ResumeExecution 恢复被中断的执行
-func (l *Loop) ResumeExecution(ctx context.Context, checkpointID, interruptID string, userAnswer string, channel, chatID string, sessionKey string, isAskUser bool) (string, error) {
+func (l *Loop) ResumeExecution(ctx context.Context, checkpointID, interruptID string, userAnswer string, channel, chatID string, sessionKey string, isAskUser bool, isPlan bool) (string, error) {
 	if l.adkRunner == nil {
 		return "", fmt.Errorf("ADK Agent 未初始化")
 	}
@@ -591,7 +592,18 @@ func (l *Loop) ResumeExecution(ctx context.Context, checkpointID, interruptID st
 	}
 
 	// 恢复执行
-	iter, err := l.adkRunner.ResumeWithParams(ctx, checkpointID, resumeParams)
+	var (
+		iter *adk.AsyncIterator[*adk.AgentEvent]
+		err  error
+	)
+	if isPlan {
+		if l.planAgent == nil {
+			return "", fmt.Errorf("Plan Agent 未初始化")
+		}
+		iter, err = l.planAgent.ResumeWithParams(ctx, checkpointID, resumeParams)
+	} else {
+		iter, err = l.adkRunner.ResumeWithParams(ctx, checkpointID, resumeParams)
+	}
 	if err != nil {
 		return "", fmt.Errorf("恢复执行失败: %w", err)
 	}
@@ -621,7 +633,7 @@ func (l *Loop) ResumeExecution(ctx context.Context, checkpointID, interruptID st
 				ChatID:  chatID,
 			}
 			newCheckpointID := fmt.Sprintf("%s_resume_%d", checkpointID, time.Now().UnixNano())
-			return "", l.handleInterrupt(ctx, msg, newCheckpointID, event, nil, sessionKey)
+			return "", l.handleInterrupt(ctx, msg, newCheckpointID, event, nil, sessionKey, isPlan)
 		}
 	}
 
@@ -670,7 +682,7 @@ func (l *Loop) processWithPlan(ctx context.Context, msg *bus.InboundMessage) err
 	}
 
 	if lastEvent != nil && lastEvent.Action != nil && lastEvent.Action.Interrupted != nil {
-		if err := l.handleInterrupt(ctx, msg, checkpointID, lastEvent, sess, sessionKey); err != nil {
+		if err := l.handleInterrupt(ctx, msg, checkpointID, lastEvent, sess, sessionKey, true); err != nil {
 			if strings.HasPrefix(err.Error(), "INTERRUPT:") {
 				return nil
 			}

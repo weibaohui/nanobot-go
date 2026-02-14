@@ -32,6 +32,7 @@ type InterruptInfo struct {
 	Options      []string `json:"options,omitempty"`
 	SessionKey   string   `json:"session_key"`
 	IsAskUser    bool     `json:"is_ask_user"`
+	IsPlan       bool     `json:"is_plan"`
 }
 
 // UserResponse 用户响应

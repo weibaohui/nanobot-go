@@ -329,6 +329,10 @@ func (a *PlanExecuteAgent) StreamWithHistory(ctx context.Context, input string, 
 	return a.runner.Run(ctx, messages)
 }
 
+func (a *PlanExecuteAgent) ResumeWithParams(ctx context.Context, checkpointID string, params *adk.ResumeParams) (*adk.AsyncIterator[*adk.AgentEvent], error) {
+	return a.runner.ResumeWithParams(ctx, checkpointID, params)
+}
+
 // GetChatModel returns the underlying chat model adapter
 func (a *PlanExecuteAgent) GetChatModel() model.ToolCallingChatModel {
 	return a.adapter
