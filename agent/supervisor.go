@@ -11,6 +11,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
+	"github.com/weibaohui/nanobot-go/agent/tools/askuser"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/eino_adapter"
@@ -371,8 +372,13 @@ func (sa *SupervisorAgent) handleInterrupt(msg *bus.InboundMessage, checkpointID
 	// 解析中断信息
 	var question string
 	var options []string
+	isAskUser := false
 
-	if info, ok := interruptCtx.Info.(map[string]any); ok {
+	if info, ok := interruptCtx.Info.(*askuser.AskUserInfo); ok {
+		question = info.Question
+		options = append(options, info.Options...)
+		isAskUser = true
+	} else if info, ok := interruptCtx.Info.(map[string]any); ok {
 		if q, ok := info["question"].(string); ok {
 			question = q
 		}
@@ -382,6 +388,9 @@ func (sa *SupervisorAgent) handleInterrupt(msg *bus.InboundMessage, checkpointID
 					options = append(options, s)
 				}
 			}
+		}
+		if question != "" {
+			isAskUser = true
 		}
 	} else {
 		question = fmt.Sprintf("%v", interruptCtx.Info)
@@ -396,6 +405,7 @@ func (sa *SupervisorAgent) handleInterrupt(msg *bus.InboundMessage, checkpointID
 		Question:     question,
 		Options:      options,
 		SessionKey:   msg.SessionKey(),
+		IsAskUser:    isAskUser,
 		IsSupervisor: true, // 标记来自 Supervisor 模式的中断
 	})
 
