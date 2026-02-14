@@ -48,16 +48,22 @@ type Loop struct {
 	running             bool
 	logger              *zap.Logger
 
-	// ADK Agent
+	// ADK Agent（保留用于向后兼容）
 	adkAgent  *adk.ChatModelAgent
 	adkRunner *adk.Runner
 
 	// 中断管理
 	interruptManager *InterruptManager
 
-	// Plan-Execute mode support
+	// Plan-Execute mode support（保留用于向后兼容）
 	planAgent *eino_adapter.PlanExecuteAgent
 	selector  *eino_adapter.ModeSelector
+
+	// Supervisor 入口 Agent（新增）
+	supervisor *SupervisorAgent
+
+	// 是否启用 Supervisor 模式
+	enableSupervisor bool
 }
 
 // NewLoop 创建代理循环
@@ -139,6 +145,28 @@ func NewLoop(messageBus *bus.MessageBus, provider providers.LLMProvider, workspa
 			CheckPointStore: loop.interruptManager.GetCheckpointStore(),
 		})
 		logger.Info("ADK Agent 创建成功")
+	}
+
+	// 创建 Supervisor Agent（入口型 Agent）
+	supervisor, err := NewSupervisorAgent(ctx, &SupervisorConfig{
+		Provider:        provider,
+		Model:           model,
+		Workspace:       workspace,
+		Tools:           adkTools,
+		Logger:          logger,
+		Sessions:        sessionManager,
+		Bus:             messageBus,
+		InterruptMgr:    loop.interruptManager,
+		CheckpointStore: loop.interruptManager.GetCheckpointStore(),
+		MaxIterations:   maxIterations,
+		EnableStream:    true,
+	})
+	if err != nil {
+		logger.Error("创建 Supervisor Agent 失败，将使用传统模式", zap.Error(err))
+	} else {
+		loop.supervisor = supervisor
+		loop.enableSupervisor = true
+		logger.Info("Supervisor Agent 创建成功，已启用入口型 Agent 模式")
 	}
 
 	return loop
@@ -289,6 +317,24 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 	// 更新工具上下文
 	l.updateToolContext(msg.Channel, msg.ChatID)
 
+	// 优先使用 Supervisor Agent 处理消息
+	if l.enableSupervisor && l.supervisor != nil {
+		l.logger.Info("使用 Supervisor Agent 处理消息")
+		response, err := l.supervisor.Process(ctx, msg)
+		if err != nil {
+			// 检查是否是中断
+			if strings.HasPrefix(err.Error(), "INTERRUPT:") {
+				return nil
+			}
+			return fmt.Errorf("Supervisor 处理失败: %w", err)
+		}
+
+		// 发布响应
+		l.bus.PublishOutbound(bus.NewOutboundMessage(msg.Channel, msg.ChatID, response))
+		return nil
+	}
+
+	// 回退到传统模式
 	// 检查是否使用计划模式
 	if l.planAgent != nil && l.selector != nil && l.selector.ShouldUsePlanMode(msg.Content) {
 		l.logger.Info("使用计划执行模式")
@@ -643,6 +689,16 @@ func (l *Loop) ResumeExecution(ctx context.Context, checkpointID, interruptID st
 // GetInterruptManager 获取中断管理器
 func (l *Loop) GetInterruptManager() *InterruptManager {
 	return l.interruptManager
+}
+
+// GetSupervisor 获取 Supervisor Agent
+func (l *Loop) GetSupervisor() *SupervisorAgent {
+	return l.supervisor
+}
+
+// IsSupervisorEnabled 检查是否启用 Supervisor 模式
+func (l *Loop) IsSupervisorEnabled() bool {
+	return l.enableSupervisor && l.supervisor != nil
 }
 
 // processWithPlan 使用计划执行模式
