@@ -146,13 +146,8 @@ func runAgent(cmd *cobra.Command, args []string) {
 	ctx := context.Background()
 	if agentMessage != "" {
 
-		// Use normal single-turn mode
-		response, err := loop.ProcessDirect(ctx, agentMessage, agentSession, "cli", "default")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "错误: %s\n", err)
-			os.Exit(1)
-		}
-		fmt.Println(response)
+		fmt.Println("发送消息:", agentMessage)
+
 	} else {
 		runInteractiveMode(ctx, loop, logger)
 	}
@@ -192,16 +187,9 @@ func runInteractiveMode(ctx context.Context, loop *agent.Loop, logger *zap.Logge
 		}
 
 		var response string
-		var err error
 
 		logger.Info("使用普通模式", zap.String("input", input))
 		// Use normal mode
-		response, err = loop.ProcessDirect(ctx, input, agentSession, "cli", "default")
-
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "错误: %s\n", err)
-			continue
-		}
 
 		fmt.Println()
 		fmt.Println("🐈 nanobot")
@@ -255,24 +243,7 @@ func runGateway(cmd *cobra.Command, args []string) {
 		logger,
 	)
 
-	// Initialize smart mode selector and plan-execute agent
-	selector := eino_adapter.NewModeSelector()
 	ctx := context.Background()
-	planAgent, err := eino_adapter.NewPlanExecuteAgent(ctx, &eino_adapter.Config{
-		Cfg:             cfg,
-		Tools:           loop.GetTools(),
-		Logger:          logger,
-		EnableStream:    false,
-		MaxIterations:   maxIter,
-		CheckpointStore: loop.GetInterruptManager().GetCheckpointStore(),
-	})
-	if err != nil {
-		logger.Warn("无法创建计划执行代理，将仅使用普通模式", zap.Error(err))
-	} else {
-		loop.SetPlanAgent(planAgent)
-		loop.SetModeSelector(selector)
-		logger.Info("计划执行模式已启用")
-	}
 
 	channelManager := channels.NewManager(messageBus)
 
@@ -281,11 +252,6 @@ func runGateway(cmd *cobra.Command, args []string) {
 
 	// 注册配置中启用的渠道
 	registerChannels(channelManager, cfg, messageBus, logger)
-
-	cronService.SetOnJobCallback(func(job *cron.Job) (string, error) {
-		ctx := context.Background()
-		return loop.ProcessDirect(ctx, job.Payload.Message, job.Payload.Channel+":"+job.Payload.To, job.Payload.Channel, job.Payload.To)
-	})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -301,7 +267,7 @@ func runGateway(cmd *cobra.Command, args []string) {
 	heartbeatService := heartbeat.NewService(
 		workspacePath,
 		func(ctx context.Context, prompt string) (string, error) {
-			return loop.ProcessDirect(ctx, prompt, "heartbeat", "heartbeat", "heartbeat")
+			return "// TODO 待实现", nil
 		},
 		0,    // 使用默认间隔（30分钟）
 		true, // 启用心跳

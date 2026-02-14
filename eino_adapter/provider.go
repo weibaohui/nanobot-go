@@ -22,7 +22,7 @@ type ProviderAdapter struct {
 	skillLoader   SkillLoader     // 技能加载器
 }
 
-func createProviderConfig(cfg *config.Config, logger *zap.Logger) (apiKey, apiBase, modelName string) {
+func createProviderConfig(logger *zap.Logger, cfg *config.Config) (apiKey, apiBase, modelName string) {
 	providerCfg := cfg.GetProvider(cfg.Agents.Defaults.Model)
 	if providerCfg == nil || providerCfg.APIKey == "" {
 		logger.Warn("未找到有效的 API Key，请设置环境变量")
@@ -39,12 +39,7 @@ func createProviderConfig(cfg *config.Config, logger *zap.Logger) (apiKey, apiBa
 
 // NewProviderAdapter 创建 Provider 适配器
 func NewProviderAdapter(logger *zap.Logger, cfg *config.Config) *ProviderAdapter {
-	apiKey, apiBase, modelName := createProviderConfig(cfg, logger)
-
-	if modelName == "" {
-		modelName = "gpt-4o"
-	}
-
+	apiKey, apiBase, modelName := createProviderConfig(logger, cfg)
 	// 使用 eino-ext 的 OpenAI ChatModel
 	chatModel, err := openai.NewChatModel(context.Background(), &openai.ChatModelConfig{
 		APIKey:  apiKey,
@@ -58,15 +53,6 @@ func NewProviderAdapter(logger *zap.Logger, cfg *config.Config) *ProviderAdapter
 		return nil
 	}
 
-	return &ProviderAdapter{
-		logger:        logger,
-		chatModel:     chatModel,
-		registeredMap: make(map[string]bool),
-	}
-}
-
-// NewProviderAdapterWithModel 使用已有的 ChatModel 创建适配器
-func NewProviderAdapterWithModel(logger *zap.Logger, chatModel model.ToolCallingChatModel) *ProviderAdapter {
 	return &ProviderAdapter{
 		logger:        logger,
 		chatModel:     chatModel,

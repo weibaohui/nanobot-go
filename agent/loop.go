@@ -8,7 +8,6 @@ import (
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/agent/tools"
 	"github.com/weibaohui/nanobot-go/agent/tools/askuser"
@@ -45,16 +44,8 @@ type Loop struct {
 	running             bool
 	logger              *zap.Logger
 
-	// ADK Agent（保留用于向后兼容）
-	adkAgent  *adk.ChatModelAgent
-	adkRunner *adk.Runner
-
 	// 中断管理
 	interruptManager *InterruptManager
-
-	// Plan-Execute mode support（保留用于向后兼容）
-	planAgent *eino_adapter.PlanExecuteAgent
-	selector  *eino_adapter.ModeSelector
 
 	// Supervisor 入口 Agent（新增）
 	supervisor *SupervisorAgent
@@ -113,32 +104,6 @@ func NewLoop(cfg *config.Config, messageBus *bus.MessageBus, workspace string, m
 	adapter.SetRegisteredTools(toolNames)
 
 	adkTools := loop.tools.GetADKTools()
-	var toolsConfig adk.ToolsConfig
-	if len(adkTools) > 0 {
-		toolsConfig = adk.ToolsConfig{
-			ToolsNodeConfig: compose.ToolsNodeConfig{
-				Tools: adkTools,
-			},
-		}
-	}
-	adkAgent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
-		Name:          "nanobot",
-		Description:   "nanobot AI assistant",
-		Model:         adapter,
-		ToolsConfig:   toolsConfig,
-		MaxIterations: maxIterations,
-	})
-	if err != nil {
-		logger.Error("创建 ADK Agent 失败，将使用回退模式", zap.Error(err))
-	} else {
-		loop.adkAgent = adkAgent
-		loop.adkRunner = adk.NewRunner(ctx, adk.RunnerConfig{
-			Agent:           adkAgent,
-			EnableStreaming: true,
-			CheckPointStore: loop.interruptManager.GetCheckpointStore(),
-		})
-		logger.Info("ADK Agent 创建成功")
-	}
 
 	// 创建 Supervisor Agent（入口型 Agent）
 	supervisor, err := NewSupervisorAgent(ctx, &SupervisorConfig{
@@ -325,37 +290,6 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 		return nil
 	}
 
-	// // 回退到传统模式
-	// // 检查是否使用计划模式
-	// if l.planAgent != nil && l.selector != nil && l.selector.ShouldUsePlanMode(msg.Content) {
-	// 	l.logger.Info("使用计划执行模式")
-	// 	if err := l.processWithPlan(ctx, msg); err != nil {
-	// 		if strings.HasPrefix(err.Error(), "INTERRUPT:") {
-	// 			return nil
-	// 		}
-	// 		return err
-	// 	}
-	// 	return nil
-	// }
-
-	// // 检查是否使用流式处理
-	// if l.ShouldUseStream(msg.Channel) {
-	// 	if err := l.processWithADKStream(ctx, msg); err != nil {
-	// 		if strings.HasPrefix(err.Error(), "INTERRUPT:") {
-	// 			return nil
-	// 		}
-	// 		return err
-	// 	}
-	// 	return nil
-	// }
-
-	// // 使用普通模式
-	// if err := l.processWithADK(ctx, msg); err != nil {
-	// 	if strings.HasPrefix(err.Error(), "INTERRUPT:") {
-	// 		return nil
-	// 	}
-	// 	return err
-	// }
 	return nil
 }
 
@@ -373,151 +307,6 @@ func (l *Loop) updateToolContext(channel, chatID string) {
 	if at, ok := l.tools.Get("ask_user").(tools.ContextSetter); ok {
 		at.SetContext(channel, chatID)
 	}
-}
-
-// buildMessagesWithSystem 构建包含系统提示词的消息列表
-func (l *Loop) buildMessagesWithSystem(history []*schema.Message, userInput, channel, chatID string) []*schema.Message {
-	// 构建系统提示词
-	systemPrompt := l.context.BuildSystemPrompt(nil)
-	// 复用公共方法构建消息列表
-	return BuildMessageList(systemPrompt, history, userInput, channel, chatID)
-}
-
-// processWithADK 使用 ADK Agent 处理消息
-func (l *Loop) processWithADK(ctx context.Context, msg *bus.InboundMessage) error {
-	if l.adkAgent == nil || l.adkRunner == nil {
-		return fmt.Errorf("ADK Agent 未初始化")
-	}
-
-	// 获取会话历史
-	sessionKey := msg.SessionKey()
-	sess := l.sessions.GetOrCreate(sessionKey)
-	history := l.convertHistory(sess.GetHistory(10))
-
-	// 构建消息（包含系统提示词）
-	messages := l.buildMessagesWithSystem(history, msg.Content, msg.Channel, msg.ChatID)
-
-	// 生成 checkpoint ID
-	checkpointID := fmt.Sprintf("%s_%d", sessionKey, time.Now().UnixNano())
-
-	iter := l.adkRunner.Run(ctx, messages, adk.WithCheckPointID(checkpointID))
-	var response string
-	var lastEvent *adk.AgentEvent
-
-	for {
-		event, ok := iter.Next()
-		if !ok {
-			break
-		}
-		if event.Err != nil {
-			return fmt.Errorf("ADK Agent 执行失败: %w", event.Err)
-		}
-		if event.Output != nil && event.Output.MessageOutput != nil {
-			msgOutput, err := event.Output.MessageOutput.GetMessage()
-			if err != nil {
-				continue
-			}
-			response = msgOutput.Content
-		}
-		lastEvent = event
-	}
-
-	// 检查是否被中断
-	if lastEvent != nil && lastEvent.Action != nil && lastEvent.Action.Interrupted != nil {
-		if err := l.handleInterrupt(ctx, msg, checkpointID, lastEvent, sess, sessionKey, false); err != nil {
-			if strings.HasPrefix(err.Error(), "INTERRUPT:") {
-				return nil
-			}
-			return err
-		}
-		return nil
-	}
-
-	// 发布响应
-	l.bus.PublishOutbound(bus.NewOutboundMessage(msg.Channel, msg.ChatID, response))
-
-	// 保存会话
-	sess.AddMessage("user", msg.Content)
-	sess.AddMessage("assistant", response)
-	l.sessions.Save(sess)
-
-	l.logger.Info("响应完成",
-		zap.String("渠道", msg.Channel),
-		zap.Int("内容长度", len(response)),
-	)
-
-	return nil
-}
-
-// processWithADKStream 使用流式处理
-func (l *Loop) processWithADKStream(ctx context.Context, msg *bus.InboundMessage) error {
-	if l.adkAgent == nil || l.adkRunner == nil {
-		return fmt.Errorf("ADK Agent 未初始化")
-	}
-
-	// 获取会话历史
-	sessionKey := msg.SessionKey()
-	sess := l.sessions.GetOrCreate(sessionKey)
-	history := l.convertHistory(sess.GetHistory(10))
-
-	// 构建消息（包含系统提示词）
-	messages := l.buildMessagesWithSystem(history, msg.Content, msg.Channel, msg.ChatID)
-
-	// 生成 checkpoint ID（用于中断恢复）
-	checkpointID := fmt.Sprintf("%s_%d", sessionKey, time.Now().UnixNano())
-
-	iter := l.adkRunner.Run(ctx, messages, adk.WithCheckPointID(checkpointID))
-	var response string
-	var fullContent string
-	var lastEvent *adk.AgentEvent
-
-	for {
-		event, ok := iter.Next()
-		if !ok {
-			break
-		}
-		if event.Err != nil {
-			return fmt.Errorf("流式执行失败: %w", event.Err)
-		}
-		if event.Output != nil && event.Output.MessageOutput != nil {
-			msgOutput, err := event.Output.MessageOutput.GetMessage()
-			if err != nil {
-				continue
-			}
-			delta := ""
-			if fullContent != "" && strings.HasPrefix(msgOutput.Content, fullContent) {
-				delta = msgOutput.Content[len(fullContent):]
-			} else {
-				delta = msgOutput.Content
-			}
-			if delta != "" {
-				l.bus.PublishStream(bus.NewStreamChunk(msg.Channel, msg.ChatID, delta, msgOutput.Content, false))
-			}
-			fullContent = msgOutput.Content
-			response = msgOutput.Content
-		}
-		lastEvent = event
-	}
-
-	// 检查是否被中断
-	if lastEvent != nil && lastEvent.Action != nil && lastEvent.Action.Interrupted != nil {
-		return l.handleInterrupt(ctx, msg, checkpointID, lastEvent, sess, sessionKey, false)
-	}
-
-	// 发送完成标记
-	l.bus.PublishStream(bus.NewStreamChunk(msg.Channel, msg.ChatID, "", response, true))
-
-	// 保存会话
-	sess.AddMessage("user", msg.Content)
-	sess.AddMessage("assistant", response)
-	l.sessions.Save(sess)
-
-	l.logger.Info("流式响应完成",
-		zap.String("渠道", msg.Channel),
-		zap.Int("内容长度", len(response)),
-	)
-
-	return nil
 }
 
 // handleInterrupt 处理中断
@@ -616,23 +405,11 @@ func (l *Loop) ResumeExecution(ctx context.Context, checkpointID, interruptID st
 		return l.supervisor.Resume(ctx, checkpointID, resumeParams, msg)
 	}
 
-	// 非 Supervisor 模式的恢复
-	if l.adkRunner == nil {
-		return "", fmt.Errorf("ADK Agent 未初始化")
-	}
-
 	var (
 		iter *adk.AsyncIterator[*adk.AgentEvent]
 		err  error
 	)
-	if isPlan {
-		if l.planAgent == nil {
-			return "", fmt.Errorf("Plan Agent 未初始化")
-		}
-		iter, err = l.planAgent.ResumeWithParams(ctx, checkpointID, resumeParams)
-	} else {
-		iter, err = l.adkRunner.ResumeWithParams(ctx, checkpointID, resumeParams)
-	}
+
 	if err != nil {
 		return "", fmt.Errorf("恢复执行失败: %w", err)
 	}
@@ -680,62 +457,6 @@ func (l *Loop) IsSupervisorEnabled() bool {
 	return l.enableSupervisor && l.supervisor != nil
 }
 
-// processWithPlan 使用计划执行模式
-func (l *Loop) processWithPlan(ctx context.Context, msg *bus.InboundMessage) error {
-
-	// 获取会话历史
-	sessionKey := msg.SessionKey()
-	sess := l.sessions.GetOrCreate(sessionKey)
-	history := l.convertHistory(sess.GetHistory(10))
-
-	// 构建消息（包含系统提示词）
-	messages := l.buildMessagesWithSystem(history, msg.Content, msg.Channel, msg.ChatID)
-
-	checkpointID := fmt.Sprintf("%s_%d", sessionKey, time.Now().UnixNano())
-	iter := l.planAgent.StreamWithHistory(ctx, msg.Content, messages[:len(messages)-1], checkpointID)
-	var response string
-	var lastEvent *adk.AgentEvent
-	for {
-		event, ok := iter.Next()
-		if !ok {
-			break
-		}
-		if event.Err != nil {
-			return fmt.Errorf("计划执行失败: %w", event.Err)
-		}
-		if event.Output != nil && event.Output.MessageOutput != nil {
-			msgOutput, err := event.Output.MessageOutput.GetMessage()
-			if err != nil {
-				continue
-			}
-			response = msgOutput.Content
-		}
-		lastEvent = event
-		if event.Action != nil && event.Action.Interrupted != nil {
-			break
-		}
-	}
-
-	if lastEvent != nil && lastEvent.Action != nil && lastEvent.Action.Interrupted != nil {
-		if err := l.handleInterrupt(ctx, msg, checkpointID, lastEvent, sess, sessionKey, true); err != nil {
-			if strings.HasPrefix(err.Error(), "INTERRUPT:") {
-				return nil
-			}
-			return err
-		}
-		return nil
-	}
-
-	// 发布响应
-	l.bus.PublishOutbound(bus.NewOutboundMessage(msg.Channel, msg.ChatID, response))
-
-	sess.AddMessage("user", msg.Content)
-	sess.AddMessage("assistant", response)
-	l.sessions.Save(sess)
-
-	return nil
-}
-
 // convertHistory 转换会话历史为 eino Message 格式
 func (l *Loop) convertHistory(history []map[string]any) []*schema.Message {
 	result := make([]*schema.Message, 0, len(history))
@@ -761,75 +482,7 @@ func (l *Loop) ShouldUseStream(channel string) bool {
 	return channel == "websocket"
 }
 
-// ProcessDirect 直接处理消息（用于 CLI 或 cron）
-func (l *Loop) ProcessDirect(ctx context.Context, content, sessionKey, channel, chatID string) (string, error) {
-	// 更新工具上下文
-	l.updateToolContext(channel, chatID)
-
-	if l.adkAgent == nil || l.adkRunner == nil {
-		return "", fmt.Errorf("ADK Agent 未初始化")
-	}
-
-	// 获取会话历史
-	sess := l.sessions.GetOrCreate(sessionKey)
-	history := l.convertHistory(sess.GetHistory(10))
-
-	// 构建消息（包含系统提示词）
-	messages := l.buildMessagesWithSystem(history, content, channel, chatID)
-
-	iter := l.adkRunner.Run(ctx, messages)
-	var response string
-	for {
-		event, ok := iter.Next()
-		if !ok {
-			break
-		}
-		if event.Err != nil {
-			return "", event.Err
-		}
-		if event.Output != nil && event.Output.MessageOutput != nil {
-			msgOutput, err := event.Output.MessageOutput.GetMessage()
-			if err != nil {
-				continue
-			}
-			response = msgOutput.Content
-		}
-	}
-
-	// 保存会话
-	sess.AddMessage("user", content)
-	sess.AddMessage("assistant", response)
-	l.sessions.Save(sess)
-
-	return response, nil
-}
-
 // GetTools returns all registered tools as a slice
 func (l *Loop) GetTools() []tool.BaseTool {
 	return l.tools.GetADKTools()
-}
-
-// SetPlanAgent sets the plan-execute agent for complex task handling
-func (l *Loop) SetPlanAgent(planAgent *eino_adapter.PlanExecuteAgent) {
-	l.planAgent = planAgent
-}
-
-// SetModeSelector sets the mode selector for automatic mode switching
-func (l *Loop) SetModeSelector(selector *eino_adapter.ModeSelector) {
-	l.selector = selector
-}
-
-// GetPlanAgent returns the plan-execute agent
-func (l *Loop) GetPlanAgent() *eino_adapter.PlanExecuteAgent {
-	return l.planAgent
-}
-
-// GetModeSelector returns the mode selector
-func (l *Loop) GetModeSelector() *eino_adapter.ModeSelector {
-	return l.selector
-}
-
-// GetADKAgent returns the ADK agent
-func (l *Loop) GetADKAgent() *adk.ChatModelAgent {
-	return l.adkAgent
 }

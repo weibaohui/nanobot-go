@@ -37,7 +37,6 @@ type SupervisorAgent struct {
 	workspace string
 	tools     []tool.BaseTool
 	logger    *zap.Logger
-	router    *Router
 	sessions  *session.Manager
 	bus       *bus.MessageBus
 	context   *ContextBuilder // 上下文构建器，用于复用基础系统提示词
@@ -99,7 +98,6 @@ func NewSupervisorAgent(ctx context.Context, cfg *SupervisorConfig) (*Supervisor
 		workspace:        cfg.Workspace,
 		tools:            cfg.Tools,
 		logger:           logger,
-		router:           NewRouter(&RouterConfig{Logger: logger}),
 		sessions:         cfg.Sessions,
 		bus:              cfg.Bus,
 		context:          cfg.Context,
@@ -298,13 +296,6 @@ func (sa *SupervisorAgent) buildSupervisorInstruction() string {
 func (sa *SupervisorAgent) Process(ctx context.Context, msg *bus.InboundMessage) (string, error) {
 	sessionKey := msg.SessionKey()
 	sess := sa.sessions.GetOrCreate(sessionKey)
-
-	// 路由决策
-	agentType := sa.router.Route(ctx, msg.Content)
-	sa.logger.Info("路由决策完成",
-		zap.String("agent_type", string(agentType)),
-		zap.String("session_key", sessionKey),
-	)
 
 	// 构建消息
 	history := sa.convertHistory(sess.GetHistory(10))
@@ -530,11 +521,6 @@ func (sa *SupervisorAgent) convertHistory(history []map[string]any) []*schema.Me
 		})
 	}
 	return result
-}
-
-// GetRouter 获取路由器
-func (sa *SupervisorAgent) GetRouter() *Router {
-	return sa.router
 }
 
 // GetSubAgents 获取子 Agent

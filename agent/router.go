@@ -13,30 +13,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// AgentType 定义 Agent 类型
-type AgentType string
-
-const (
-	AgentTypeReAct AgentType = "react"
-	AgentTypePlan  AgentType = "plan"
-	AgentTypeChat  AgentType = "chat"
-)
-
-// IntentType 意图类型
-type IntentType string
-
-const (
-	IntentFileOperation    IntentType = "file_operation"
-	IntentWebSearch        IntentType = "web_search"
-	IntentCodeExecution    IntentType = "code_execution"
-	IntentProjectPlanning  IntentType = "project_planning"
-	IntentTaskDelegation   IntentType = "task_delegation"
-	IntentSimpleQuestion   IntentType = "simple_question"
-	IntentCasualChat       IntentType = "casual_chat"
-	IntentInformationQuery IntentType = "information_query"
-	IntentUnknown          IntentType = "unknown"
-)
-
 // RouteDecision 路由决策结果
 type RouteDecision struct {
 	AgentType    AgentType
@@ -54,10 +30,10 @@ type Router struct {
 	logger       *zap.Logger
 
 	// 关键词配置
-	toolKeywords    []string
-	planKeywords    []string
-	chatKeywords    []string
-	intentKeywords  map[IntentType][]string
+	toolKeywords   []string
+	planKeywords   []string
+	chatKeywords   []string
+	intentKeywords map[IntentType][]string
 
 	// 规则引擎
 	rules []RoutingRule
