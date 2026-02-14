@@ -160,13 +160,6 @@ func (ec *EinoCallbacks) onEndWithStreamOutput(ctx context.Context, info *callba
 	if !ec.enabled {
 		return ctx
 	}
-
-	ec.logger.Info("[EinoCallback] 流式输出结束",
-		zap.String("component", string(info.Component)),
-		zap.String("type", info.Type),
-		zap.String("name", info.Name),
-	)
-
 	return ctx
 }
 
@@ -202,10 +195,6 @@ func (ec *EinoCallbacks) logModelInput(input callbacks.CallbackInput, info *call
 	if len(modelInput.Messages) > 0 {
 		for _, msg := range modelInput.Messages {
 			if msg != nil {
-				ec.logger.Info("[EinoCallback]   Message",
-					zap.String("role", string(msg.Role)),
-					zap.Int("content_length", len(msg.Content)),
-				)
 				// 在调试级别下记录完整内容
 				ec.logger.Debug("[EinoCallback]   Message Content",
 					zap.String("role", string(msg.Role)),
@@ -261,10 +250,6 @@ func (ec *EinoCallbacks) logModelOutput(output callbacks.CallbackOutput, info *c
 
 	// 记录生成的 Message
 	if modelOutput.Message != nil {
-		ec.logger.Info("[EinoCallback] Model 输出 Message",
-			zap.String("role", string(modelOutput.Message.Role)),
-			zap.Int("content_length", len(modelOutput.Message.Content)),
-		)
 		// 在调试级别下记录完整内容
 		ec.logger.Debug("[EinoCallback] Model 输出 Content",
 			zap.String("role", string(modelOutput.Message.Role)),

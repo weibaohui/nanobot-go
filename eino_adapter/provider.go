@@ -152,30 +152,30 @@ func (a *ProviderAdapter) Generate(ctx context.Context, input []*schema.Message,
 
 // interceptToolCalls 拦截并转换工具调用
 func (a *ProviderAdapter) interceptToolCalls(response *providers.LLMResponse) {
-	if a.logger != nil {
-		a.logger.Info("原始工具调用列表",
-			zap.Int("数量", len(response.ToolCalls)),
-		)
-	}
 
 	if len(response.ToolCalls) == 0 {
 		return
 	}
 
 	for i, tc := range response.ToolCalls {
-		a.logger.Info("原始工具调用",
-			zap.String("名称", tc.Name),
-			zap.Any("参数", tc.Arguments),
-		)
+		if a.logger != nil {
+			a.logger.Info("工具调用",
+				zap.String("名称", tc.Name),
+				zap.Any("参数", tc.Arguments),
+			)
+		}
 		newName, newArgs, err := a.interceptToolCall(tc.Name, tc.Arguments)
 		if err != nil {
 			continue
 		}
 		if newName != tc.Name {
-			a.logger.Info("工具调用被拦截",
-				zap.String("原始名称", tc.Name),
-				zap.String("新名称", newName),
-			)
+			if a.logger != nil {
+				a.logger.Info("工具调用被拦截",
+					zap.String("原始名称", tc.Name),
+					zap.String("新名称", newName),
+					zap.Any("新参数", newArgs),
+				)
+			}
 			// 工具名被修改了，说明需要转换为技能调用
 			response.ToolCalls[i].Name = newName
 			response.ToolCalls[i].Arguments = newArgs

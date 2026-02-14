@@ -323,11 +323,6 @@ func (p *LiteLLMProvider) parseResponse(body []byte) (*LLMResponse, error) {
 				args = map[string]any{"raw": tc.Function.Arguments}
 			}
 		}
-		p.logger.Info("解析工具调用",
-			zap.String("ID", tc.ID),
-			zap.String("名称", tc.Function.Name),
-			zap.Any("参数", args),
-		)
 		result.ToolCalls = append(result.ToolCalls, ToolCallRequest{
 			ID:        tc.ID,
 			Name:      tc.Function.Name,
