@@ -194,59 +194,22 @@ func (a *ProviderAdapter) interceptToolCalls(msg *schema.Message) {
 }
 
 // Stream produces a response as a stream
+// 注意：为避免流式响应解析问题，这里使用 Generate 并模拟流式输出
 func (a *ProviderAdapter) Stream(ctx context.Context, input []*schema.Message, opts ...model.Option) (*schema.StreamReader[*schema.Message], error) {
-	options := model.GetCommonOptions(&model.Options{}, opts...)
-
-	// Get options
-	modelName := a.model
-	if options.Model != nil && *options.Model != "" {
-		modelName = *options.Model
-	}
-
-	maxTokens := 4096
-	if options.MaxTokens != nil {
-		maxTokens = *options.MaxTokens
-	}
-
-	temperature := float32(0.7)
-	if options.Temperature != nil {
-		temperature = *options.Temperature
-	}
-
-	// 处理 toolChoice
-	toolChoice := a.toolChoice
-	if options.ToolChoice != nil {
-		toolChoice = convertToolChoiceToOpenAIFormat(*options.ToolChoice)
-	}
-
-	// 调用 provider 的流式接口
-	sr, err := a.provider.ChatStream(ctx, input, a.tools, toolChoice, modelName, maxTokens, float64(temperature))
+	// 直接调用 Generate 获取完整响应
+	msg, err := a.Generate(ctx, input, opts...)
 	if err != nil {
 		return nil, err
 	}
 
-	// 创建新的 StreamReader 用于拦截处理
-	interceptedSR, interceptedSW := schema.Pipe[*schema.Message](100)
-
+	// 创建 StreamReader 并发送完整消息
+	sr, sw := schema.Pipe[*schema.Message](1)
 	go func() {
-		defer interceptedSW.Close()
-
-		for {
-			msg, err := sr.Recv()
-			if err != nil {
-				return
-			}
-
-			// 对包含工具调用的消息进行拦截处理
-			if len(msg.ToolCalls) > 0 {
-				a.interceptToolCalls(msg)
-			}
-
-			interceptedSW.Send(msg, nil)
-		}
+		defer sw.Close()
+		sw.Send(msg, nil)
 	}()
 
-	return interceptedSR, nil
+	return sr, nil
 }
 
 // WithTools returns a new adapter instance with the specified tools bound
