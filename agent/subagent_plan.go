@@ -139,9 +139,16 @@ func NewPlanSubAgent(ctx context.Context, cfg *PlanConfig) (*PlanSubAgent, error
 		return nil, fmt.Errorf("创建 Plan Agent 失败: %w", err)
 	}
 
+	// 包装为有名称的 Agent
+	namedAgent := &namedPlanAgent{
+		ResumableAgent: peAgent,
+		name:          "plan_agent",
+		description:   "Plan-Execute-Replan 模式 Agent，用于复杂任务的规划与执行",
+	}
+
 	// 创建 Runner
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{
-		Agent:           peAgent,
+		Agent:           namedAgent,
 		EnableStreaming: true,
 		CheckPointStore: cfg.CheckpointStore,
 	})
@@ -152,7 +159,7 @@ func NewPlanSubAgent(ctx context.Context, cfg *PlanConfig) (*PlanSubAgent, error
 	)
 
 	return &PlanSubAgent{
-		agent:   peAgent,
+		agent:   namedAgent,
 		runner:  runner,
 		adapter: adapter,
 		tools:   cfg.Tools,
@@ -380,4 +387,21 @@ func (a *PlanSubAgent) Resume(ctx context.Context, checkpointID string, resumePa
 // GetRunner 获取 Runner
 func (a *PlanSubAgent) GetRunner() *adk.Runner {
 	return a.runner
+}
+
+// namedPlanAgent 为 PlanExecuteAgent 提供名称包装
+type namedPlanAgent struct {
+	adk.ResumableAgent
+	name        string
+	description string
+}
+
+// Name 返回 Agent 名称
+func (n *namedPlanAgent) Name(_ context.Context) string {
+	return n.name
+}
+
+// Description 返回 Agent 描述
+func (n *namedPlanAgent) Description(_ context.Context) string {
+	return n.description
 }
