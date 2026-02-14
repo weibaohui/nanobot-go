@@ -444,6 +444,7 @@ func (sa *SupervisorAgent) handleInterrupt(msg *bus.InboundMessage, checkpointID
 		Question:     question,
 		Options:      options,
 		SessionKey:   msg.SessionKey(),
+		IsSupervisor: true, // 标记来自 Supervisor 模式的中断
 	})
 
 	sa.logger.Info("等待用户输入以恢复执行",
@@ -540,4 +541,51 @@ func (sa *SupervisorAgent) GetSubAgents() map[AgentType]SubAgent {
 // GetADKRunner 获取 ADK Runner
 func (sa *SupervisorAgent) GetADKRunner() *adk.Runner {
 	return sa.adkRunner
+}
+
+// Resume 恢复被中断的执行
+// 用于处理 Supervisor 模式下的中断恢复
+func (sa *SupervisorAgent) Resume(ctx context.Context, checkpointID string, resumeParams *adk.ResumeParams, msg *bus.InboundMessage) (string, error) {
+	if sa.adkRunner == nil {
+		return "", fmt.Errorf("ADK Runner 未初始化")
+	}
+
+	// 使用 Supervisor 的 Runner 恢复执行
+	iter, err := sa.adkRunner.ResumeWithParams(ctx, checkpointID, resumeParams)
+	if err != nil {
+		return "", fmt.Errorf("Supervisor 恢复执行失败: %w", err)
+	}
+
+	var response string
+	var lastEvent *adk.AgentEvent
+
+	for {
+		event, ok := iter.Next()
+		if !ok {
+			break
+		}
+
+		if event.Err != nil {
+			return "", fmt.Errorf("Supervisor 恢复后执行失败: %w", event.Err)
+		}
+
+		if event.Output != nil && event.Output.MessageOutput != nil {
+			msgOutput, err := event.Output.MessageOutput.GetMessage()
+			if err != nil {
+				continue
+			}
+			response = msgOutput.Content
+		}
+
+		lastEvent = event
+	}
+
+	// 检查是否再次被中断
+	if lastEvent != nil && lastEvent.Action != nil && lastEvent.Action.Interrupted != nil {
+		// 生成新的 checkpoint ID
+		newCheckpointID := fmt.Sprintf("%s_resume_%d", checkpointID, time.Now().UnixNano())
+		return "", sa.handleInterrupt(msg, newCheckpointID, lastEvent)
+	}
+
+	return response, nil
 }

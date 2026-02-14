@@ -55,6 +55,7 @@ type InterruptInfo struct {
 	SessionKey   string           `json:"session_key"`
 	IsAskUser    bool             `json:"is_ask_user"`
 	IsPlan       bool             `json:"is_plan"`
+	IsSupervisor bool             `json:"is_supervisor"` // 标记是否来自 Supervisor 模式的中断
 	Type         InterruptType    `json:"type"`
 	Status       InterruptStatus  `json:"status"`
 	CreatedAt    time.Time        `json:"created_at"`

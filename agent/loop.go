@@ -289,7 +289,7 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 		}
 
 		// 恢复执行
-		result, err := l.ResumeExecution(ctx, pendingInterrupt.CheckpointID, pendingInterrupt.InterruptID, msg.Content, msg.Channel, msg.ChatID, sessionKey, pendingInterrupt.IsAskUser, pendingInterrupt.IsPlan)
+		result, err := l.ResumeExecution(ctx, pendingInterrupt.CheckpointID, pendingInterrupt.InterruptID, msg.Content, msg.Channel, msg.ChatID, sessionKey, pendingInterrupt.IsAskUser, pendingInterrupt.IsPlan, pendingInterrupt.IsSupervisor)
 		if err != nil {
 			// 检查是否是新的中断
 			if strings.HasPrefix(err.Error(), "INTERRUPT:") {
@@ -615,11 +615,7 @@ func (l *Loop) handleInterrupt(ctx context.Context, msg *bus.InboundMessage, che
 }
 
 // ResumeExecution 恢复被中断的执行
-func (l *Loop) ResumeExecution(ctx context.Context, checkpointID, interruptID string, userAnswer string, channel, chatID string, sessionKey string, isAskUser bool, isPlan bool) (string, error) {
-	if l.adkRunner == nil {
-		return "", fmt.Errorf("ADK Agent 未初始化")
-	}
-
+func (l *Loop) ResumeExecution(ctx context.Context, checkpointID, interruptID string, userAnswer string, channel, chatID string, sessionKey string, isAskUser bool, isPlan bool, isSupervisor bool) (string, error) {
 	// 准备恢复参数
 	var resumePayload any
 	if isAskUser {
@@ -637,7 +633,26 @@ func (l *Loop) ResumeExecution(ctx context.Context, checkpointID, interruptID st
 		},
 	}
 
-	// 恢复执行
+	// 构建消息对象（用于 Supervisor 模式的中断恢复）
+	msg := &bus.InboundMessage{
+		Channel: channel,
+		ChatID:  chatID,
+	}
+
+	// 根据中断类型选择恢复方式
+	if isSupervisor {
+		// Supervisor 模式的中断恢复
+		if l.supervisor == nil {
+			return "", fmt.Errorf("Supervisor Agent 未初始化")
+		}
+		return l.supervisor.Resume(ctx, checkpointID, resumeParams, msg)
+	}
+
+	// 非 Supervisor 模式的恢复
+	if l.adkRunner == nil {
+		return "", fmt.Errorf("ADK Agent 未初始化")
+	}
+
 	var (
 		iter *adk.AsyncIterator[*adk.AgentEvent]
 		err  error
@@ -674,10 +689,6 @@ func (l *Loop) ResumeExecution(ctx context.Context, checkpointID, interruptID st
 		// 检查是否再次被中断
 		if event.Action != nil && event.Action.Interrupted != nil {
 			// 递归处理新的中断
-			msg := &bus.InboundMessage{
-				Channel: channel,
-				ChatID:  chatID,
-			}
 			newCheckpointID := fmt.Sprintf("%s_resume_%d", checkpointID, time.Now().UnixNano())
 			return "", l.handleInterrupt(ctx, msg, newCheckpointID, event, nil, sessionKey, isPlan)
 		}
