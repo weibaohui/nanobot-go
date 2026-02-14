@@ -261,7 +261,7 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 		}
 
 		// 恢复执行
-		result, err := l.ResumeExecution(ctx, pendingInterrupt.CheckpointID, pendingInterrupt.CheckpointID, msg.Content, msg.Channel, msg.ChatID)
+		result, err := l.ResumeExecution(ctx, pendingInterrupt.CheckpointID, pendingInterrupt.InterruptID, msg.Content, msg.Channel, msg.ChatID, sessionKey)
 		if err != nil {
 			// 检查是否是新的中断
 			if strings.HasPrefix(err.Error(), "INTERRUPT:") {
@@ -502,7 +502,10 @@ func (l *Loop) handleInterrupt(ctx context.Context, msg *bus.InboundMessage, che
 	var question string
 	var options []string
 
-	if info, ok := interruptCtx.Info.(map[string]any); ok {
+	if info, ok := interruptCtx.Info.(*askuser.AskUserInfo); ok {
+		question = info.Question
+		options = append(options, info.Options...)
+	} else if info, ok := interruptCtx.Info.(map[string]any); ok {
 		if q, ok := info["question"].(string); ok {
 			question = q
 		}
@@ -517,10 +520,14 @@ func (l *Loop) handleInterrupt(ctx context.Context, msg *bus.InboundMessage, che
 		// 尝试直接作为 Stringer
 		question = fmt.Sprintf("%v", interruptCtx.Info)
 	}
+	if sessionKey == "" && msg != nil {
+		sessionKey = msg.SessionKey()
+	}
 
 	// 发送中断请求到用户
 	l.interruptManager.HandleInterrupt(&InterruptInfo{
 		CheckpointID: checkpointID,
+		InterruptID:  interruptID,
 		Channel:      msg.Channel,
 		ChatID:       msg.ChatID,
 		Question:     question,
@@ -540,7 +547,7 @@ func (l *Loop) handleInterrupt(ctx context.Context, msg *bus.InboundMessage, che
 }
 
 // ResumeExecution 恢复被中断的执行
-func (l *Loop) ResumeExecution(ctx context.Context, checkpointID, interruptID string, userAnswer string, channel, chatID string) (string, error) {
+func (l *Loop) ResumeExecution(ctx context.Context, checkpointID, interruptID string, userAnswer string, channel, chatID string, sessionKey string) (string, error) {
 	if l.adkRunner == nil {
 		return "", fmt.Errorf("ADK Agent 未初始化")
 	}
@@ -585,7 +592,7 @@ func (l *Loop) ResumeExecution(ctx context.Context, checkpointID, interruptID st
 				ChatID:  chatID,
 			}
 			newCheckpointID := fmt.Sprintf("%s_resume_%d", checkpointID, time.Now().UnixNano())
-			return "", l.handleInterrupt(ctx, msg, newCheckpointID, event, nil, "")
+			return "", l.handleInterrupt(ctx, msg, newCheckpointID, event, nil, sessionKey)
 		}
 	}
 

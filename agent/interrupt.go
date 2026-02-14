@@ -25,6 +25,7 @@ type InterruptManager struct {
 // InterruptInfo 中断信息
 type InterruptInfo struct {
 	CheckpointID string         `json:"checkpoint_id"`
+	InterruptID  string         `json:"interrupt_id"`
 	Channel      string         `json:"channel"`
 	ChatID       string         `json:"chat_id"`
 	Question     string         `json:"question"`
