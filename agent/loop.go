@@ -403,7 +403,7 @@ func (l *Loop) processWithADK(ctx context.Context, msg *bus.InboundMessage) erro
 	// 获取会话历史
 	sessionKey := msg.SessionKey()
 	sess := l.sessions.GetOrCreate(sessionKey)
-	history := l.convertHistory(sess.GetHistory(50))
+	history := l.convertHistory(sess.GetHistory(10))
 
 	// 构建消息（包含系统提示词）
 	messages := l.buildMessagesWithSystem(history, msg.Content, msg.Channel, msg.ChatID)
@@ -469,7 +469,7 @@ func (l *Loop) processWithADKStream(ctx context.Context, msg *bus.InboundMessage
 	// 获取会话历史
 	sessionKey := msg.SessionKey()
 	sess := l.sessions.GetOrCreate(sessionKey)
-	history := l.convertHistory(sess.GetHistory(50))
+	history := l.convertHistory(sess.GetHistory(10))
 
 	// 构建消息（包含系统提示词）
 	messages := l.buildMessagesWithSystem(history, msg.Content, msg.Channel, msg.ChatID)
@@ -697,7 +697,7 @@ func (l *Loop) processWithPlan(ctx context.Context, msg *bus.InboundMessage) err
 	// 获取会话历史
 	sessionKey := msg.SessionKey()
 	sess := l.sessions.GetOrCreate(sessionKey)
-	history := l.convertHistory(sess.GetHistory(50))
+	history := l.convertHistory(sess.GetHistory(10))
 
 	// 构建消息（包含系统提示词）
 	messages := l.buildMessagesWithSystem(history, msg.Content, msg.Channel, msg.ChatID)
@@ -783,7 +783,7 @@ func (l *Loop) ProcessDirect(ctx context.Context, content, sessionKey, channel, 
 
 	// 获取会话历史
 	sess := l.sessions.GetOrCreate(sessionKey)
-	history := l.convertHistory(sess.GetHistory(50))
+	history := l.convertHistory(sess.GetHistory(10))
 
 	// 构建消息（包含系统提示词）
 	messages := l.buildMessagesWithSystem(history, content, channel, chatID)
