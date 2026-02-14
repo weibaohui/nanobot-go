@@ -124,7 +124,7 @@ func (m *SubagentManager) runSubagent(ctx context.Context, taskID, task, label, 
 		default:
 		}
 
-		response, err := m.provider.Chat(ctx, messages, registry.GetDefinitions(ctx), m.model, 4096, 0.7)
+		response, err := m.provider.Chat(ctx, messages, registry.GetDefinitions(ctx), nil, m.model, 4096, 0.7)
 		if err != nil {
 			m.logger.Error("子代理 LLM 调用失败", zap.Error(err))
 			m.announceResult(taskID, label, task, fmt.Sprintf("错误: %s", err), originChannel, originChatID, "error")

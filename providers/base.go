@@ -35,10 +35,11 @@ type StreamChunk struct {
 // LLMProvider LLM 提供商接口
 type LLMProvider interface {
 	// Chat 发送聊天完成请求
-	Chat(ctx context.Context, messages []map[string]any, tools []map[string]any, model string, maxTokens int, temperature float64) (*LLMResponse, error)
+	// toolChoice: "auto" | "none" | "required" | {"type": "function", "function": {"name": "..."}}
+	Chat(ctx context.Context, messages []map[string]any, tools []map[string]any, toolChoice any, model string, maxTokens int, temperature float64) (*LLMResponse, error)
 
 	// ChatStream 发送流式聊天请求
-	ChatStream(ctx context.Context, messages []map[string]any, tools []map[string]any, model string, maxTokens int, temperature float64) (<-chan StreamChunk, error)
+	ChatStream(ctx context.Context, messages []map[string]any, tools []map[string]any, toolChoice any, model string, maxTokens int, temperature float64) (<-chan StreamChunk, error)
 
 	// GetDefaultModel 获取默认模型
 	GetDefaultModel() string

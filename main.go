@@ -264,12 +264,13 @@ func runGateway(cmd *cobra.Command, args []string) {
 	selector := eino_adapter.NewModeSelector()
 	ctx := context.Background()
 	planAgent, err := eino_adapter.NewPlanExecuteAgent(ctx, &eino_adapter.Config{
-		Provider:      provider,
-		Model:         cfg.Agents.Defaults.Model,
-		Tools:         loop.GetTools(),
-		Logger:        logger,
-		EnableStream:  false,
-		MaxIterations: maxIter,
+		Provider:        provider,
+		Model:           cfg.Agents.Defaults.Model,
+		Tools:           loop.GetTools(),
+		Logger:          logger,
+		EnableStream:    false,
+		MaxIterations:   maxIter,
+		CheckpointStore: loop.GetInterruptManager().GetCheckpointStore(),
 	})
 	if err != nil {
 		logger.Warn("无法创建计划执行代理，将仅使用普通模式", zap.Error(err))

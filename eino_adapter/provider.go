@@ -19,8 +19,9 @@ type ProviderAdapter struct {
 	provider      providers.LLMProvider
 	model         string
 	tools         []*schema.ToolInfo
-	registeredMap map[string]bool // 已注册的工具名称
-	skillLoader   SkillLoader     // 技能加载器
+	toolChoice    any              // 工具选择策略
+	registeredMap map[string]bool  // 已注册的工具名称
+	skillLoader   SkillLoader      // 技能加载器
 }
 
 // NewProviderAdapter creates a new adapter that wraps nanobot-go's LLMProvider
@@ -111,6 +112,13 @@ func (a *ProviderAdapter) Generate(ctx context.Context, input []*schema.Message,
 	var tools []map[string]any
 	if len(a.tools) > 0 {
 		tools = convertToolInfoToProviderFormat(a.tools)
+		if a.logger != nil {
+			a.logger.Info("Generate 使用绑定的工具",
+				zap.Int("tools_count", len(tools)),
+			)
+		}
+	} else if a.logger != nil {
+		a.logger.Warn("Generate 没有绑定的工具")
 	}
 
 	// Get options
@@ -129,8 +137,14 @@ func (a *ProviderAdapter) Generate(ctx context.Context, input []*schema.Message,
 		temperature = *options.Temperature
 	}
 
+	// 处理 toolChoice - 转换 eino 格式到 OpenAI 格式
+	toolChoice := a.toolChoice
+	if options.ToolChoice != nil {
+		toolChoice = convertToolChoiceToOpenAIFormat(*options.ToolChoice)
+	}
+
 	// Call the provider
-	response, err := a.provider.Chat(ctx, messages, tools, modelName, maxTokens, float64(temperature))
+	response, err := a.provider.Chat(ctx, messages, tools, toolChoice, modelName, maxTokens, float64(temperature))
 	if err != nil {
 		if a.logger != nil {
 			a.logger.Error("调用 LLM 失败", zap.Error(err))
@@ -204,11 +218,17 @@ func (a *ProviderAdapter) Stream(ctx context.Context, input []*schema.Message, o
 
 // WithTools returns a new adapter instance with the specified tools bound
 func (a *ProviderAdapter) WithTools(tools []*schema.ToolInfo) (model.ToolCallingChatModel, error) {
+	if a.logger != nil {
+		a.logger.Info("WithTools 被调用",
+			zap.Int("tools_count", len(tools)),
+		)
+	}
 	return &ProviderAdapter{
 		logger:        a.logger,
 		provider:      a.provider,
 		model:         a.model,
 		tools:         tools,
+		toolChoice:    a.toolChoice,
 		registeredMap: a.registeredMap,
 		skillLoader:   a.skillLoader,
 	}, nil
@@ -324,4 +344,18 @@ func convertToolInfoToProviderFormat(tools []*schema.ToolInfo) []map[string]any 
 	}
 
 	return result
+}
+
+// convertToolChoiceToOpenAIFormat converts eino ToolChoice to OpenAI format
+func convertToolChoiceToOpenAIFormat(toolChoice schema.ToolChoice) string {
+	switch toolChoice {
+	case schema.ToolChoiceForbidden:
+		return "none"
+	case schema.ToolChoiceAllowed:
+		return "auto"
+	case schema.ToolChoiceForced:
+		return "required"
+	default:
+		return string(toolChoice)
+	}
 }

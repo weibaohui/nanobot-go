@@ -46,7 +46,7 @@ func NewLiteLLMProvider(logger *zap.Logger, apiKey, apiBase, defaultModel string
 }
 
 // ChatStream 发送流式聊天请求
-func (p *LiteLLMProvider) ChatStream(ctx context.Context, messages []map[string]any, tools []map[string]any, model string, maxTokens int, temperature float64) (<-chan StreamChunk, error) {
+func (p *LiteLLMProvider) ChatStream(ctx context.Context, messages []map[string]any, tools []map[string]any, toolChoice any, model string, maxTokens int, temperature float64) (<-chan StreamChunk, error) {
 	ch := make(chan StreamChunk, 100)
 
 	if model == "" {
@@ -73,7 +73,12 @@ func (p *LiteLLMProvider) ChatStream(ctx context.Context, messages []map[string]
 
 	if len(tools) > 0 {
 		reqBody["tools"] = tools
-		reqBody["tool_choice"] = "auto"
+		// 使用传入的 toolChoice，如果为 nil 则使用 "auto"
+		if toolChoice != nil {
+			reqBody["tool_choice"] = toolChoice
+		} else {
+			reqBody["tool_choice"] = "auto"
+		}
 	}
 
 	jsonData, err := json.Marshal(reqBody)
@@ -186,7 +191,7 @@ func (p *LiteLLMProvider) ChatStream(ctx context.Context, messages []map[string]
 }
 
 // Chat 发送聊天完成请求
-func (p *LiteLLMProvider) Chat(ctx context.Context, messages []map[string]any, tools []map[string]any, model string, maxTokens int, temperature float64) (*LLMResponse, error) {
+func (p *LiteLLMProvider) Chat(ctx context.Context, messages []map[string]any, tools []map[string]any, toolChoice any, model string, maxTokens int, temperature float64) (*LLMResponse, error) {
 	if model == "" {
 		model = p.defaultModel
 	}
@@ -212,7 +217,12 @@ func (p *LiteLLMProvider) Chat(ctx context.Context, messages []map[string]any, t
 	// 添加工具
 	if len(tools) > 0 {
 		reqBody["tools"] = tools
-		reqBody["tool_choice"] = "auto"
+		// 使用传入的 toolChoice，如果为 nil 则使用 "auto"
+		if toolChoice != nil {
+			reqBody["tool_choice"] = toolChoice
+		} else {
+			reqBody["tool_choice"] = "auto"
+		}
 	}
 
 	// 序列化请求

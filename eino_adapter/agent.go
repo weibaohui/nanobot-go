@@ -3,6 +3,7 @@ package eino_adapter
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/adk/prebuilt/planexecute"
@@ -26,12 +27,13 @@ type PlanExecuteAgent struct {
 
 // Config holds configuration for the PlanExecuteAgent
 type Config struct {
-	Provider      providers.LLMProvider
-	Model         string
-	Tools         []tool.BaseTool
-	Logger        *zap.Logger
-	EnableStream  bool
-	MaxIterations int
+	Provider        providers.LLMProvider
+	Model           string
+	Tools           []tool.BaseTool
+	Logger          *zap.Logger
+	EnableStream    bool
+	MaxIterations   int
+	CheckpointStore compose.CheckPointStore // Optional: for interrupt/resume support
 }
 
 // NewPlanExecuteAgent creates a new Plan-Execute-Replan agent
@@ -69,18 +71,98 @@ func NewPlanExecuteAgent(ctx context.Context, cfg *Config) (*PlanExecuteAgent, e
 
 	// Convert tools to eino format and create tools config
 	var toolsConfig adk.ToolsConfig
+	var toolDescriptions []string
+	var toolInfos []*schema.ToolInfo
 	if len(cfg.Tools) > 0 {
 		toolsConfig = adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{
 				Tools: cfg.Tools,
 			},
 		}
+		// Collect tool descriptions and info for the executor prompt and model binding
+		for _, t := range cfg.Tools {
+			info, err := t.Info(ctx)
+			if err == nil && info != nil {
+				toolDescriptions = append(toolDescriptions, fmt.Sprintf("- %s: %s", info.Name, info.Desc))
+				toolInfos = append(toolInfos, info)
+			}
+		}
 	}
 
-	// Create executor agent
+	// Bind tools to the adapter so the model knows about them
+	var executorModel model.ToolCallingChatModel = adapter
+	if len(toolInfos) > 0 {
+		boundModel, err := adapter.WithTools(toolInfos)
+		if err != nil {
+			logger.Warn("Failed to bind tools to executor model", zap.Error(err))
+		} else {
+			executorModel = boundModel
+		}
+	}
+
+	// Create executor agent with custom prompt that tells the model about available tools
 	executor, err := planexecute.NewExecutor(ctx, &planexecute.ExecutorConfig{
-		Model:       adapter,
+		Model:       executorModel,
 		ToolsConfig: toolsConfig,
+		GenInputFn: func(ctx context.Context, in *planexecute.ExecutionContext) ([]*schema.Message, error) {
+			logger.Info("Executor GenInputFn called",
+				zap.String("step", in.Plan.FirstStep()),
+				zap.Int("executed_steps", len(in.ExecutedSteps)),
+			)
+
+			planContent, err := in.Plan.MarshalJSON()
+			if err != nil {
+				return nil, err
+			}
+
+			firstStep := in.Plan.FirstStep()
+
+			// Build executed steps summary
+			var executedSteps strings.Builder
+			for idx, m := range in.ExecutedSteps {
+				executedSteps.WriteString(fmt.Sprintf("## %d. Step: %s\n  Result: %s\n\n", idx+1, m.Step, m.Result))
+			}
+
+			// Build system prompt with tool information
+			systemPrompt := fmt.Sprintf(`You are a diligent AI assistant executing a plan step by step.
+
+## Available Tools
+%s
+
+## CRITICAL RULES
+1. You MUST use tools to complete tasks. Do NOT just respond with text.
+2. When a step requires information from the user, you MUST call the "ask_user" tool.
+3. DO NOT write questions in plain text - always use the ask_user tool to ask questions.
+4. If you cannot complete a step without user input, call ask_user immediately.
+
+## When to use ask_user tool
+- When you need user preferences (destination, dates, budget, etc.)
+- When you need user confirmation
+- When information is missing to complete a task
+
+## Example
+WRONG: "喵~ 请告诉我您想去哪里旅行？"
+RIGHT: Call ask_user tool with question="您想去哪里旅行？"
+
+Remember: Always use tools, never just respond with text when you need information.`, strings.Join(toolDescriptions, "\n"))
+
+			userMessage := fmt.Sprintf(`## OBJECTIVE
+%s
+
+## Plan
+%s
+
+## COMPLETED STEPS & RESULTS
+%s
+
+## Your task is to execute the first step, which is:
+%s`, in.UserInput[0].Content, string(planContent), executedSteps.String(), firstStep)
+
+			return []*schema.Message{
+				{Role: schema.System, Content: systemPrompt},
+				{Role: schema.User, Content: userMessage},
+			}, nil
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create executor: %w", err)
@@ -105,10 +187,11 @@ func NewPlanExecuteAgent(ctx context.Context, cfg *Config) (*PlanExecuteAgent, e
 		return nil, fmt.Errorf("failed to create plan-execute agent: %w", err)
 	}
 
-	// Create the runner
+	// Create the runner with optional checkpoint store for interrupt/resume support
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{
 		Agent:           peAgent,
 		EnableStreaming: cfg.EnableStream,
+		CheckPointStore: cfg.CheckpointStore,
 	})
 
 	logger.Info("Plan-Execute-Replan agent created successfully",
