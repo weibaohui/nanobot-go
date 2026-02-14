@@ -34,6 +34,10 @@ type ReActConfig struct {
 	Logger          *zap.Logger
 	CheckpointStore compose.CheckPointStore
 	MaxIterations   int
+	// 技能加载器
+	SkillsLoader    func(skillName string) string
+	// 已注册的工具名称列表
+	RegisteredTools []string
 }
 
 // NewReActSubAgent 创建 ReAct 子 Agent
@@ -54,6 +58,14 @@ func NewReActSubAgent(ctx context.Context, cfg *ReActConfig) (*ReActSubAgent, er
 
 	// 创建 Provider 适配器
 	adapter := eino_adapter.NewProviderAdapter(logger, cfg.Provider, cfg.Model)
+
+	// 配置技能加载器和已注册工具
+	if cfg.SkillsLoader != nil {
+		adapter.SetSkillLoader(cfg.SkillsLoader)
+	}
+	if len(cfg.RegisteredTools) > 0 {
+		adapter.SetRegisteredTools(cfg.RegisteredTools)
+	}
 
 	// 配置工具
 	var toolsConfig adk.ToolsConfig

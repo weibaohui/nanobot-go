@@ -57,8 +57,9 @@ type SupervisorAgent struct {
 	checkpointStore  compose.CheckPointStore
 
 	// 配置
-	maxIterations int
-	enableStream  bool
+	maxIterations   int
+	enableStream    bool
+	registeredTools []string // 已注册的工具名称列表
 }
 
 // SupervisorConfig Supervisor 配置
@@ -75,6 +76,8 @@ type SupervisorConfig struct {
 	CheckpointStore compose.CheckPointStore
 	MaxIterations   int
 	EnableStream    bool
+	// 已注册的工具名称列表
+	RegisteredTools []string
 }
 
 // NewSupervisorAgent 创建 Supervisor Agent
@@ -107,6 +110,7 @@ func NewSupervisorAgent(ctx context.Context, cfg *SupervisorConfig) (*Supervisor
 		checkpointStore:  cfg.CheckpointStore,
 		maxIterations:    maxIter,
 		enableStream:     cfg.EnableStream,
+		registeredTools:  cfg.RegisteredTools,
 	}
 
 	// 创建子 Agent
@@ -131,6 +135,12 @@ func NewSupervisorAgent(ctx context.Context, cfg *SupervisorConfig) (*Supervisor
 func (sa *SupervisorAgent) createSubAgents(ctx context.Context) error {
 	var err error
 
+	// 获取技能加载器
+	var skillsLoader func(skillName string) string
+	if sa.context != nil {
+		skillsLoader = sa.context.GetSkillsLoader().LoadSkill
+	}
+
 	// 创建 ReAct Agent
 	sa.reactAgent, err = NewReActSubAgent(ctx, &ReActConfig{
 		Provider:        sa.provider,
@@ -140,6 +150,8 @@ func (sa *SupervisorAgent) createSubAgents(ctx context.Context) error {
 		Logger:          sa.logger,
 		CheckpointStore: sa.checkpointStore,
 		MaxIterations:   sa.maxIterations,
+		SkillsLoader:    skillsLoader,
+		RegisteredTools: sa.registeredTools,
 	})
 	if err != nil {
 		return fmt.Errorf("创建 ReAct Agent 失败: %w", err)
@@ -154,6 +166,8 @@ func (sa *SupervisorAgent) createSubAgents(ctx context.Context) error {
 		Logger:          sa.logger,
 		CheckpointStore: sa.checkpointStore,
 		MaxIterations:   sa.maxIterations,
+		SkillsLoader:    skillsLoader,
+		RegisteredTools: sa.registeredTools,
 	})
 	if err != nil {
 		return fmt.Errorf("创建 Plan Agent 失败: %w", err)
@@ -161,9 +175,13 @@ func (sa *SupervisorAgent) createSubAgents(ctx context.Context) error {
 
 	// 创建 Chat Agent
 	sa.chatAgent, err = NewChatSubAgent(ctx, &ChatConfig{
-		Provider: sa.provider,
-		Model:    sa.model,
-		Logger:   sa.logger,
+		Provider:        sa.provider,
+		Model:           sa.model,
+		Tools:           sa.tools,
+		Logger:          sa.logger,
+		CheckpointStore: sa.checkpointStore,
+		SkillsLoader:    skillsLoader,
+		RegisteredTools: sa.registeredTools,
 	})
 	if err != nil {
 		return fmt.Errorf("创建 Chat Agent 失败: %w", err)

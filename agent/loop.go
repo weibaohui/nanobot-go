@@ -161,6 +161,7 @@ func NewLoop(messageBus *bus.MessageBus, provider providers.LLMProvider, workspa
 		CheckpointStore: loop.interruptManager.GetCheckpointStore(),
 		MaxIterations:   maxIterations,
 		EnableStream:    true,
+		RegisteredTools: toolNames, // 传入已注册的工具名称列表
 	})
 	if err != nil {
 		logger.Error("创建 Supervisor Agent 失败，将使用传统模式", zap.Error(err))

@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/components/tool"
+	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/eino_adapter"
 	"github.com/weibaohui/nanobot-go/providers"
@@ -18,14 +20,21 @@ type ChatSubAgent struct {
 	runner   *adk.Runner
 	provider providers.LLMProvider
 	model    string
+	tools    []tool.BaseTool
 	logger   *zap.Logger
 }
 
 // ChatConfig Chat Agent 配置
 type ChatConfig struct {
-	Provider providers.LLMProvider
-	Model    string
-	Logger   *zap.Logger
+	Provider        providers.LLMProvider
+	Model           string
+	Tools           []tool.BaseTool
+	Logger          *zap.Logger
+	CheckpointStore compose.CheckPointStore
+	// 技能加载器
+	SkillsLoader func(skillName string) string
+	// 已注册的工具名称列表
+	RegisteredTools []string
 }
 
 // NewChatSubAgent 创建 Chat 子 Agent
@@ -42,13 +51,32 @@ func NewChatSubAgent(ctx context.Context, cfg *ChatConfig) (*ChatSubAgent, error
 	// 创建 Provider 适配器
 	adapter := eino_adapter.NewProviderAdapter(logger, cfg.Provider, cfg.Model)
 
-	// 创建 ADK ChatModel Agent（无工具）
+	// 配置技能加载器和已注册工具
+	if cfg.SkillsLoader != nil {
+		adapter.SetSkillLoader(cfg.SkillsLoader)
+	}
+	if len(cfg.RegisteredTools) > 0 {
+		adapter.SetRegisteredTools(cfg.RegisteredTools)
+	}
+
+	// 配置工具
+	var toolsConfig adk.ToolsConfig
+	if len(cfg.Tools) > 0 {
+		toolsConfig = adk.ToolsConfig{
+			ToolsNodeConfig: compose.ToolsNodeConfig{
+				Tools: cfg.Tools,
+			},
+		}
+	}
+
+	// 创建 ADK ChatModel Agent
 	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
-		Name:        "chat_agent",
-		Description: "Chat 模式 Agent，用于简单对话和问答",
-		Instruction: buildChatInstruction(),
-		Model:       adapter,
-		// Chat Agent 不使用工具，保持轻量级
+		Name:          "chat_agent",
+		Description:   "Chat 模式 Agent，用于简单对话和问答",
+		Instruction:   buildChatInstruction(),
+		Model:         adapter,
+		ToolsConfig:   toolsConfig,
+		MaxIterations: 5,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("创建 Chat Agent 失败: %w", err)
@@ -58,15 +86,19 @@ func NewChatSubAgent(ctx context.Context, cfg *ChatConfig) (*ChatSubAgent, error
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{
 		Agent:           agent,
 		EnableStreaming: true,
+		CheckPointStore: cfg.CheckpointStore,
 	})
 
-	logger.Info("Chat Agent 创建成功")
+	logger.Info("Chat Agent 创建成功",
+		zap.Int("tools_count", len(cfg.Tools)),
+	)
 
 	return &ChatSubAgent{
 		agent:    agent,
 		runner:   runner,
 		provider: cfg.Provider,
 		model:    cfg.Model,
+		tools:    cfg.Tools,
 		logger:   logger,
 	}, nil
 }

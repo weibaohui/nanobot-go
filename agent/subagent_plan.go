@@ -36,6 +36,10 @@ type PlanConfig struct {
 	Logger          *zap.Logger
 	CheckpointStore compose.CheckPointStore
 	MaxIterations   int
+	// 技能加载器
+	SkillsLoader func(skillName string) string
+	// 已注册的工具名称列表
+	RegisteredTools []string
 }
 
 // NewPlanSubAgent 创建 Plan 子 Agent
@@ -56,6 +60,14 @@ func NewPlanSubAgent(ctx context.Context, cfg *PlanConfig) (*PlanSubAgent, error
 
 	// 创建 Provider 适配器
 	adapter := eino_adapter.NewProviderAdapter(logger, cfg.Provider, cfg.Model)
+
+	// 配置技能加载器和已注册工具
+	if cfg.SkillsLoader != nil {
+		adapter.SetSkillLoader(cfg.SkillsLoader)
+	}
+	if len(cfg.RegisteredTools) > 0 {
+		adapter.SetRegisteredTools(cfg.RegisteredTools)
+	}
 
 	// 创建 Planner
 	planner, err := planexecute.NewPlanner(ctx, &planexecute.PlannerConfig{
