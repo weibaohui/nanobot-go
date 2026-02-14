@@ -67,52 +67,6 @@ func (a *ProviderAdapter) isKnownSkill(name string) bool {
 	return content != ""
 }
 
-// interceptToolCall 拦截工具调用，如果工具不存在则转换为技能调用
-func (a *ProviderAdapter) interceptToolCall(toolName string, argumentsJSON string) (string, string, error) {
-	// 如果工具已注册，不拦截
-	if a.isRegisteredTool(toolName) {
-		return toolName, argumentsJSON, nil
-	}
-
-	// 如果是已知技能，将工具调用转换为技能调用
-	if a.isKnownSkill(toolName) {
-		// 解析原始参数
-		var originalArgs map[string]any
-		if err := json.Unmarshal([]byte(argumentsJSON), &originalArgs); err != nil {
-			originalArgs = make(map[string]any)
-		}
-
-		// 将原始参数包装成技能参数
-		skillParams := map[string]any{
-			"skill_name": toolName,
-			"action":     originalArgs["action"],
-		}
-
-		// 移除 action 后的其他参数放入 params
-		filteredParams := make(map[string]any)
-		for k, v := range originalArgs {
-			if k != "action" {
-				filteredParams[k] = v
-			}
-		}
-		if len(filteredParams) > 0 {
-			skillParams["params"] = filteredParams
-		}
-
-		// 序列化新参数
-		newArgsJSON, err := json.Marshal(skillParams)
-		if err != nil {
-			return toolName, argumentsJSON, err
-		}
-
-		// 返回 use_skill 作为工具名
-		return "use_skill", string(newArgsJSON), nil
-	}
-
-	// 既不是工具也不是技能，保持原样（会在执行时报错）
-	return toolName, argumentsJSON, nil
-}
-
 // Generate produces a complete model response
 func (a *ProviderAdapter) Generate(ctx context.Context, input []*schema.Message, opts ...model.Option) (*schema.Message, error) {
 	options := model.GetCommonOptions(&model.Options{}, opts...)
@@ -159,6 +113,52 @@ func (a *ProviderAdapter) Generate(ctx context.Context, input []*schema.Message,
 	a.interceptToolCalls(response)
 
 	return response, nil
+}
+
+// interceptToolCall 拦截工具调用，如果工具不存在则转换为技能调用
+func (a *ProviderAdapter) interceptToolCall(toolName string, argumentsJSON string) (string, string, error) {
+	// 如果工具已注册，不拦截
+	if a.isRegisteredTool(toolName) {
+		return toolName, argumentsJSON, nil
+	}
+
+	// 如果是已知技能，将工具调用转换为技能调用
+	if a.isKnownSkill(toolName) {
+		// 解析原始参数
+		var originalArgs map[string]any
+		if err := json.Unmarshal([]byte(argumentsJSON), &originalArgs); err != nil {
+			originalArgs = make(map[string]any)
+		}
+
+		// 将原始参数包装成技能参数
+		skillParams := map[string]any{
+			"skill_name": toolName,
+			"action":     originalArgs["action"],
+		}
+
+		// 移除 action 后的其他参数放入 params
+		filteredParams := make(map[string]any)
+		for k, v := range originalArgs {
+			if k != "action" {
+				filteredParams[k] = v
+			}
+		}
+		if len(filteredParams) > 0 {
+			skillParams["params"] = filteredParams
+		}
+
+		// 序列化新参数
+		newArgsJSON, err := json.Marshal(skillParams)
+		if err != nil {
+			return toolName, argumentsJSON, err
+		}
+
+		// 返回 use_skill 作为工具名
+		return "use_skill", string(newArgsJSON), nil
+	}
+
+	// 既不是工具也不是技能，保持原样（会在执行时报错）
+	return toolName, argumentsJSON, nil
 }
 
 // interceptToolCalls 拦截并转换工具调用
