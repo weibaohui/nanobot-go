@@ -41,6 +41,7 @@ type ChannelsConfig struct {
 	Email     EmailConfig     `json:"email"`
 	Slack     SlackConfig     `json:"slack"`
 	QQ        QQConfig        `json:"qq"`
+	Matrix    MatrixConfig    `json:"matrix"`
 }
 
 // WebSocketConfig WebSocket 渠道配置
@@ -180,6 +181,15 @@ type QQConfig struct {
 	AppID     string   `json:"appId"`
 	Secret    string   `json:"secret"`
 	AllowFrom []string `json:"allowFrom"`
+}
+
+// MatrixConfig Matrix 渠道配置
+type MatrixConfig struct {
+	Enabled    bool     `json:"enabled"`
+	Homeserver string   `json:"homeserver"` // Matrix 服务器地址，如 https://matrix.example.com
+	UserID     string   `json:"userId"`     // 用户 ID，如 @nanobot:example.com
+	Token      string   `json:"token"`      // 访问令牌
+	AllowFrom  []string `json:"allowFrom"`  // 允许的用户白名单
 }
 
 // ProvidersConfig LLM 提供商配置

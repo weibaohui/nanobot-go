@@ -659,4 +659,20 @@ func registerChannels(mgr *channels.Manager, cfg *config.Config, messageBus *bus
 		logger.Info("已注册钉钉渠道")
 	}
 
+	// Matrix 渠道
+	if cfg.Channels.Matrix.Enabled {
+		matrixConfig := &channels.MatrixConfig{
+			Homeserver: cfg.Channels.Matrix.Homeserver,
+			UserID:     cfg.Channels.Matrix.UserID,
+			Token:      cfg.Channels.Matrix.Token,
+			AllowFrom:  cfg.Channels.Matrix.AllowFrom,
+		}
+		matrix := channels.NewMatrixChannel(matrixConfig, messageBus, logger)
+		mgr.Register(matrix)
+		logger.Info("已注册 Matrix 渠道",
+			zap.String("homeserver", matrixConfig.Homeserver),
+			zap.String("user_id", matrixConfig.UserID),
+		)
+	}
+
 }
