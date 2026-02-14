@@ -88,6 +88,8 @@ func NewPlanExecuteAgent(ctx context.Context, cfg *Config) (*PlanExecuteAgent, e
 			}
 		}
 	}
+	//打印工具数量
+	// logger.Info("NewPlanExecuteAgent  tools数量", zap.Int("tools_count", len(toolInfos)))
 
 	// Bind tools to the adapter so the model knows about them
 	var executorModel model.ToolCallingChatModel = adapter

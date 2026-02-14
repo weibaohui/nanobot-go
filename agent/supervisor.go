@@ -156,7 +156,7 @@ func (sa *SupervisorAgent) createSubAgents(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("创建 ReAct Agent 失败: %w", err)
 	}
-
+	// sa.logger.Info("SupervisorAgent createSubAgents tools数量", zap.Int("tools_count", len(sa.tools)))
 	// 创建 Plan Agent
 	sa.planAgent, err = NewPlanSubAgent(ctx, &PlanConfig{
 		Provider:        sa.provider,

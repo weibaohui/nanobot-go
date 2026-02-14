@@ -88,6 +88,9 @@ func NewPlanSubAgent(ctx context.Context, cfg *PlanConfig) (*PlanSubAgent, error
 		}
 	}
 
+	//打印工具数量
+	// logger.Info("PlanSubAgent createSubAgents tools数量", zap.Int("tools_count", len(toolInfos)))
+
 	// 绑定工具到适配器
 	var executorModel model.ToolCallingChatModel = adapter
 	if len(toolInfos) > 0 {

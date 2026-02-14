@@ -3,6 +3,7 @@ package eino_adapter
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
@@ -113,13 +114,19 @@ func (a *ProviderAdapter) Generate(ctx context.Context, input []*schema.Message,
 	if len(a.tools) > 0 {
 		tools = convertToolInfoToProviderFormat(a.tools)
 		if a.logger != nil {
+			var toolNames []string
+			for _, t := range tools {
+				if fn, ok := t["function"].(map[string]any); ok {
+					if name, ok := fn["name"].(string); ok {
+						toolNames = append(toolNames, name)
+					}
+				}
+			}
 			a.logger.Info("Generate 使用绑定的工具",
 				zap.Int("tools_count", len(tools)),
+				zap.String("tools", strings.Join(toolNames, ",")),
 			)
-			//打印tools的名称
-			for _, tool := range tools {
-				a.logger.Info("工具名称", zap.String("名称", tool["name"].(string)))
-			}
+
 		}
 	} else if a.logger != nil {
 		a.logger.Warn("Generate 没有绑定的工具")
@@ -222,11 +229,11 @@ func (a *ProviderAdapter) Stream(ctx context.Context, input []*schema.Message, o
 
 // WithTools returns a new adapter instance with the specified tools bound
 func (a *ProviderAdapter) WithTools(tools []*schema.ToolInfo) (model.ToolCallingChatModel, error) {
-	if a.logger != nil {
-		a.logger.Info("WithTools 被调用",
-			zap.Int("tools_count", len(tools)),
-		)
-	}
+	// if a.logger != nil {
+	// 	a.logger.Info("WithTools 被调用",
+	// 		zap.Int("tools_count", len(tools)),
+	// 	)
+	// }
 	return &ProviderAdapter{
 		logger:        a.logger,
 		provider:      a.provider,
