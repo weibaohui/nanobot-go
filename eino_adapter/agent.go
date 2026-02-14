@@ -314,6 +314,21 @@ func (a *PlanExecuteAgent) Stream(ctx context.Context, input string) *adk.AsyncI
 	return a.runner.Run(ctx, messages)
 }
 
+func (a *PlanExecuteAgent) StreamWithHistory(ctx context.Context, input string, history []*schema.Message, checkpointID string) *adk.AsyncIterator[*adk.AgentEvent] {
+	messages := make([]*schema.Message, 0, len(history)+1)
+	if len(history) > 0 {
+		messages = append(messages, history...)
+	}
+	messages = append(messages, &schema.Message{
+		Role:    schema.User,
+		Content: input,
+	})
+	if checkpointID != "" {
+		return a.runner.Run(ctx, messages, adk.WithCheckPointID(checkpointID))
+	}
+	return a.runner.Run(ctx, messages)
+}
+
 // GetChatModel returns the underlying chat model adapter
 func (a *PlanExecuteAgent) GetChatModel() model.ToolCallingChatModel {
 	return a.adapter

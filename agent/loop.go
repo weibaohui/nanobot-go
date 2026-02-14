@@ -392,7 +392,13 @@ func (l *Loop) processWithADK(ctx context.Context, msg *bus.InboundMessage) erro
 
 	// 检查是否被中断
 	if lastEvent != nil && lastEvent.Action != nil && lastEvent.Action.Interrupted != nil {
-		return l.handleInterrupt(ctx, msg, checkpointID, lastEvent, sess, sessionKey)
+		if err := l.handleInterrupt(ctx, msg, checkpointID, lastEvent, sess, sessionKey); err != nil {
+			if strings.HasPrefix(err.Error(), "INTERRUPT:") {
+				return nil
+			}
+			return err
+		}
+		return nil
 	}
 
 	// 发布响应
@@ -425,9 +431,14 @@ func (l *Loop) processWithADKStream(ctx context.Context, msg *bus.InboundMessage
 	// 构建消息（包含系统提示词）
 	messages := l.buildMessagesWithSystem(history, msg.Content, msg.Channel, msg.ChatID)
 
-	iter := l.adkRunner.Run(ctx, messages)
+	// 生成 checkpoint ID（用于中断恢复）
+	checkpointID := fmt.Sprintf("%s_%d", sessionKey, time.Now().UnixNano())
+
+	iter := l.adkRunner.Run(ctx, messages, adk.WithCheckPointID(checkpointID))
 	var response string
 	var fullContent string
+	var lastEvent *adk.AgentEvent
+
 	for {
 		event, ok := iter.Next()
 		if !ok {
@@ -453,6 +464,12 @@ func (l *Loop) processWithADKStream(ctx context.Context, msg *bus.InboundMessage
 			fullContent = msgOutput.Content
 			response = msgOutput.Content
 		}
+		lastEvent = event
+	}
+
+	// 检查是否被中断
+	if lastEvent != nil && lastEvent.Action != nil && lastEvent.Action.Interrupted != nil {
+		return l.handleInterrupt(ctx, msg, checkpointID, lastEvent, sess, sessionKey)
 	}
 
 	// 发送完成标记
@@ -591,9 +608,39 @@ func (l *Loop) processWithPlan(ctx context.Context, msg *bus.InboundMessage) err
 	// 构建消息（包含系统提示词）
 	messages := l.buildMessagesWithSystem(history, msg.Content, msg.Channel, msg.ChatID)
 
-	response, err := l.planAgent.Execute(ctx, messages)
-	if err != nil {
-		return fmt.Errorf("计划执行失败: %w", err)
+	checkpointID := fmt.Sprintf("%s_%d", sessionKey, time.Now().UnixNano())
+	iter := l.planAgent.StreamWithHistory(ctx, msg.Content, messages[:len(messages)-1], checkpointID)
+	var response string
+	var lastEvent *adk.AgentEvent
+	for {
+		event, ok := iter.Next()
+		if !ok {
+			break
+		}
+		if event.Err != nil {
+			return fmt.Errorf("计划执行失败: %w", event.Err)
+		}
+		if event.Output != nil && event.Output.MessageOutput != nil {
+			msgOutput, err := event.Output.MessageOutput.GetMessage()
+			if err != nil {
+				continue
+			}
+			response = msgOutput.Content
+		}
+		lastEvent = event
+		if event.Action != nil && event.Action.Interrupted != nil {
+			break
+		}
+	}
+
+	if lastEvent != nil && lastEvent.Action != nil && lastEvent.Action.Interrupted != nil {
+		if err := l.handleInterrupt(ctx, msg, checkpointID, lastEvent, sess, sessionKey); err != nil {
+			if strings.HasPrefix(err.Error(), "INTERRUPT:") {
+				return nil
+			}
+			return err
+		}
+		return nil
 	}
 
 	// 发布响应
