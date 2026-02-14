@@ -4,35 +4,72 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
-	"github.com/weibaohui/nanobot-go/providers"
+	"github.com/weibaohui/nanobot-go/config"
 	"go.uber.org/zap"
 )
 
 // SkillLoader 技能加载函数类型
 type SkillLoader func(name string) string
 
-// ProviderAdapter adapts providers.LLMProvider to eino's ToolCallingChatModel interface
+// ProviderAdapter 包装 eino-ext 的 OpenAI ChatModel，添加拦截功能
 type ProviderAdapter struct {
 	logger        *zap.Logger
-	provider      providers.LLMProvider
-	model         string
-	tools         []*schema.ToolInfo
-	toolChoice    any             // 工具选择策略
+	chatModel     model.ToolCallingChatModel
 	registeredMap map[string]bool // 已注册的工具名称
 	skillLoader   SkillLoader     // 技能加载器
 }
 
-// NewProviderAdapter creates a new adapter that wraps nanobot-go's LLMProvider
-func NewProviderAdapter(logger *zap.Logger, provider providers.LLMProvider, modelName string) *ProviderAdapter {
-	if modelName == "" {
-		modelName = provider.GetDefaultModel()
+func createProviderConfig(cfg *config.Config, logger *zap.Logger) (apiKey, apiBase, modelName string) {
+	providerCfg := cfg.GetProvider(cfg.Agents.Defaults.Model)
+	if providerCfg == nil || providerCfg.APIKey == "" {
+		logger.Warn("未找到有效的 API Key，请设置环境变量")
+		return "", "", "gpt-4o-mini"
 	}
+
+	apiBase = providerCfg.APIBase
+	if apiBase == "" {
+		apiBase = "https://api.openai.com/v1"
+	}
+
+	return providerCfg.APIKey, apiBase, cfg.Agents.Defaults.Model
+}
+
+// NewProviderAdapter 创建 Provider 适配器
+func NewProviderAdapter(logger *zap.Logger, cfg *config.Config) *ProviderAdapter {
+	apiKey, apiBase, modelName := createProviderConfig(cfg, logger)
+
+	if modelName == "" {
+		modelName = "gpt-4o"
+	}
+
+	// 使用 eino-ext 的 OpenAI ChatModel
+	chatModel, err := openai.NewChatModel(context.Background(), &openai.ChatModelConfig{
+		APIKey:  apiKey,
+		Model:   modelName,
+		BaseURL: apiBase,
+	})
+	if err != nil {
+		if logger != nil {
+			logger.Error("创建 OpenAI ChatModel 失败", zap.Error(err))
+		}
+		return nil
+	}
+
 	return &ProviderAdapter{
 		logger:        logger,
-		provider:      provider,
-		model:         modelName,
+		chatModel:     chatModel,
+		registeredMap: make(map[string]bool),
+	}
+}
+
+// NewProviderAdapterWithModel 使用已有的 ChatModel 创建适配器
+func NewProviderAdapterWithModel(logger *zap.Logger, chatModel model.ToolCallingChatModel) *ProviderAdapter {
+	return &ProviderAdapter{
+		logger:        logger,
+		chatModel:     chatModel,
 		registeredMap: make(map[string]bool),
 	}
 }
@@ -65,54 +102,6 @@ func (a *ProviderAdapter) isKnownSkill(name string) bool {
 	}
 	content := a.skillLoader(name)
 	return content != ""
-}
-
-// Generate produces a complete model response
-func (a *ProviderAdapter) Generate(ctx context.Context, input []*schema.Message, opts ...model.Option) (*schema.Message, error) {
-	options := model.GetCommonOptions(&model.Options{}, opts...)
-
-	// Get options
-	modelName := a.model
-	if options.Model != nil && *options.Model != "" {
-		modelName = *options.Model
-	}
-
-	maxTokens := 4096
-	if options.MaxTokens != nil {
-		maxTokens = *options.MaxTokens
-	}
-
-	temperature := float32(0.7)
-	if options.Temperature != nil {
-		temperature = *options.Temperature
-	}
-
-	// 处理 toolChoice - 转换 eino 格式到 OpenAI 格式
-	toolChoice := a.toolChoice
-	if options.ToolChoice != nil {
-		toolChoice = convertToolChoiceToOpenAIFormat(*options.ToolChoice)
-	}
-
-	// 调用 provider - 直接传递 eino 原生类型
-	response, err := a.provider.Chat(ctx, input, a.tools, toolChoice, modelName, maxTokens, float64(temperature))
-	if err != nil {
-		if a.logger != nil {
-			a.logger.Error("调用 LLM 失败", zap.Error(err))
-		}
-		return nil, err
-	}
-
-	if a.logger != nil {
-		a.logger.Info("原始响应",
-			zap.String("内容", response.Content),
-			zap.Int("工具调用数", len(response.ToolCalls)),
-		)
-	}
-
-	// 拦截并转换工具调用
-	a.interceptToolCalls(response)
-
-	return response, nil
 }
 
 // interceptToolCall 拦截工具调用，如果工具不存在则转换为技能调用
@@ -159,6 +148,30 @@ func (a *ProviderAdapter) interceptToolCall(toolName string, argumentsJSON strin
 
 	// 既不是工具也不是技能，保持原样（会在执行时报错）
 	return toolName, argumentsJSON, nil
+}
+
+// Generate produces a complete model response
+func (a *ProviderAdapter) Generate(ctx context.Context, input []*schema.Message, opts ...model.Option) (*schema.Message, error) {
+	// 调用底层 ChatModel
+	response, err := a.chatModel.Generate(ctx, input, opts...)
+	if err != nil {
+		if a.logger != nil {
+			a.logger.Error("调用 LLM 失败", zap.Error(err))
+		}
+		return nil, err
+	}
+
+	if a.logger != nil {
+		a.logger.Info("原始响应",
+			zap.String("内容", response.Content),
+			zap.Int("工具调用数", len(response.ToolCalls)),
+		)
+	}
+
+	// 拦截并转换工具调用
+	a.interceptToolCalls(response)
+
+	return response, nil
 }
 
 // interceptToolCalls 拦截并转换工具调用
@@ -214,33 +227,16 @@ func (a *ProviderAdapter) Stream(ctx context.Context, input []*schema.Message, o
 
 // WithTools returns a new adapter instance with the specified tools bound
 func (a *ProviderAdapter) WithTools(tools []*schema.ToolInfo) (model.ToolCallingChatModel, error) {
+	// 绑定工具到底层 ChatModel
+	boundModel, err := a.chatModel.WithTools(tools)
+	if err != nil {
+		return nil, err
+	}
+
 	return &ProviderAdapter{
 		logger:        a.logger,
-		provider:      a.provider,
-		model:         a.model,
-		tools:         tools,
-		toolChoice:    a.toolChoice,
+		chatModel:     boundModel,
 		registeredMap: a.registeredMap,
 		skillLoader:   a.skillLoader,
 	}, nil
-}
-
-// BindTools binds tools to the model
-func (a *ProviderAdapter) BindTools(tools []*schema.ToolInfo) error {
-	a.tools = tools
-	return nil
-}
-
-// convertToolChoiceToOpenAIFormat converts eino ToolChoice to OpenAI format
-func convertToolChoiceToOpenAIFormat(toolChoice schema.ToolChoice) string {
-	switch toolChoice {
-	case schema.ToolChoiceForbidden:
-		return "none"
-	case schema.ToolChoiceAllowed:
-		return "auto"
-	case schema.ToolChoiceForced:
-		return "required"
-	default:
-		return string(toolChoice)
-	}
 }

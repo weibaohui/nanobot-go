@@ -23,9 +23,9 @@ import (
 	"github.com/weibaohui/nanobot-go/agent/tools/websearch"
 	"github.com/weibaohui/nanobot-go/agent/tools/writefile"
 	"github.com/weibaohui/nanobot-go/bus"
+	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/cron"
 	"github.com/weibaohui/nanobot-go/eino_adapter"
-	"github.com/weibaohui/nanobot-go/providers"
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
 )
@@ -33,9 +33,8 @@ import (
 // Loop 代理循环核心
 type Loop struct {
 	bus                 *bus.MessageBus
-	provider            providers.LLMProvider
+	cfg                 *config.Config
 	workspace           string
-	model               string
 	maxIterations       int
 	execTimeout         int
 	restrictToWorkspace bool
@@ -65,16 +64,15 @@ type Loop struct {
 }
 
 // NewLoop 创建代理循环
-func NewLoop(messageBus *bus.MessageBus, provider providers.LLMProvider, workspace string, model string, maxIterations int, execTimeout int, restrictToWorkspace bool, cronService *cron.Service, sessionManager *session.Manager, logger *zap.Logger) *Loop {
+func NewLoop(cfg *config.Config, messageBus *bus.MessageBus, workspace string, maxIterations int, execTimeout int, restrictToWorkspace bool, cronService *cron.Service, sessionManager *session.Manager, logger *zap.Logger) *Loop {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
 
 	loop := &Loop{
 		bus:                 messageBus,
-		provider:            provider,
+		cfg:                 cfg,
 		workspace:           workspace,
-		model:               model,
 		maxIterations:       maxIterations,
 		execTimeout:         execTimeout,
 		restrictToWorkspace: restrictToWorkspace,
@@ -108,7 +106,7 @@ func NewLoop(messageBus *bus.MessageBus, provider providers.LLMProvider, workspa
 
 	// 创建 ADK Agent
 	ctx := context.Background()
-	adapter := eino_adapter.NewProviderAdapter(logger, provider, model)
+	adapter := eino_adapter.NewProviderAdapter(logger, loop.cfg)
 
 	// 配置适配器：设置技能加载器和已注册工具列表
 	adapter.SetSkillLoader(loop.context.GetSkillsLoader().LoadSkill)
@@ -144,9 +142,8 @@ func NewLoop(messageBus *bus.MessageBus, provider providers.LLMProvider, workspa
 
 	// 创建 Supervisor Agent（入口型 Agent）
 	supervisor, err := NewSupervisorAgent(ctx, &SupervisorConfig{
-		Provider:        provider,
-		Model:           model,
-		Workspace:       workspace,
+		Cfg:             loop.cfg,
+		Workspace:       loop.workspace,
 		Tools:           adkTools,
 		Logger:          logger,
 		Sessions:        sessionManager,

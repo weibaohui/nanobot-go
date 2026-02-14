@@ -8,29 +8,28 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
+	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/eino_adapter"
-	"github.com/weibaohui/nanobot-go/providers"
 	"go.uber.org/zap"
 )
 
 // ChatSubAgent Chat 模式子 Agent
 // 适用于简单对话和问答场景
 type ChatSubAgent struct {
-	agent    *adk.ChatModelAgent
-	runner   *adk.Runner
-	provider providers.LLMProvider
-	model    string
-	tools    []tool.BaseTool
-	logger   *zap.Logger
+	Cfg    *config.Config
+	agent  *adk.ChatModelAgent
+	runner *adk.Runner
+	tools  []tool.BaseTool
+	logger *zap.Logger
 }
 
 // ChatConfig Chat Agent 配置
 type ChatConfig struct {
-	Provider        providers.LLMProvider
-	Model           string
+	Cfg             *config.Config
 	Tools           []tool.BaseTool
 	Logger          *zap.Logger
 	CheckpointStore compose.CheckPointStore
+	MaxIterations   int
 	// 技能加载器
 	SkillsLoader func(skillName string) string
 	// 已注册的工具名称列表
@@ -48,8 +47,12 @@ func NewChatSubAgent(ctx context.Context, cfg *ChatConfig) (*ChatSubAgent, error
 		logger = zap.NewNop()
 	}
 
+	maxIter := cfg.MaxIterations
+	if maxIter <= 0 {
+		maxIter = 15
+	}
 	// 创建 Provider 适配器
-	adapter := eino_adapter.NewProviderAdapter(logger, cfg.Provider, cfg.Model)
+	adapter := eino_adapter.NewProviderAdapter(logger, cfg.Cfg)
 
 	// 配置技能加载器和已注册工具
 	if cfg.SkillsLoader != nil {
@@ -90,16 +93,16 @@ func NewChatSubAgent(ctx context.Context, cfg *ChatConfig) (*ChatSubAgent, error
 	})
 
 	logger.Info("Chat Agent 创建成功",
+		zap.Int("max_iterations", maxIter),
 		zap.Int("tools_count", len(cfg.Tools)),
 	)
-
 	return &ChatSubAgent{
-		agent:    agent,
-		runner:   runner,
-		provider: cfg.Provider,
-		model:    cfg.Model,
-		tools:    cfg.Tools,
-		logger:   logger,
+		Cfg:    cfg.Cfg,
+		agent:  agent,
+		runner: runner,
+
+		tools:  cfg.Tools,
+		logger: logger,
 	}, nil
 }
 

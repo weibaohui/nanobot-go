@@ -17,7 +17,6 @@ import (
 	"github.com/weibaohui/nanobot-go/cron"
 	"github.com/weibaohui/nanobot-go/eino_adapter"
 	"github.com/weibaohui/nanobot-go/heartbeat"
-	"github.com/weibaohui/nanobot-go/providers"
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -119,7 +118,6 @@ func runAgent(cmd *cobra.Command, args []string) {
 	)
 
 	messageBus := bus.NewMessageBus(logger)
-	provider := createProvider(cfg, logger)
 
 	dataDir := filepath.Join(workspacePath, ".nanobot")
 	sessionManager := session.NewManager(dataDir)
@@ -134,10 +132,9 @@ func runAgent(cmd *cobra.Command, args []string) {
 	}
 
 	loop := agent.NewLoop(
+		cfg,
 		messageBus,
-		provider,
 		workspacePath,
-		cfg.Agents.Defaults.Model,
 		maxIter,
 		execTimeout,
 		cfg.Tools.RestrictToWorkspace,
@@ -227,7 +224,6 @@ func runGateway(cmd *cobra.Command, args []string) {
 	)
 
 	messageBus := bus.NewMessageBus(logger)
-	provider := createProvider(cfg, logger)
 
 	dataDir := filepath.Join(workspacePath, ".nanobot")
 	sessionManager := session.NewManager(dataDir)
@@ -248,10 +244,9 @@ func runGateway(cmd *cobra.Command, args []string) {
 	eino_adapter.RegisterGlobalCallbacks(callbacks)
 
 	loop := agent.NewLoop(
+		cfg,
 		messageBus,
-		provider,
 		workspacePath,
-		cfg.Agents.Defaults.Model,
 		maxIter,
 		execTimeout,
 		cfg.Tools.RestrictToWorkspace,
@@ -264,8 +259,7 @@ func runGateway(cmd *cobra.Command, args []string) {
 	selector := eino_adapter.NewModeSelector()
 	ctx := context.Background()
 	planAgent, err := eino_adapter.NewPlanExecuteAgent(ctx, &eino_adapter.Config{
-		Provider:        provider,
-		Model:           cfg.Agents.Defaults.Model,
+		Cfg:             cfg,
 		Tools:           loop.GetTools(),
 		Logger:          logger,
 		EnableStream:    false,
@@ -600,28 +594,6 @@ func createDefaultConfig() *config.Config {
 		},
 	}
 }
-
-func createProvider(cfg *config.Config, logger *zap.Logger) providers.LLMProvider {
-	providerCfg := cfg.GetProvider(cfg.Agents.Defaults.Model)
-	if providerCfg == nil || providerCfg.APIKey == "" {
-		logger.Warn("未找到有效的 API Key，请设置环境变量")
-		return providers.NewLiteLLMProvider(logger, "", "", "gpt-4o-mini", nil)
-	}
-
-	apiBase := providerCfg.APIBase
-	if apiBase == "" {
-		apiBase = "https://api.openai.com/v1"
-	}
-
-	return providers.NewLiteLLMProvider(
-		logger,
-		providerCfg.APIKey,
-		apiBase,
-		cfg.Agents.Defaults.Model,
-		providerCfg.ExtraHeaders,
-	)
-}
-
 func getEnvOrDefault(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value

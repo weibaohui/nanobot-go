@@ -11,9 +11,8 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
+	"github.com/weibaohui/nanobot-go/config"
 	"go.uber.org/zap"
-
-	"github.com/weibaohui/nanobot-go/providers"
 )
 
 // PlanExecuteAgent wraps the eino plan-execute-replan agent
@@ -27,8 +26,7 @@ type PlanExecuteAgent struct {
 
 // Config holds configuration for the PlanExecuteAgent
 type Config struct {
-	Provider        providers.LLMProvider
-	Model           string
+	Cfg             *config.Config
 	Tools           []tool.BaseTool
 	Logger          *zap.Logger
 	EnableStream    bool
@@ -42,10 +40,6 @@ func NewPlanExecuteAgent(ctx context.Context, cfg *Config) (*PlanExecuteAgent, e
 		return nil, fmt.Errorf("config is required")
 	}
 
-	if cfg.Provider == nil {
-		return nil, fmt.Errorf("provider is required")
-	}
-
 	logger := cfg.Logger
 	if logger == nil {
 		logger = zap.NewNop()
@@ -57,7 +51,7 @@ func NewPlanExecuteAgent(ctx context.Context, cfg *Config) (*PlanExecuteAgent, e
 	}
 
 	// Create the provider adapter
-	adapter := NewProviderAdapter(logger, cfg.Provider, cfg.Model)
+	adapter := NewProviderAdapter(logger, cfg.Cfg)
 
 	// Create planner agent using ToolCallingChatModel (not ChatModelWithFormattedOutput)
 	// This uses tool calling to generate structured Plan output

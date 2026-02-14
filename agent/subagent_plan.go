@@ -12,8 +12,8 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
+	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/eino_adapter"
-	"github.com/weibaohui/nanobot-go/providers"
 	"go.uber.org/zap"
 )
 
@@ -29,8 +29,7 @@ type PlanSubAgent struct {
 
 // PlanConfig Plan Agent 配置
 type PlanConfig struct {
-	Provider        providers.LLMProvider
-	Model           string
+	Cfg             *config.Config
 	Workspace       string
 	Tools           []tool.BaseTool
 	Logger          *zap.Logger
@@ -59,7 +58,7 @@ func NewPlanSubAgent(ctx context.Context, cfg *PlanConfig) (*PlanSubAgent, error
 	}
 
 	// 创建 Provider 适配器
-	adapter := eino_adapter.NewProviderAdapter(logger, cfg.Provider, cfg.Model)
+	adapter := eino_adapter.NewProviderAdapter(logger, cfg.Cfg)
 
 	// 配置技能加载器和已注册工具
 	if cfg.SkillsLoader != nil {

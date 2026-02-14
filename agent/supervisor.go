@@ -12,8 +12,8 @@ import (
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/bus"
+	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/eino_adapter"
-	"github.com/weibaohui/nanobot-go/providers"
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
 )
@@ -33,8 +33,7 @@ type SubAgent interface {
 // SupervisorAgent 监督者 Agent
 // 作为统一入口，根据用户输入自动路由到合适的子 Agent
 type SupervisorAgent struct {
-	provider  providers.LLMProvider
-	model     string
+	cfg       *config.Config
 	workspace string
 	tools     []tool.BaseTool
 	logger    *zap.Logger
@@ -64,8 +63,7 @@ type SupervisorAgent struct {
 
 // SupervisorConfig Supervisor 配置
 type SupervisorConfig struct {
-	Provider        providers.LLMProvider
-	Model           string
+	Cfg             *config.Config
 	Workspace       string
 	Tools           []tool.BaseTool
 	Logger          *zap.Logger
@@ -97,8 +95,7 @@ func NewSupervisorAgent(ctx context.Context, cfg *SupervisorConfig) (*Supervisor
 	}
 
 	sa := &SupervisorAgent{
-		provider:         cfg.Provider,
-		model:            cfg.Model,
+		cfg:              cfg.Cfg,
 		workspace:        cfg.Workspace,
 		tools:            cfg.Tools,
 		logger:           logger,
@@ -124,7 +121,7 @@ func NewSupervisorAgent(ctx context.Context, cfg *SupervisorConfig) (*Supervisor
 	}
 
 	logger.Info("Supervisor Agent 创建成功",
-		zap.String("model", cfg.Model),
+		zap.String("model", cfg.Context.workspace),
 		zap.Int("max_iterations", maxIter),
 	)
 
@@ -143,8 +140,7 @@ func (sa *SupervisorAgent) createSubAgents(ctx context.Context) error {
 
 	// 创建 ReAct Agent
 	sa.reactAgent, err = NewReActSubAgent(ctx, &ReActConfig{
-		Provider:        sa.provider,
-		Model:           sa.model,
+		Cfg:             sa.cfg,
 		Workspace:       sa.workspace,
 		Tools:           sa.tools,
 		Logger:          sa.logger,
@@ -159,8 +155,7 @@ func (sa *SupervisorAgent) createSubAgents(ctx context.Context) error {
 	// sa.logger.Info("SupervisorAgent createSubAgents tools数量", zap.Int("tools_count", len(sa.tools)))
 	// 创建 Plan Agent
 	sa.planAgent, err = NewPlanSubAgent(ctx, &PlanConfig{
-		Provider:        sa.provider,
-		Model:           sa.model,
+		Cfg:             sa.cfg,
 		Workspace:       sa.workspace,
 		Tools:           sa.tools,
 		Logger:          sa.logger,
@@ -175,8 +170,7 @@ func (sa *SupervisorAgent) createSubAgents(ctx context.Context) error {
 
 	// 创建 Chat Agent
 	sa.chatAgent, err = NewChatSubAgent(ctx, &ChatConfig{
-		Provider:        sa.provider,
-		Model:           sa.model,
+		Cfg:             sa.cfg,
 		Tools:           sa.tools,
 		Logger:          sa.logger,
 		CheckpointStore: sa.checkpointStore,
@@ -193,7 +187,7 @@ func (sa *SupervisorAgent) createSubAgents(ctx context.Context) error {
 // createADKSupervisor 创建 ADK Supervisor
 func (sa *SupervisorAgent) createADKSupervisor(ctx context.Context) error {
 	// 创建 Supervisor 的 ChatModel
-	adapter := eino_adapter.NewProviderAdapter(sa.logger, sa.provider, sa.model)
+	adapter := eino_adapter.NewProviderAdapter(sa.logger, sa.cfg)
 
 	// 创建 Supervisor Agent
 	svAgent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{

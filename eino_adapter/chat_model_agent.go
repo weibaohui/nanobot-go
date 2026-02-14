@@ -8,9 +8,8 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
+	"github.com/weibaohui/nanobot-go/config"
 	"go.uber.org/zap"
-
-	"github.com/weibaohui/nanobot-go/providers"
 )
 
 // ChatModelAgent 封装 eino ADK 的 ChatModelAgent
@@ -24,8 +23,7 @@ type ChatModelAgent struct {
 
 // ChatModelAgentConfig 配置
 type ChatModelAgentConfig struct {
-	Provider      providers.LLMProvider
-	Model         string
+	Cfg           *config.Config
 	Tools         []tool.BaseTool
 	Logger        *zap.Logger
 	MaxIterations int
@@ -38,10 +36,6 @@ func NewChatModelAgent(ctx context.Context, cfg *ChatModelAgentConfig) (*ChatMod
 		return nil, fmt.Errorf("config is required")
 	}
 
-	if cfg.Provider == nil {
-		return nil, fmt.Errorf("provider is required")
-	}
-
 	logger := cfg.Logger
 
 	maxIterations := cfg.MaxIterations
@@ -50,7 +44,7 @@ func NewChatModelAgent(ctx context.Context, cfg *ChatModelAgentConfig) (*ChatMod
 	}
 
 	// Create the provider adapter
-	adapter := NewProviderAdapter(logger, cfg.Provider, cfg.Model)
+	adapter := NewProviderAdapter(logger, cfg.Cfg)
 
 	// Convert tools to eino format
 	var toolsConfig adk.ToolsConfig

@@ -9,26 +9,24 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
+	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/eino_adapter"
-	"github.com/weibaohui/nanobot-go/providers"
 	"go.uber.org/zap"
 )
 
 // ReActSubAgent ReAct 模式子 Agent
 // 适用于工具调用、推理、长对话场景
 type ReActSubAgent struct {
-	agent    *adk.ChatModelAgent
-	runner   *adk.Runner
-	provider providers.LLMProvider
-	model    string
-	tools    []tool.BaseTool
-	logger   *zap.Logger
+	cfg    *config.Config
+	agent  *adk.ChatModelAgent
+	runner *adk.Runner
+	tools  []tool.BaseTool
+	logger *zap.Logger
 }
 
 // ReActConfig ReAct Agent 配置
 type ReActConfig struct {
-	Provider        providers.LLMProvider
-	Model           string
+	Cfg             *config.Config
 	Workspace       string
 	Tools           []tool.BaseTool
 	Logger          *zap.Logger
@@ -57,7 +55,7 @@ func NewReActSubAgent(ctx context.Context, cfg *ReActConfig) (*ReActSubAgent, er
 	}
 
 	// 创建 Provider 适配器
-	adapter := eino_adapter.NewProviderAdapter(logger, cfg.Provider, cfg.Model)
+	adapter := eino_adapter.NewProviderAdapter(logger, cfg.Cfg)
 
 	// 配置技能加载器和已注册工具
 	if cfg.SkillsLoader != nil {
@@ -103,12 +101,11 @@ func NewReActSubAgent(ctx context.Context, cfg *ReActConfig) (*ReActSubAgent, er
 	)
 
 	return &ReActSubAgent{
-		agent:    agent,
-		runner:   runner,
-		provider: cfg.Provider,
-		model:    cfg.Model,
-		tools:    cfg.Tools,
-		logger:   logger,
+		agent:  agent,
+		runner: runner,
+		cfg:    cfg.Cfg,
+		tools:  cfg.Tools,
+		logger: logger,
 	}, nil
 }
 

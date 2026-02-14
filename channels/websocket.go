@@ -10,7 +10,6 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/weibaohui/nanobot-go/bus"
-	"github.com/weibaohui/nanobot-go/providers"
 	"go.uber.org/zap"
 )
 
@@ -35,16 +34,6 @@ type WebSocketChannel struct {
 	clients   map[string]*websocket.Conn // chatID -> conn
 	clientsMu sync.RWMutex
 	logger    *zap.Logger
-
-	// 用于流式处理
-	provider providers.LLMProvider
-	model    string
-}
-
-// SetProvider 设置 LLM 提供者（用于流式处理）
-func (c *WebSocketChannel) SetProvider(provider providers.LLMProvider, model string) {
-	c.provider = provider
-	c.model = model
 }
 
 // NewWebSocketChannel 创建 WebSocket 渠道
