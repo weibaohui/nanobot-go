@@ -17,6 +17,7 @@ type InterruptManager struct {
 	logger        *zap.Logger
 	checkpoint    compose.CheckPointStore
 	pending       map[string]*InterruptInfo // checkpointID -> info
+	pendingBySession map[string]*InterruptInfo // sessionKey -> info
 	mu            sync.RWMutex
 	responseChan  chan *UserResponse
 }
@@ -40,11 +41,12 @@ type UserResponse struct {
 // NewInterruptManager 创建中断管理器
 func NewInterruptManager(messageBus *bus.MessageBus, logger *zap.Logger) *InterruptManager {
 	return &InterruptManager{
-		bus:          messageBus,
-		logger:       logger,
-		checkpoint:   NewInMemoryCheckpointStore(),
-		pending:      make(map[string]*InterruptInfo),
-		responseChan: make(chan *UserResponse, 100),
+		bus:              messageBus,
+		logger:           logger,
+		checkpoint:       NewInMemoryCheckpointStore(),
+		pending:          make(map[string]*InterruptInfo),
+		pendingBySession: make(map[string]*InterruptInfo),
+		responseChan:     make(chan *UserResponse, 100),
 	}
 }
 
@@ -57,6 +59,9 @@ func (m *InterruptManager) GetCheckpointStore() compose.CheckPointStore {
 func (m *InterruptManager) HandleInterrupt(info *InterruptInfo) {
 	m.mu.Lock()
 	m.pending[info.CheckpointID] = info
+	if info.SessionKey != "" {
+		m.pendingBySession[info.SessionKey] = info
+	}
 	m.mu.Unlock()
 
 	// 发送中断消息到用户
@@ -73,6 +78,7 @@ func (m *InterruptManager) HandleInterrupt(info *InterruptInfo) {
 		zap.String("checkpoint_id", info.CheckpointID),
 		zap.String("channel", info.Channel),
 		zap.String("chat_id", info.ChatID),
+		zap.String("session_key", info.SessionKey),
 	)
 }
 
@@ -106,9 +112,7 @@ func (m *InterruptManager) WaitForResponse(ctx context.Context, checkpointID str
 		case resp := <-m.responseChan:
 			if resp.CheckpointID == checkpointID {
 				// 清理
-				m.mu.Lock()
-				delete(m.pending, checkpointID)
-				m.mu.Unlock()
+				m.ClearInterrupt(checkpointID)
 				return resp, nil
 			}
 			// 不是目标响应，放回通道
@@ -126,7 +130,31 @@ func (m *InterruptManager) WaitForResponse(ctx context.Context, checkpointID str
 // CancelInterrupt 取消中断
 func (m *InterruptManager) CancelInterrupt(checkpointID string) {
 	m.mu.Lock()
-	delete(m.pending, checkpointID)
+	if info, ok := m.pending[checkpointID]; ok {
+		delete(m.pending, checkpointID)
+		if info.SessionKey != "" {
+			delete(m.pendingBySession, info.SessionKey)
+		}
+	}
+	m.mu.Unlock()
+}
+
+// GetPendingInterrupt 获取指定会话的待处理中断
+func (m *InterruptManager) GetPendingInterrupt(sessionKey string) *InterruptInfo {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.pendingBySession[sessionKey]
+}
+
+// ClearInterrupt 清除已处理的中断
+func (m *InterruptManager) ClearInterrupt(checkpointID string) {
+	m.mu.Lock()
+	if info, ok := m.pending[checkpointID]; ok {
+		delete(m.pending, checkpointID)
+		if info.SessionKey != "" {
+			delete(m.pendingBySession, info.SessionKey)
+		}
+	}
 	m.mu.Unlock()
 }
 

@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/agent/tools"
+	"github.com/weibaohui/nanobot-go/agent/tools/askuser"
 	toolcron "github.com/weibaohui/nanobot-go/agent/tools/cron"
 	"github.com/weibaohui/nanobot-go/agent/tools/editfile"
 	"github.com/weibaohui/nanobot-go/agent/tools/exec"
@@ -50,6 +52,9 @@ type Loop struct {
 	adkAgent  *adk.ChatModelAgent
 	adkRunner *adk.Runner
 
+	// 中断管理
+	interruptManager *InterruptManager
+
 	// Plan-Execute mode support
 	planAgent *eino_adapter.PlanExecuteAgent
 	selector  *eino_adapter.ModeSelector
@@ -75,6 +80,9 @@ func NewLoop(messageBus *bus.MessageBus, provider providers.LLMProvider, workspa
 		tools:               tools.NewRegistry(),
 		logger:              logger,
 	}
+
+	// 创建中断管理器
+	loop.interruptManager = NewInterruptManager(messageBus, logger)
 
 	// 创建子代理管理器
 	loop.subagents = NewSubagentManager(provider, workspace, messageBus, model, execTimeout, restrictToWorkspace, logger)
@@ -128,6 +136,7 @@ func NewLoop(messageBus *bus.MessageBus, provider providers.LLMProvider, workspa
 		loop.adkRunner = adk.NewRunner(ctx, adk.RunnerConfig{
 			Agent:           adkAgent,
 			EnableStreaming: true,
+			CheckPointStore: loop.interruptManager.GetCheckpointStore(),
 		})
 		logger.Info("ADK Agent 创建成功")
 	}
@@ -170,6 +179,13 @@ func (l *Loop) registerDefaultTools() {
 	if l.cronService != nil {
 		l.tools.Register(&toolcron.Tool{CronService: l.cronService})
 	}
+
+	// Ask User 工具（用于向用户提问并中断等待响应）
+	l.tools.Register(askuser.NewTool(func(channel, chatID, question string, options []string) (string, error) {
+		// 这个回调会在 InterruptManager 中处理
+		// 实际的中断处理在 tool 的 InvokableRun 中通过 StatefulInterrupt 完成
+		return "", nil
+	}))
 
 	// 注册通用技能工具（用于拦截后的技能调用）
 	l.tools.Register(skill.NewGenericSkillTool(l.context.GetSkillsLoader().LoadSkill))
@@ -226,6 +242,50 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 		zap.String("内容", preview),
 	)
 
+	// 检查是否有待处理的中断需要响应
+	sessionKey := msg.SessionKey()
+	if pendingInterrupt := l.interruptManager.GetPendingInterrupt(sessionKey); pendingInterrupt != nil {
+		l.logger.Info("检测到待处理的中断，尝试恢复执行",
+			zap.String("checkpoint_id", pendingInterrupt.CheckpointID),
+			zap.String("session_key", sessionKey),
+		)
+
+		// 提交用户响应
+		response := &UserResponse{
+			CheckpointID: pendingInterrupt.CheckpointID,
+			Answer:       msg.Content,
+		}
+		if err := l.interruptManager.SubmitUserResponse(response); err != nil {
+			l.logger.Error("提交用户响应失败", zap.Error(err))
+			return err
+		}
+
+		// 恢复执行
+		result, err := l.ResumeExecution(ctx, pendingInterrupt.CheckpointID, pendingInterrupt.CheckpointID, msg.Content, msg.Channel, msg.ChatID)
+		if err != nil {
+			// 检查是否是新的中断
+			if strings.HasPrefix(err.Error(), "INTERRUPT:") {
+				// 新的中断已由 handleInterrupt 处理
+				return nil
+			}
+			return fmt.Errorf("恢复执行失败: %w", err)
+		}
+
+		// 清理已完成的中断
+		l.interruptManager.ClearInterrupt(pendingInterrupt.CheckpointID)
+
+		// 发布恢复后的响应
+		l.bus.PublishOutbound(bus.NewOutboundMessage(msg.Channel, msg.ChatID, result))
+
+		// 保存会话
+		sess := l.sessions.GetOrCreate(sessionKey)
+		sess.AddMessage("user", msg.Content)
+		sess.AddMessage("assistant", result)
+		l.sessions.Save(sess)
+
+		return nil
+	}
+
 	// 更新工具上下文
 	l.updateToolContext(msg.Channel, msg.ChatID)
 
@@ -254,6 +314,9 @@ func (l *Loop) updateToolContext(channel, chatID string) {
 	}
 	if ct, ok := l.tools.Get("cron").(tools.ContextSetter); ok {
 		ct.SetContext(channel, chatID)
+	}
+	if at, ok := l.tools.Get("ask_user").(tools.ContextSetter); ok {
+		at.SetContext(channel, chatID)
 	}
 }
 
@@ -302,8 +365,13 @@ func (l *Loop) processWithADK(ctx context.Context, msg *bus.InboundMessage) erro
 	// 构建消息（包含系统提示词）
 	messages := l.buildMessagesWithSystem(history, msg.Content, msg.Channel, msg.ChatID)
 
-	iter := l.adkRunner.Run(ctx, messages)
+	// 生成 checkpoint ID
+	checkpointID := fmt.Sprintf("%s_%d", sessionKey, time.Now().UnixNano())
+
+	iter := l.adkRunner.Run(ctx, messages, adk.WithCheckPointID(checkpointID))
 	var response string
+	var lastEvent *adk.AgentEvent
+
 	for {
 		event, ok := iter.Next()
 		if !ok {
@@ -319,6 +387,12 @@ func (l *Loop) processWithADK(ctx context.Context, msg *bus.InboundMessage) erro
 			}
 			response = msgOutput.Content
 		}
+		lastEvent = event
+	}
+
+	// 检查是否被中断
+	if lastEvent != nil && lastEvent.Action != nil && lastEvent.Action.Interrupted != nil {
+		return l.handleInterrupt(ctx, msg, checkpointID, lastEvent, sess, sessionKey)
 	}
 
 	// 发布响应
@@ -395,6 +469,115 @@ func (l *Loop) processWithADKStream(ctx context.Context, msg *bus.InboundMessage
 	)
 
 	return nil
+}
+
+// handleInterrupt 处理中断
+func (l *Loop) handleInterrupt(ctx context.Context, msg *bus.InboundMessage, checkpointID string, event *adk.AgentEvent, sess *session.Session, sessionKey string) error {
+	if event.Action == nil || event.Action.Interrupted == nil {
+		return nil
+	}
+
+	// 获取中断上下文
+	interruptCtx := event.Action.Interrupted.InterruptContexts[0]
+	interruptID := interruptCtx.ID
+
+	// 解析中断信息
+	var question string
+	var options []string
+
+	if info, ok := interruptCtx.Info.(map[string]any); ok {
+		if q, ok := info["question"].(string); ok {
+			question = q
+		}
+		if opts, ok := info["options"].([]any); ok {
+			for _, opt := range opts {
+				if s, ok := opt.(string); ok {
+					options = append(options, s)
+				}
+			}
+		}
+	} else {
+		// 尝试直接作为 Stringer
+		question = fmt.Sprintf("%v", interruptCtx.Info)
+	}
+
+	// 发送中断请求到用户
+	l.interruptManager.HandleInterrupt(&InterruptInfo{
+		CheckpointID: checkpointID,
+		Channel:      msg.Channel,
+		ChatID:       msg.ChatID,
+		Question:     question,
+		Options:      options,
+		SessionKey:   sessionKey,
+	})
+
+	l.logger.Info("等待用户输入以恢复执行",
+		zap.String("checkpoint_id", checkpointID),
+		zap.String("interrupt_id", interruptID),
+		zap.String("question", question),
+	)
+
+	// 注意：这里不等待用户响应，而是返回
+	// 用户响应会通过 SubmitUserResponse 提交，然后通过 ResumeExecution 恢复
+	return fmt.Errorf("INTERRUPT:%s:%s", checkpointID, interruptID)
+}
+
+// ResumeExecution 恢复被中断的执行
+func (l *Loop) ResumeExecution(ctx context.Context, checkpointID, interruptID string, userAnswer string, channel, chatID string) (string, error) {
+	if l.adkRunner == nil {
+		return "", fmt.Errorf("ADK Agent 未初始化")
+	}
+
+	// 准备恢复参数
+	resumeParams := &adk.ResumeParams{
+		Targets: map[string]any{
+			interruptID: map[string]any{
+				"user_answer": userAnswer,
+			},
+		},
+	}
+
+	// 恢复执行
+	iter, err := l.adkRunner.ResumeWithParams(ctx, checkpointID, resumeParams)
+	if err != nil {
+		return "", fmt.Errorf("恢复执行失败: %w", err)
+	}
+
+	var response string
+	for {
+		event, ok := iter.Next()
+		if !ok {
+			break
+		}
+		if event.Err != nil {
+			return "", fmt.Errorf("恢复后执行失败: %w", event.Err)
+		}
+		if event.Output != nil && event.Output.MessageOutput != nil {
+			msgOutput, err := event.Output.MessageOutput.GetMessage()
+			if err != nil {
+				continue
+			}
+			response = msgOutput.Content
+		}
+
+		// 检查是否再次被中断
+		if event.Action != nil && event.Action.Interrupted != nil {
+			// 递归处理新的中断
+			msg := &bus.InboundMessage{
+				Channel: channel,
+				ChatID:  chatID,
+			}
+			newCheckpointID := fmt.Sprintf("%s_resume_%d", checkpointID, time.Now().UnixNano())
+			return "", l.handleInterrupt(ctx, msg, newCheckpointID, event, nil, "")
+		}
+	}
+
+	return response, nil
+}
+
+// GetInterruptManager 获取中断管理器
+func (l *Loop) GetInterruptManager() *InterruptManager {
+	return l.interruptManager
 }
 
 // processWithPlan 使用计划执行模式

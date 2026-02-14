@@ -37,6 +37,25 @@ type StreamChunk struct {
 	Done     bool   `json:"done"`     // 是否完成
 }
 
+// InterruptRequest 表示中断请求（需要用户输入）
+type InterruptRequest struct {
+	Channel      string   `json:"channel"`
+	ChatID       string   `json:"chat_id"`
+	CheckpointID string   `json:"checkpoint_id"`
+	InterruptID  string   `json:"interrupt_id"`
+	Question     string   `json:"question"`
+	Options      []string `json:"options,omitempty"`
+}
+
+// InterruptResponse 表示用户对中断的响应
+type InterruptResponse struct {
+	Channel      string `json:"channel"`
+	ChatID       string `json:"chat_id"`
+	CheckpointID string `json:"checkpoint_id"`
+	InterruptID  string `json:"interrupt_id"`
+	Answer       string `json:"answer"`
+}
+
 // NewInboundMessage 创建一个新的入站消息
 func NewInboundMessage(channel, senderID, chatID, content string) *InboundMessage {
 	return &InboundMessage{
