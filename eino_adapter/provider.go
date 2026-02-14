@@ -220,7 +220,33 @@ func (a *ProviderAdapter) Stream(ctx context.Context, input []*schema.Message, o
 	}
 
 	// 调用 provider 的流式接口
-	return a.provider.ChatStream(ctx, input, a.tools, toolChoice, modelName, maxTokens, float64(temperature))
+	sr, err := a.provider.ChatStream(ctx, input, a.tools, toolChoice, modelName, maxTokens, float64(temperature))
+	if err != nil {
+		return nil, err
+	}
+
+	// 创建新的 StreamReader 用于拦截处理
+	interceptedSR, interceptedSW := schema.Pipe[*schema.Message](100)
+
+	go func() {
+		defer interceptedSW.Close()
+
+		for {
+			msg, err := sr.Recv()
+			if err != nil {
+				return
+			}
+
+			// 对包含工具调用的消息进行拦截处理
+			if len(msg.ToolCalls) > 0 {
+				a.interceptToolCalls(msg)
+			}
+
+			interceptedSW.Send(msg, nil)
+		}
+	}()
+
+	return interceptedSR, nil
 }
 
 // WithTools returns a new adapter instance with the specified tools bound

@@ -126,6 +126,13 @@ func (p *LiteLLMProvider) Chat(ctx context.Context, messages []*schema.Message, 
 	return p.parseResponseToMessage(body)
 }
 
+// toolCallAccumulator 用于累积流式工具调用
+type toolCallAccumulator struct {
+	id        string
+	name      string
+	arguments strings.Builder
+}
+
 // ChatStream 发送流式聊天请求 - 返回 eino 原生 StreamReader
 func (p *LiteLLMProvider) ChatStream(ctx context.Context, messages []*schema.Message, tools []*schema.ToolInfo, toolChoice any, model string, maxTokens int, temperature float64) (*schema.StreamReader[*schema.Message], error) {
 	if model == "" {
@@ -190,6 +197,10 @@ func (p *LiteLLMProvider) ChatStream(ctx context.Context, messages []*schema.Mes
 		defer sw.Close()
 		defer resp.Body.Close()
 
+		// 工具调用累积器 - 按 ID 索引
+		toolCallAccumulators := make(map[int]*toolCallAccumulator)
+		var toolCallIndex int
+
 		reader := bufio.NewReader(resp.Body)
 		for {
 			line, err := reader.ReadString('\n')
@@ -211,6 +222,23 @@ func (p *LiteLLMProvider) ChatStream(ctx context.Context, messages []*schema.Mes
 
 			data := strings.TrimPrefix(line, "data: ")
 			if data == "[DONE]" {
+				// 流结束，发送累积的完整工具调用
+				if len(toolCallAccumulators) > 0 {
+					msg := &schema.Message{
+						Role:      schema.Assistant,
+						ToolCalls: make([]schema.ToolCall, len(toolCallAccumulators)),
+					}
+					for idx, acc := range toolCallAccumulators {
+						msg.ToolCalls[idx] = schema.ToolCall{
+							ID: acc.id,
+							Function: schema.FunctionCall{
+								Name:      acc.name,
+								Arguments: acc.arguments.String(),
+							},
+						}
+					}
+					sw.Send(msg, nil)
+				}
 				return
 			}
 
@@ -219,6 +247,7 @@ func (p *LiteLLMProvider) ChatStream(ctx context.Context, messages []*schema.Mes
 					Delta struct {
 						Content   string `json:"content"`
 						ToolCalls []struct {
+							Index    int    `json:"index"`
 							ID       string `json:"id"`
 							Type     string `json:"type"`
 							Function struct {
@@ -240,26 +269,62 @@ func (p *LiteLLMProvider) ChatStream(ctx context.Context, messages []*schema.Mes
 			}
 
 			choice := streamResp.Choices[0]
-			msg := &schema.Message{
-				Role:    schema.Assistant,
-				Content: choice.Delta.Content,
-			}
 
-			// 处理工具调用
+			// 处理工具调用 - 累积参数
 			if len(choice.Delta.ToolCalls) > 0 {
-				msg.ToolCalls = make([]schema.ToolCall, len(choice.Delta.ToolCalls))
-				for i, tc := range choice.Delta.ToolCalls {
-					msg.ToolCalls[i] = schema.ToolCall{
-						ID: tc.ID,
-						Function: schema.FunctionCall{
-							Name:      tc.Function.Name,
-							Arguments: tc.Function.Arguments, // 保持原始字符串，不做解析
-						},
+				for _, tc := range choice.Delta.ToolCalls {
+					idx := tc.Index
+					if idx == 0 && tc.ID != "" {
+						// 新工具调用开始
+						toolCallAccumulators[idx] = &toolCallAccumulator{
+							id:   tc.ID,
+							name: tc.Function.Name,
+						}
+						toolCallIndex = idx
+					}
+
+					// 累积参数
+					if acc, ok := toolCallAccumulators[idx]; ok {
+						if tc.Function.Name != "" && acc.name == "" {
+							acc.name = tc.Function.Name
+						}
+						if tc.Function.Arguments != "" {
+							acc.arguments.WriteString(tc.Function.Arguments)
+						}
+					} else if tc.Function.Arguments != "" {
+						// 可能是继续累积
+						if acc, ok := toolCallAccumulators[toolCallIndex]; ok {
+							acc.arguments.WriteString(tc.Function.Arguments)
+						}
 					}
 				}
 			}
 
-			sw.Send(msg, nil)
+			// 发送内容增量
+			if choice.Delta.Content != "" {
+				sw.Send(&schema.Message{
+					Role:    schema.Assistant,
+					Content: choice.Delta.Content,
+				}, nil)
+			}
+
+			// 如果有 finish_reason，发送完整的工具调用
+			if choice.FinishReason != "" && len(toolCallAccumulators) > 0 {
+				msg := &schema.Message{
+					Role:      schema.Assistant,
+					ToolCalls: make([]schema.ToolCall, len(toolCallAccumulators)),
+				}
+				for idx, acc := range toolCallAccumulators {
+					msg.ToolCalls[idx] = schema.ToolCall{
+						ID: acc.id,
+						Function: schema.FunctionCall{
+							Name:      acc.name,
+							Arguments: acc.arguments.String(),
+						},
+					}
+				}
+				sw.Send(msg, nil)
+			}
 		}
 	}()
 
