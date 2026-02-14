@@ -56,7 +56,6 @@ type SupervisorAgent struct {
 
 	// 配置
 	maxIterations   int
-	enableStream    bool
 	registeredTools []string // 已注册的工具名称列表
 }
 
@@ -72,7 +71,6 @@ type SupervisorConfig struct {
 	InterruptMgr    *InterruptManager
 	CheckpointStore compose.CheckPointStore
 	MaxIterations   int
-	EnableStream    bool
 	// 已注册的工具名称列表
 	RegisteredTools []string
 }
@@ -104,7 +102,6 @@ func NewSupervisorAgent(ctx context.Context, cfg *SupervisorConfig) (*Supervisor
 		interruptManager: cfg.InterruptMgr,
 		checkpointStore:  cfg.CheckpointStore,
 		maxIterations:    maxIter,
-		enableStream:     cfg.EnableStream,
 		registeredTools:  cfg.RegisteredTools,
 	}
 
@@ -217,7 +214,6 @@ func (sa *SupervisorAgent) createADKSupervisor(ctx context.Context) error {
 	// 创建 Runner
 	sa.adkRunner = adk.NewRunner(ctx, adk.RunnerConfig{
 		Agent:           sv,
-		EnableStreaming: sa.enableStream,
 		CheckPointStore: sa.checkpointStore,
 	})
 
@@ -240,7 +236,7 @@ func (sa *SupervisorAgent) buildSupervisorInstruction() string {
   - 需要多步推理的复杂问题
 - 特点：ReAct 模式（推理 → 行动 → 观察 → 再推理）
 
-### 2. plan_execute_replan (Plan-Execute-Replan Agent)
+### 2. plan_agent (Plan-Execute-Replan Agent)
 - 用途：复杂任务的规划与执行
 - 适用场景：
   - 需要规划的任务（如旅行规划、项目规划）
@@ -285,7 +281,7 @@ func (sa *SupervisorAgent) buildSupervisorInstruction() string {
 ## 转移规则
 
 - 一次只调用一个子 Agent
-- 只能转移到：react_agent、plan_execute_replan、chat_agent
+- 只能转移到：react_agent、plan_agent、chat_agent
 - 不要自己执行任务，总是委托给子 Agent
 - 子 Agent 完成后，汇总结果返回给用户
 - 如果任务需要用户确认，子 Agent 会处理中断
@@ -308,11 +304,7 @@ func (sa *SupervisorAgent) Process(ctx context.Context, msg *bus.InboundMessage)
 	var response string
 	var err error
 
-	if sa.enableStream {
-		response, err = sa.processWithStream(ctx, messages, checkpointID, msg)
-	} else {
-		response, err = sa.processNormal(ctx, messages, checkpointID, msg)
-	}
+	response, err = sa.processNormal(ctx, messages, checkpointID, msg)
 
 	if err != nil {
 		// 检查是否是中断
@@ -362,60 +354,6 @@ func (sa *SupervisorAgent) processNormal(ctx context.Context, messages []*schema
 	if lastEvent != nil && lastEvent.Action != nil && lastEvent.Action.Interrupted != nil {
 		return "", sa.handleInterrupt(msg, checkpointID, lastEvent)
 	}
-
-	return response, nil
-}
-
-// processWithStream 流式模式处理
-func (sa *SupervisorAgent) processWithStream(ctx context.Context, messages []*schema.Message, checkpointID string, msg *bus.InboundMessage) (string, error) {
-	iter := sa.adkRunner.Run(ctx, messages, adk.WithCheckPointID(checkpointID))
-
-	var response string
-	var fullContent string
-	var lastEvent *adk.AgentEvent
-
-	for {
-		event, ok := iter.Next()
-		if !ok {
-			break
-		}
-
-		if event.Err != nil {
-			return "", fmt.Errorf("流式执行失败: %w", event.Err)
-		}
-
-		if event.Output != nil && event.Output.MessageOutput != nil {
-			msgOutput, err := event.Output.MessageOutput.GetMessage()
-			if err != nil {
-				continue
-			}
-
-			// 计算增量内容
-			delta := ""
-			if fullContent != "" && strings.HasPrefix(msgOutput.Content, fullContent) {
-				delta = msgOutput.Content[len(fullContent):]
-			} else {
-				delta = msgOutput.Content
-			}
-
-			if delta != "" {
-				sa.bus.PublishStream(bus.NewStreamChunk(msg.Channel, msg.ChatID, delta, msgOutput.Content, false))
-			}
-
-			fullContent = msgOutput.Content
-			response = msgOutput.Content
-		}
-
-		lastEvent = event
-	}
-
-	// 检查中断
-	if lastEvent != nil && lastEvent.Action != nil && lastEvent.Action.Interrupted != nil {
-		return "", sa.handleInterrupt(msg, checkpointID, lastEvent)
-	}
-
-	// 发送完成标记
-	sa.bus.PublishStream(bus.NewStreamChunk(msg.Channel, msg.ChatID, "", response, true))
 
 	return response, nil
 }

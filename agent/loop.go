@@ -117,7 +117,6 @@ func NewLoop(cfg *config.Config, messageBus *bus.MessageBus, workspace string, m
 		InterruptMgr:    loop.interruptManager,
 		CheckpointStore: loop.interruptManager.GetCheckpointStore(),
 		MaxIterations:   maxIterations,
-		EnableStream:    true,
 		RegisteredTools: toolNames, // 传入已注册的工具名称列表
 	})
 	if err != nil {
