@@ -174,38 +174,6 @@ func (l *Loop) registerDefaultTools() {
 	// 注册通用技能工具（用于拦截后的技能调用）
 	l.tools.Register(skill.NewGenericSkillTool(l.context.GetSkillsLoader().LoadSkill))
 
-	// 动态注册所有技能为工具
-	// l.registerSkillTools()
-}
-
-// registerSkillTools 扫描并注册所有技能为工具
-func (l *Loop) registerSkillTools() {
-	skillsLoader := l.context.GetSkillsLoader()
-	skills := skillsLoader.ListSkills(false)
-
-	loadSkillFunc := skillsLoader.LoadSkill
-
-	for _, sk := range skills {
-		// 获取技能描述
-		description := sk.Name
-		if meta := skillsLoader.GetSkillMetadata(sk.Name); meta != nil {
-			if desc, ok := meta["description"]; ok && desc != "" {
-				description = desc
-			}
-		}
-
-		// 为每个技能创建并注册工具
-		skillTool := skill.NewDynamicTool(sk.Name, description, loadSkillFunc)
-		l.tools.Register(skillTool)
-		l.logger.Debug("注册技能工具",
-			zap.String("name", sk.Name),
-			zap.String("source", sk.Source),
-		)
-	}
-
-	l.logger.Info("已注册技能工具",
-		zap.Int("数量", len(skills)),
-	)
 }
 
 // Run 运行代理循环
@@ -269,7 +237,7 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 
 	// 检查是否使用流式处理
 	if l.ShouldUseStream(msg.Channel) {
-		return l.processWithStream(ctx, msg)
+		return l.processWithADKStream(ctx, msg)
 	}
 
 	// 使用普通模式
@@ -369,8 +337,8 @@ func (l *Loop) processWithADK(ctx context.Context, msg *bus.InboundMessage) erro
 	return nil
 }
 
-// processWithStream 使用流式处理
-func (l *Loop) processWithStream(ctx context.Context, msg *bus.InboundMessage) error {
+// processWithADKStream 使用流式处理
+func (l *Loop) processWithADKStream(ctx context.Context, msg *bus.InboundMessage) error {
 	if l.adkAgent == nil || l.adkRunner == nil {
 		return fmt.Errorf("ADK Agent 未初始化")
 	}
@@ -431,7 +399,16 @@ func (l *Loop) processWithStream(ctx context.Context, msg *bus.InboundMessage) e
 
 // processWithPlan 使用计划执行模式
 func (l *Loop) processWithPlan(ctx context.Context, msg *bus.InboundMessage) error {
-	response, err := l.planAgent.Execute(ctx, msg.Content)
+
+	// 获取会话历史
+	sessionKey := msg.SessionKey()
+	sess := l.sessions.GetOrCreate(sessionKey)
+	history := l.convertHistory(sess.GetHistory(50))
+
+	// 构建消息（包含系统提示词）
+	messages := l.buildMessagesWithSystem(history, msg.Content, msg.Channel, msg.ChatID)
+
+	response, err := l.planAgent.Execute(ctx, messages)
 	if err != nil {
 		return fmt.Errorf("计划执行失败: %w", err)
 	}
@@ -439,9 +416,6 @@ func (l *Loop) processWithPlan(ctx context.Context, msg *bus.InboundMessage) err
 	// 发布响应
 	l.bus.PublishOutbound(bus.NewOutboundMessage(msg.Channel, msg.ChatID, response))
 
-	// 保存会话
-	sessionKey := msg.SessionKey()
-	sess := l.sessions.GetOrCreate(sessionKey)
 	sess.AddMessage("user", msg.Content)
 	sess.AddMessage("assistant", response)
 	l.sessions.Save(sess)

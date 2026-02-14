@@ -26,13 +26,12 @@ type PlanExecuteAgent struct {
 
 // Config holds configuration for the PlanExecuteAgent
 type Config struct {
-	Provider        providers.LLMProvider
-	Model           string
-	Tools           []tool.BaseTool
-	Logger          *zap.Logger
-	EnableStream    bool
-	MaxIterations   int
-	EnableCallbacks bool // 是否启用回调日志
+	Provider      providers.LLMProvider
+	Model         string
+	Tools         []tool.BaseTool
+	Logger        *zap.Logger
+	EnableStream  bool
+	MaxIterations int
 }
 
 // NewPlanExecuteAgent creates a new Plan-Execute-Replan agent
@@ -53,13 +52,6 @@ func NewPlanExecuteAgent(ctx context.Context, cfg *Config) (*PlanExecuteAgent, e
 	maxIterations := cfg.MaxIterations
 	if maxIterations <= 0 {
 		maxIterations = 10
-	}
-
-	// 注册全局回调处理器
-	if cfg.EnableCallbacks {
-		callbacks := NewEinoCallbacks(true, logger)
-		RegisterGlobalCallbacks(callbacks)
-		logger.Info("已启用 Eino 回调日志")
 	}
 
 	// Create the provider adapter
@@ -133,9 +125,9 @@ func NewPlanExecuteAgent(ctx context.Context, cfg *Config) (*PlanExecuteAgent, e
 	}, nil
 }
 
-// Execute runs the plan-execute-replan cycle for the given input
-func (a *PlanExecuteAgent) Execute(ctx context.Context, input string) (string, error) {
-	return a.ExecuteWithHistory(ctx, input, nil)
+// Execute runs the plan-execute-replan cycle for the given messages
+func (a *PlanExecuteAgent) Execute(ctx context.Context, messages []*schema.Message) (string, error) {
+	return a.ExecuteWithHistory(ctx, messages[len(messages)-1].Content, messages[:len(messages)-1])
 }
 
 // ExecuteWithHistory runs the agent with conversation history
