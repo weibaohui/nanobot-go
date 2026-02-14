@@ -13,24 +13,25 @@ import (
 
 // InterruptManager 管理中断和恢复
 type InterruptManager struct {
-	bus           *bus.MessageBus
-	logger        *zap.Logger
-	checkpoint    compose.CheckPointStore
-	pending       map[string]*InterruptInfo // checkpointID -> info
+	bus              *bus.MessageBus
+	logger           *zap.Logger
+	checkpoint       compose.CheckPointStore
+	pending          map[string]*InterruptInfo // checkpointID -> info
 	pendingBySession map[string]*InterruptInfo // sessionKey -> info
-	mu            sync.RWMutex
-	responseChan  chan *UserResponse
+	mu               sync.RWMutex
+	responseChan     chan *UserResponse
 }
 
 // InterruptInfo 中断信息
 type InterruptInfo struct {
-	CheckpointID string         `json:"checkpoint_id"`
-	InterruptID  string         `json:"interrupt_id"`
-	Channel      string         `json:"channel"`
-	ChatID       string         `json:"chat_id"`
-	Question     string         `json:"question"`
-	Options      []string       `json:"options,omitempty"`
-	SessionKey   string         `json:"session_key"`
+	CheckpointID string   `json:"checkpoint_id"`
+	InterruptID  string   `json:"interrupt_id"`
+	Channel      string   `json:"channel"`
+	ChatID       string   `json:"chat_id"`
+	Question     string   `json:"question"`
+	Options      []string `json:"options,omitempty"`
+	SessionKey   string   `json:"session_key"`
+	IsAskUser    bool     `json:"is_ask_user"`
 }
 
 // UserResponse 用户响应

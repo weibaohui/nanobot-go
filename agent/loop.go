@@ -261,7 +261,7 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 		}
 
 		// 恢复执行
-		result, err := l.ResumeExecution(ctx, pendingInterrupt.CheckpointID, pendingInterrupt.InterruptID, msg.Content, msg.Channel, msg.ChatID, sessionKey)
+		result, err := l.ResumeExecution(ctx, pendingInterrupt.CheckpointID, pendingInterrupt.InterruptID, msg.Content, msg.Channel, msg.ChatID, sessionKey, pendingInterrupt.IsAskUser)
 		if err != nil {
 			// 检查是否是新的中断
 			if strings.HasPrefix(err.Error(), "INTERRUPT:") {
@@ -292,16 +292,34 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 	// 检查是否使用计划模式
 	if l.planAgent != nil && l.selector != nil && l.selector.ShouldUsePlanMode(msg.Content) {
 		l.logger.Info("使用计划执行模式")
-		return l.processWithPlan(ctx, msg)
+		if err := l.processWithPlan(ctx, msg); err != nil {
+			if strings.HasPrefix(err.Error(), "INTERRUPT:") {
+				return nil
+			}
+			return err
+		}
+		return nil
 	}
 
 	// 检查是否使用流式处理
 	if l.ShouldUseStream(msg.Channel) {
-		return l.processWithADKStream(ctx, msg)
+		if err := l.processWithADKStream(ctx, msg); err != nil {
+			if strings.HasPrefix(err.Error(), "INTERRUPT:") {
+				return nil
+			}
+			return err
+		}
+		return nil
 	}
 
 	// 使用普通模式
-	return l.processWithADK(ctx, msg)
+	if err := l.processWithADK(ctx, msg); err != nil {
+		if strings.HasPrefix(err.Error(), "INTERRUPT:") {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 // updateToolContext 更新工具上下文
@@ -501,10 +519,12 @@ func (l *Loop) handleInterrupt(ctx context.Context, msg *bus.InboundMessage, che
 	// 解析中断信息
 	var question string
 	var options []string
+	isAskUser := false
 
 	if info, ok := interruptCtx.Info.(*askuser.AskUserInfo); ok {
 		question = info.Question
 		options = append(options, info.Options...)
+		isAskUser = true
 	} else if info, ok := interruptCtx.Info.(map[string]any); ok {
 		if q, ok := info["question"].(string); ok {
 			question = q
@@ -533,6 +553,7 @@ func (l *Loop) handleInterrupt(ctx context.Context, msg *bus.InboundMessage, che
 		Question:     question,
 		Options:      options,
 		SessionKey:   sessionKey,
+		IsAskUser:    isAskUser,
 	})
 
 	l.logger.Info("等待用户输入以恢复执行",
@@ -547,17 +568,25 @@ func (l *Loop) handleInterrupt(ctx context.Context, msg *bus.InboundMessage, che
 }
 
 // ResumeExecution 恢复被中断的执行
-func (l *Loop) ResumeExecution(ctx context.Context, checkpointID, interruptID string, userAnswer string, channel, chatID string, sessionKey string) (string, error) {
+func (l *Loop) ResumeExecution(ctx context.Context, checkpointID, interruptID string, userAnswer string, channel, chatID string, sessionKey string, isAskUser bool) (string, error) {
 	if l.adkRunner == nil {
 		return "", fmt.Errorf("ADK Agent 未初始化")
 	}
 
 	// 准备恢复参数
+	var resumePayload any
+	if isAskUser {
+		resumePayload = &askuser.AskUserInfo{
+			UserAnswer: userAnswer,
+		}
+	} else {
+		resumePayload = map[string]any{
+			"user_answer": userAnswer,
+		}
+	}
 	resumeParams := &adk.ResumeParams{
 		Targets: map[string]any{
-			interruptID: map[string]any{
-				"user_answer": userAnswer,
-			},
+			interruptID: resumePayload,
 		},
 	}
 
