@@ -35,7 +35,7 @@ type ReActConfig struct {
 	CheckpointStore compose.CheckPointStore
 	MaxIterations   int
 	// 技能加载器
-	SkillsLoader    func(skillName string) string
+	SkillsLoader func(skillName string) string
 	// 已注册的工具名称列表
 	RegisteredTools []string
 }
@@ -79,11 +79,11 @@ func NewReActSubAgent(ctx context.Context, cfg *ReActConfig) (*ReActSubAgent, er
 
 	// 创建 ADK ChatModel Agent
 	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
-		Name:        "react_agent",
-		Description: "ReAct 模式 Agent，用于工具调用、推理和长对话",
-		Instruction: buildReActInstruction(cfg.Workspace),
-		Model:       adapter,
-		ToolsConfig: toolsConfig,
+		Name:          "react_agent",
+		Description:   "ReAct 模式 Agent，用于工具调用、推理和长对话",
+		Instruction:   buildReActInstruction(cfg.Workspace),
+		Model:         adapter,
+		ToolsConfig:   toolsConfig,
 		MaxIterations: maxIter,
 	})
 	if err != nil {

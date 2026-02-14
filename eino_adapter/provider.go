@@ -3,7 +3,6 @@ package eino_adapter
 import (
 	"context"
 	"encoding/json"
-	"strings"
 
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
@@ -69,23 +68,29 @@ func (a *ProviderAdapter) isKnownSkill(name string) bool {
 }
 
 // interceptToolCall 拦截工具调用，如果工具不存在则转换为技能调用
-func (a *ProviderAdapter) interceptToolCall(toolName string, arguments map[string]any) (string, map[string]any, error) {
+func (a *ProviderAdapter) interceptToolCall(toolName string, argumentsJSON string) (string, string, error) {
 	// 如果工具已注册，不拦截
 	if a.isRegisteredTool(toolName) {
-		return toolName, arguments, nil
+		return toolName, argumentsJSON, nil
 	}
 
 	// 如果是已知技能，将工具调用转换为技能调用
 	if a.isKnownSkill(toolName) {
+		// 解析原始参数
+		var originalArgs map[string]any
+		if err := json.Unmarshal([]byte(argumentsJSON), &originalArgs); err != nil {
+			originalArgs = make(map[string]any)
+		}
+
 		// 将原始参数包装成技能参数
 		skillParams := map[string]any{
 			"skill_name": toolName,
-			"action":     arguments["action"],
+			"action":     originalArgs["action"],
 		}
 
 		// 移除 action 后的其他参数放入 params
 		filteredParams := make(map[string]any)
-		for k, v := range arguments {
+		for k, v := range originalArgs {
 			if k != "action" {
 				filteredParams[k] = v
 			}
@@ -94,43 +99,23 @@ func (a *ProviderAdapter) interceptToolCall(toolName string, arguments map[strin
 			skillParams["params"] = filteredParams
 		}
 
+		// 序列化新参数
+		newArgsJSON, err := json.Marshal(skillParams)
+		if err != nil {
+			return toolName, argumentsJSON, err
+		}
+
 		// 返回 use_skill 作为工具名
-		return "use_skill", skillParams, nil
+		return "use_skill", string(newArgsJSON), nil
 	}
 
 	// 既不是工具也不是技能，保持原样（会在执行时报错）
-	return toolName, arguments, nil
+	return toolName, argumentsJSON, nil
 }
 
 // Generate produces a complete model response
 func (a *ProviderAdapter) Generate(ctx context.Context, input []*schema.Message, opts ...model.Option) (*schema.Message, error) {
 	options := model.GetCommonOptions(&model.Options{}, opts...)
-
-	// Convert eino messages to nanobot-go format
-	messages := convertToProviderMessages(input)
-
-	// Convert bound tools to provider format
-	var tools []map[string]any
-	if len(a.tools) > 0 {
-		tools = convertToolInfoToProviderFormat(a.tools)
-		if a.logger != nil {
-			var toolNames []string
-			for _, t := range tools {
-				if fn, ok := t["function"].(map[string]any); ok {
-					if name, ok := fn["name"].(string); ok {
-						toolNames = append(toolNames, name)
-					}
-				}
-			}
-			a.logger.Info("Generate 使用绑定的工具",
-				zap.Int("tools_count", len(tools)),
-				zap.String("tools", strings.Join(toolNames, ",")),
-			)
-
-		}
-	} else if a.logger != nil {
-		a.logger.Warn("Generate 没有绑定的工具")
-	}
 
 	// Get options
 	modelName := a.model
@@ -154,8 +139,8 @@ func (a *ProviderAdapter) Generate(ctx context.Context, input []*schema.Message,
 		toolChoice = convertToolChoiceToOpenAIFormat(*options.ToolChoice)
 	}
 
-	// Call the provider
-	response, err := a.provider.Chat(ctx, messages, tools, toolChoice, modelName, maxTokens, float64(temperature))
+	// 调用 provider - 直接传递 eino 原生类型
+	response, err := a.provider.Chat(ctx, input, a.tools, toolChoice, modelName, maxTokens, float64(temperature))
 	if err != nil {
 		if a.logger != nil {
 			a.logger.Error("调用 LLM 失败", zap.Error(err))
@@ -165,75 +150,81 @@ func (a *ProviderAdapter) Generate(ctx context.Context, input []*schema.Message,
 
 	if a.logger != nil {
 		a.logger.Info("原始响应",
-			zap.Any("内容", response),
+			zap.String("内容", response.Content),
+			zap.Int("工具调用数", len(response.ToolCalls)),
 		)
 	}
+
 	// 拦截并转换工具调用
 	a.interceptToolCalls(response)
 
-	// Convert response to eino format
-	return convertToEinoMessage(response), nil
+	return response, nil
 }
 
 // interceptToolCalls 拦截并转换工具调用
-func (a *ProviderAdapter) interceptToolCalls(response *providers.LLMResponse) {
-
-	if len(response.ToolCalls) == 0 {
+func (a *ProviderAdapter) interceptToolCalls(msg *schema.Message) {
+	if len(msg.ToolCalls) == 0 {
 		return
 	}
 
-	for i, tc := range response.ToolCalls {
+	for i, tc := range msg.ToolCalls {
 		if a.logger != nil {
 			a.logger.Info("工具调用",
-				zap.String("名称", tc.Name),
-				zap.Any("参数", tc.Arguments),
+				zap.String("名称", tc.Function.Name),
+				zap.String("参数", tc.Function.Arguments),
 			)
 		}
-		newName, newArgs, err := a.interceptToolCall(tc.Name, tc.Arguments)
+		newName, newArgs, err := a.interceptToolCall(tc.Function.Name, tc.Function.Arguments)
 		if err != nil {
 			continue
 		}
-		if newName != tc.Name {
+		if newName != tc.Function.Name {
 			if a.logger != nil {
 				a.logger.Info("工具调用被拦截",
-					zap.String("原始名称", tc.Name),
+					zap.String("原始名称", tc.Function.Name),
 					zap.String("新名称", newName),
-					zap.Any("新参数", newArgs),
+					zap.String("新参数", newArgs),
 				)
 			}
 			// 工具名被修改了，说明需要转换为技能调用
-			response.ToolCalls[i].Name = newName
-			response.ToolCalls[i].Arguments = newArgs
+			msg.ToolCalls[i].Function.Name = newName
+			msg.ToolCalls[i].Function.Arguments = newArgs
 		}
 	}
 }
 
 // Stream produces a response as a stream
-// Note: The current provider interface doesn't support streaming, so we simulate it
 func (a *ProviderAdapter) Stream(ctx context.Context, input []*schema.Message, opts ...model.Option) (*schema.StreamReader[*schema.Message], error) {
-	// Generate the full response
-	msg, err := a.Generate(ctx, input, opts...)
-	if err != nil {
-		return nil, err
+	options := model.GetCommonOptions(&model.Options{}, opts...)
+
+	// Get options
+	modelName := a.model
+	if options.Model != nil && *options.Model != "" {
+		modelName = *options.Model
 	}
 
-	// Create a stream that yields the complete message
-	sr, sw := schema.Pipe[*schema.Message](1)
-	go func() {
-		defer sw.Close()
-		sw.Send(msg, nil)
-	}()
+	maxTokens := 4096
+	if options.MaxTokens != nil {
+		maxTokens = *options.MaxTokens
+	}
 
-	return sr, nil
+	temperature := float32(0.7)
+	if options.Temperature != nil {
+		temperature = *options.Temperature
+	}
+
+	// 处理 toolChoice
+	toolChoice := a.toolChoice
+	if options.ToolChoice != nil {
+		toolChoice = convertToolChoiceToOpenAIFormat(*options.ToolChoice)
+	}
+
+	// 调用 provider 的流式接口
+	return a.provider.ChatStream(ctx, input, a.tools, toolChoice, modelName, maxTokens, float64(temperature))
 }
 
 // WithTools returns a new adapter instance with the specified tools bound
 func (a *ProviderAdapter) WithTools(tools []*schema.ToolInfo) (model.ToolCallingChatModel, error) {
-	// if a.logger != nil {
-	// 	a.logger.Info("WithTools 被调用",
-	// 		zap.Int("tools_count", len(tools)),
-	// 	)
-	// }
 	return &ProviderAdapter{
 		logger:        a.logger,
 		provider:      a.provider,
@@ -245,116 +236,10 @@ func (a *ProviderAdapter) WithTools(tools []*schema.ToolInfo) (model.ToolCalling
 	}, nil
 }
 
-// BindTools binds tools to the model (alias for WithTools for compatibility)
+// BindTools binds tools to the model
 func (a *ProviderAdapter) BindTools(tools []*schema.ToolInfo) error {
 	a.tools = tools
 	return nil
-}
-
-// convertToProviderMessages converts eino messages to provider message format
-func convertToProviderMessages(messages []*schema.Message) []map[string]any {
-	result := make([]map[string]any, 0, len(messages))
-
-	for _, msg := range messages {
-		m := map[string]any{
-			"role":    string(msg.Role),
-			"content": msg.Content,
-		}
-
-		// Handle tool calls
-		if len(msg.ToolCalls) > 0 {
-			toolCalls := make([]map[string]any, len(msg.ToolCalls))
-			for i, tc := range msg.ToolCalls {
-				toolCalls[i] = map[string]any{
-					"id":   tc.ID,
-					"type": "function",
-					"function": map[string]any{
-						"name":      tc.Function.Name,
-						"arguments": tc.Function.Arguments,
-					},
-				}
-			}
-			m["tool_calls"] = toolCalls
-		}
-
-		// Handle tool responses
-		if msg.ToolCallID != "" {
-			m["tool_call_id"] = msg.ToolCallID
-		}
-
-		// Handle name
-		if msg.Name != "" {
-			m["name"] = msg.Name
-		}
-
-		result = append(result, m)
-	}
-
-	return result
-}
-
-// convertToEinoMessage converts provider response to eino message format
-func convertToEinoMessage(response *providers.LLMResponse) *schema.Message {
-	msg := &schema.Message{
-		Role:    schema.Assistant,
-		Content: response.Content,
-	}
-
-	// Convert tool calls
-	if len(response.ToolCalls) > 0 {
-		msg.ToolCalls = make([]schema.ToolCall, len(response.ToolCalls))
-		for i, tc := range response.ToolCalls {
-			// Convert arguments to JSON string
-			argsBytes, _ := json.Marshal(tc.Arguments)
-			msg.ToolCalls[i] = schema.ToolCall{
-				ID: tc.ID,
-				Function: schema.FunctionCall{
-					Name:      tc.Name,
-					Arguments: string(argsBytes),
-				},
-			}
-		}
-	}
-
-	// Add response metadata if available
-	if len(response.Usage) > 0 {
-		msg.ResponseMeta = &schema.ResponseMeta{
-			Usage: &schema.TokenUsage{
-				PromptTokens:     response.Usage["prompt_tokens"],
-				CompletionTokens: response.Usage["completion_tokens"],
-				TotalTokens:      response.Usage["total_tokens"],
-			},
-		}
-	}
-
-	return msg
-}
-
-// convertToolInfoToProviderFormat converts eino ToolInfo to provider format
-func convertToolInfoToProviderFormat(tools []*schema.ToolInfo) []map[string]any {
-	result := make([]map[string]any, len(tools))
-
-	for i, tool := range tools {
-		t := map[string]any{
-			"type": "function",
-			"function": map[string]any{
-				"name":        tool.Name,
-				"description": tool.Desc,
-			},
-		}
-
-		// Convert parameters using ToJSONSchema
-		if tool.ParamsOneOf != nil {
-			jsonSchema, err := tool.ParamsOneOf.ToJSONSchema()
-			if err == nil && jsonSchema != nil {
-				t["function"].(map[string]any)["parameters"] = jsonSchema
-			}
-		}
-
-		result[i] = t
-	}
-
-	return result
 }
 
 // convertToolChoiceToOpenAIFormat converts eino ToolChoice to OpenAI format
