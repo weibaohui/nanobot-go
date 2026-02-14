@@ -109,7 +109,7 @@ func (c *MatrixChannel) Start(ctx context.Context) error {
 		Room: &mautrix.RoomFilter{
 			// 时间线过滤器：只获取新消息，不获取历史
 			Timeline: &mautrix.FilterPart{
-				Limit: 10, // 限制历史消息数量
+				Limit: 0, // 限制历史消息数量
 				Types: []event.Type{
 					event.EventMessage,
 					event.EventEncrypted,
@@ -117,7 +117,7 @@ func (c *MatrixChannel) Start(ctx context.Context) error {
 			},
 			// 状态过滤器：不同步房间状态（成员列表、房间名等）
 			State: &mautrix.FilterPart{
-				Limit: 0, // 不获取状态事件
+				Limit:           0,    // 不获取状态事件
 				LazyLoadMembers: true, // 只在需要时懒加载成员信息
 			},
 			// ephemeral 事件（打字状态、已读标记等）
