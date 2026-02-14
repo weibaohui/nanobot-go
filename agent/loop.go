@@ -100,6 +100,11 @@ func NewLoop(messageBus *bus.MessageBus, provider providers.LLMProvider, workspa
 	// 创建 ADK Agent
 	ctx := context.Background()
 	adapter := eino_adapter.NewProviderAdapter(provider, model)
+
+	// 配置适配器：设置技能加载器和已注册工具列表
+	adapter.SetSkillLoader(loop.context.GetSkillsLoader().LoadSkill)
+	adapter.SetRegisteredTools(toolNames)
+
 	adkTools := loop.tools.GetADKTools()
 	var toolsConfig adk.ToolsConfig
 	if len(adkTools) > 0 {
@@ -166,8 +171,11 @@ func (l *Loop) registerDefaultTools() {
 		l.tools.Register(&toolcron.Tool{CronService: l.cronService})
 	}
 
+	// 注册通用技能工具（用于拦截后的技能调用）
+	l.tools.Register(skill.NewGenericSkillTool(l.context.GetSkillsLoader().LoadSkill))
+
 	// 动态注册所有技能为工具
-	l.registerSkillTools()
+	// l.registerSkillTools()
 }
 
 // registerSkillTools 扫描并注册所有技能为工具

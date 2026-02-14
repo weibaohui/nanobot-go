@@ -652,7 +652,7 @@ func createProvider(cfg *config.Config, logger *zap.Logger) providers.LLMProvide
 	providerCfg := cfg.GetProvider(cfg.Agents.Defaults.Model)
 	if providerCfg == nil || providerCfg.APIKey == "" {
 		logger.Warn("未找到有效的 API Key，请设置环境变量")
-		return providers.NewLiteLLMProvider("", "", "gpt-4o-mini", nil)
+		return providers.NewLiteLLMProvider(logger, "", "", "gpt-4o-mini", nil)
 	}
 
 	apiBase := providerCfg.APIBase
@@ -661,6 +661,7 @@ func createProvider(cfg *config.Config, logger *zap.Logger) providers.LLMProvide
 	}
 
 	return providers.NewLiteLLMProvider(
+		logger,
 		providerCfg.APIKey,
 		apiBase,
 		cfg.Agents.Defaults.Model,

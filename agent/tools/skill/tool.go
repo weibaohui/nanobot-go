@@ -172,3 +172,98 @@ func (r *Registry) HasSkill(name string) bool {
 	_, ok := r.tools[name]
 	return ok
 }
+
+// GenericSkillTool 通用技能工具 - 接收技能名作为参数
+type GenericSkillTool struct {
+	loadSkill SkillLoaderFunc
+}
+
+// NewGenericSkillTool 创建通用技能工具
+func NewGenericSkillTool(loader SkillLoaderFunc) *GenericSkillTool {
+	return &GenericSkillTool{
+		loadSkill: loader,
+	}
+}
+
+// Name 返回工具名称
+func (t *GenericSkillTool) Name() string {
+	return "use_skill"
+}
+
+// Info 返回工具信息
+func (t *GenericSkillTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
+	return &schema.ToolInfo{
+		Name: "use_skill",
+		Desc: "加载并使用指定技能。技能扩展了你的能力，提供特定领域的专业知识和操作指南。",
+		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
+			"skill_name": {
+				Type:     schema.DataType("string"),
+				Desc:     "技能名称",
+				Required: true,
+			},
+			"action": {
+				Type:     schema.DataType("string"),
+				Desc:     "要执行的操作（可选）",
+				Required: false,
+			},
+			"params": {
+				Type:     schema.DataType("object"),
+				Desc:     "操作参数（可选）",
+				Required: false,
+			},
+		}),
+	}, nil
+}
+
+// Run 执行工具逻辑
+func (t *GenericSkillTool) Run(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
+	var args struct {
+		SkillName string         `json:"skill_name"`
+		Action    string         `json:"action"`
+		Params    map[string]any `json:"params"`
+	}
+	if err := common.DecodeArgs(argumentsInJSON, &args); err != nil {
+		return "", err
+	}
+
+	return t.executeSkill(args.SkillName, args.Action, args.Params)
+}
+
+// InvokableRun 可直接调用的执行入口
+func (t *GenericSkillTool) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
+	return t.Run(ctx, argumentsInJSON, opts...)
+}
+
+// executeSkill 执行技能
+func (t *GenericSkillTool) executeSkill(skillName, action string, params map[string]any) (string, error) {
+	if t.loadSkill == nil {
+		return "", fmt.Errorf("技能加载器未配置")
+	}
+
+	if skillName == "" {
+		return "", fmt.Errorf("技能名称不能为空")
+	}
+
+	// 加载技能内容
+	content := t.loadSkill(skillName)
+	if content == "" {
+		return "", fmt.Errorf("技能 '%s' 不存在", skillName)
+	}
+
+	// 构建结果
+	var result strings.Builder
+	fmt.Fprintf(&result, "# 技能: %s\n\n", skillName)
+	result.WriteString(content)
+
+	// 如果有指定 action，提示如何使用
+	if action != "" {
+		fmt.Fprintf(&result, "\n\n---\n\n## 执行操作: %s\n", action)
+		if len(params) > 0 {
+			paramsJSON, _ := json.MarshalIndent(params, "", "  ")
+			fmt.Fprintf(&result, "\n参数:\n```json\n%s\n```\n", string(paramsJSON))
+		}
+		result.WriteString("\n请根据技能说明执行此操作。")
+	}
+
+	return result.String(), nil
+}

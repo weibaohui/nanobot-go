@@ -9,11 +9,16 @@ import (
 	"github.com/weibaohui/nanobot-go/providers"
 )
 
+// SkillLoader 技能加载函数类型
+type SkillLoader func(name string) string
+
 // ProviderAdapter adapts providers.LLMProvider to eino's ToolCallingChatModel interface
 type ProviderAdapter struct {
-	provider providers.LLMProvider
-	model    string
-	tools    []*schema.ToolInfo
+	provider      providers.LLMProvider
+	model         string
+	tools         []*schema.ToolInfo
+	registeredMap map[string]bool // 已注册的工具名称
+	skillLoader   SkillLoader     // 技能加载器
 }
 
 // NewProviderAdapter creates a new adapter that wraps nanobot-go's LLMProvider
@@ -22,9 +27,71 @@ func NewProviderAdapter(provider providers.LLMProvider, modelName string) *Provi
 		modelName = provider.GetDefaultModel()
 	}
 	return &ProviderAdapter{
-		provider: provider,
-		model:    modelName,
+		provider:      provider,
+		model:         modelName,
+		registeredMap: make(map[string]bool),
 	}
+}
+
+// SetSkillLoader 设置技能加载器
+func (a *ProviderAdapter) SetSkillLoader(loader SkillLoader) {
+	a.skillLoader = loader
+}
+
+// SetRegisteredTools 设置已注册的工具名称列表
+func (a *ProviderAdapter) SetRegisteredTools(names []string) {
+	a.registeredMap = make(map[string]bool)
+	for _, name := range names {
+		a.registeredMap[name] = true
+	}
+}
+
+// isRegisteredTool 检查工具是否已注册
+func (a *ProviderAdapter) isRegisteredTool(name string) bool {
+	return a.registeredMap[name]
+}
+
+// isKnownSkill 检查是否是已知技能
+func (a *ProviderAdapter) isKnownSkill(name string) bool {
+	if a.skillLoader == nil {
+		return false
+	}
+	content := a.skillLoader(name)
+	return content != ""
+}
+
+// interceptToolCall 拦截工具调用，如果工具不存在则转换为技能调用
+func (a *ProviderAdapter) interceptToolCall(toolName string, arguments map[string]any) (string, map[string]any, error) {
+	// 如果工具已注册，不拦截
+	if a.isRegisteredTool(toolName) {
+		return toolName, arguments, nil
+	}
+
+	// 如果是已知技能，将工具调用转换为技能调用
+	if a.isKnownSkill(toolName) {
+		// 将原始参数包装成技能参数
+		skillParams := map[string]any{
+			"skill_name": toolName,
+			"action":     arguments["action"],
+		}
+
+		// 移除 action 后的其他参数放入 params
+		filteredParams := make(map[string]any)
+		for k, v := range arguments {
+			if k != "action" {
+				filteredParams[k] = v
+			}
+		}
+		if len(filteredParams) > 0 {
+			skillParams["params"] = filteredParams
+		}
+
+		// 返回 use_skill 作为工具名
+		return "use_skill", skillParams, nil
+	}
+
+	// 既不是工具也不是技能，保持原样（会在执行时报错）
+	return toolName, arguments, nil
 }
 
 // Generate produces a complete model response
@@ -62,8 +129,30 @@ func (a *ProviderAdapter) Generate(ctx context.Context, input []*schema.Message,
 		return nil, err
 	}
 
+	// 拦截并转换工具调用
+	a.interceptToolCalls(response)
+
 	// Convert response to eino format
 	return convertToEinoMessage(response), nil
+}
+
+// interceptToolCalls 拦截并转换工具调用
+func (a *ProviderAdapter) interceptToolCalls(response *providers.LLMResponse) {
+	if len(response.ToolCalls) == 0 {
+		return
+	}
+
+	for i, tc := range response.ToolCalls {
+		newName, newArgs, err := a.interceptToolCall(tc.Name, tc.Arguments)
+		if err != nil {
+			continue
+		}
+		if newName != tc.Name {
+			// 工具名被修改了，说明需要转换为技能调用
+			response.ToolCalls[i].Name = newName
+			response.ToolCalls[i].Arguments = newArgs
+		}
+	}
 }
 
 // Stream produces a response as a stream

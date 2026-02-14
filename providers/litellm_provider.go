@@ -10,10 +10,13 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // LiteLLMProvider 使用 OpenAI 兼容 API 的 LLM 提供商
 type LiteLLMProvider struct {
+	logger       *zap.Logger
 	apiKey       string
 	apiBase      string
 	defaultModel string
@@ -22,7 +25,7 @@ type LiteLLMProvider struct {
 }
 
 // NewLiteLLMProvider 创建 LiteLLM 提供商
-func NewLiteLLMProvider(apiKey, apiBase, defaultModel string, extraHeaders map[string]string) *LiteLLMProvider {
+func NewLiteLLMProvider(logger *zap.Logger, apiKey, apiBase, defaultModel string, extraHeaders map[string]string) *LiteLLMProvider {
 	if apiBase == "" {
 		apiBase = "https://api.openai.com/v1"
 	}
@@ -31,6 +34,7 @@ func NewLiteLLMProvider(apiKey, apiBase, defaultModel string, extraHeaders map[s
 	}
 
 	return &LiteLLMProvider{
+		logger:       logger,
 		apiKey:       apiKey,
 		apiBase:      strings.TrimSuffix(apiBase, "/"),
 		defaultModel: defaultModel,
@@ -129,8 +133,8 @@ func (p *LiteLLMProvider) ChatStream(ctx context.Context, messages []map[string]
 					Delta struct {
 						Content   string `json:"content"`
 						ToolCalls []struct {
-							ID   string `json:"id"`
-							Type string `json:"type"`
+							ID       string `json:"id"`
+							Type     string `json:"type"`
 							Function struct {
 								Name      string `json:"name"`
 								Arguments string `json:"arguments"`
@@ -271,8 +275,8 @@ func (p *LiteLLMProvider) parseResponse(body []byte) (*LLMResponse, error) {
 				Content          string `json:"content"`
 				ReasoningContent string `json:"reasoning_content"`
 				ToolCalls        []struct {
-					ID   string `json:"id"`
-					Type string `json:"type"`
+					ID       string `json:"id"`
+					Type     string `json:"type"`
 					Function struct {
 						Name      string `json:"name"`
 						Arguments string `json:"arguments"`
@@ -319,6 +323,11 @@ func (p *LiteLLMProvider) parseResponse(body []byte) (*LLMResponse, error) {
 				args = map[string]any{"raw": tc.Function.Arguments}
 			}
 		}
+		p.logger.Info("解析工具调用",
+			zap.String("ID", tc.ID),
+			zap.String("名称", tc.Function.Name),
+			zap.Any("参数", args),
+		)
 		result.ToolCalls = append(result.ToolCalls, ToolCallRequest{
 			ID:        tc.ID,
 			Name:      tc.Function.Name,
