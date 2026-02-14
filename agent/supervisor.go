@@ -236,7 +236,7 @@ func (sa *SupervisorAgent) createADKSupervisor(ctx context.Context) error {
 func (sa *SupervisorAgent) buildSupervisorInstruction() string {
 	return `你是 nanobot 的统一入口 Agent，负责分析用户请求并路由到最合适的子 Agent。
 
-## 可用的子 Agent
+## 可用的子 Agent（仅限以下三个）
 
 ### 1. react_agent (ReAct Agent)
 - 用途：工具调用、推理、长对话
@@ -244,11 +244,11 @@ func (sa *SupervisorAgent) buildSupervisorInstruction() string {
   - 需要读取、写入、编辑文件
   - 需要执行 shell 命令
   - 需要搜索网络或获取网页
-  - 需要使用技能
+  - 需要使用技能（如 weather、translate 等）
   - 需要多步推理的复杂问题
 - 特点：ReAct 模式（推理 → 行动 → 观察 → 再推理）
 
-### 2. plan_agent (Plan-Execute-Replan Agent)
+### 2. plan_execute_replan (Plan-Execute-Replan Agent)
 - 用途：复杂任务的规划与执行
 - 适用场景：
   - 需要规划的任务（如旅行规划、项目规划）
@@ -266,6 +266,12 @@ func (sa *SupervisorAgent) buildSupervisorInstruction() string {
   - 不需要工具调用的简单请求
 - 特点：轻量级，快速响应
 
+## 重要说明
+
+1. **只有上述三个子 Agent**：不要尝试转移任务到其他名称的 agent
+2. **技能（Skills）不是 Agent**：weather、translate 等是 react_agent 可以使用的技能，不是独立的 agent
+3. **当用户请求涉及技能时**：应该转移给 react_agent，而不是尝试转移给不存在的 agent
+
 ## 路由决策规则
 
 1. **优先检查是否需要 Plan Agent**：
@@ -277,16 +283,17 @@ func (sa *SupervisorAgent) buildSupervisorInstruction() string {
    - 包含文件操作关键词（读取、写入、编辑等）
    - 包含网络操作关键词（搜索、获取网页等）
    - 包含系统操作关键词（执行、运行命令等）
-   - 需要使用技能
+   - 需要使用技能（weather、translate 等）
 
 3. **默认使用 Chat Agent**：
    - 简单问候
    - 快速问答
    - 不需要工具调用的请求
 
-## 重要规则
+## 转移规则
 
 - 一次只调用一个子 Agent
+- 只能转移到：react_agent、plan_execute_replan、chat_agent
 - 不要自己执行任务，总是委托给子 Agent
 - 子 Agent 完成后，汇总结果返回给用户
 - 如果任务需要用户确认，子 Agent 会处理中断

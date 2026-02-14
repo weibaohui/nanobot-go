@@ -19,9 +19,9 @@ type ProviderAdapter struct {
 	provider      providers.LLMProvider
 	model         string
 	tools         []*schema.ToolInfo
-	toolChoice    any              // 工具选择策略
-	registeredMap map[string]bool  // 已注册的工具名称
-	skillLoader   SkillLoader      // 技能加载器
+	toolChoice    any             // 工具选择策略
+	registeredMap map[string]bool // 已注册的工具名称
+	skillLoader   SkillLoader     // 技能加载器
 }
 
 // NewProviderAdapter creates a new adapter that wraps nanobot-go's LLMProvider
@@ -116,6 +116,10 @@ func (a *ProviderAdapter) Generate(ctx context.Context, input []*schema.Message,
 			a.logger.Info("Generate 使用绑定的工具",
 				zap.Int("tools_count", len(tools)),
 			)
+			//打印tools的名称
+			for _, tool := range tools {
+				a.logger.Info("工具名称", zap.String("名称", tool["name"].(string)))
+			}
 		}
 	} else if a.logger != nil {
 		a.logger.Warn("Generate 没有绑定的工具")

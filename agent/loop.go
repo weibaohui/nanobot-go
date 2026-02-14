@@ -19,7 +19,6 @@ import (
 	"github.com/weibaohui/nanobot-go/agent/tools/message"
 	"github.com/weibaohui/nanobot-go/agent/tools/readfile"
 	"github.com/weibaohui/nanobot-go/agent/tools/skill"
-	"github.com/weibaohui/nanobot-go/agent/tools/spawn"
 	"github.com/weibaohui/nanobot-go/agent/tools/webfetch"
 	"github.com/weibaohui/nanobot-go/agent/tools/websearch"
 	"github.com/weibaohui/nanobot-go/agent/tools/writefile"
@@ -44,7 +43,6 @@ type Loop struct {
 	context             *ContextBuilder
 	sessions            *session.Manager
 	tools               *tools.Registry
-	subagents           *SubagentManager
 	running             bool
 	logger              *zap.Logger
 
@@ -89,9 +87,6 @@ func NewLoop(messageBus *bus.MessageBus, provider providers.LLMProvider, workspa
 
 	// 创建中断管理器
 	loop.interruptManager = NewInterruptManager(messageBus, logger)
-
-	// 创建子代理管理器
-	loop.subagents = NewSubagentManager(provider, workspace, messageBus, model, execTimeout, restrictToWorkspace, logger)
 
 	// 注册默认工具
 	loop.registerDefaultTools()
@@ -201,9 +196,6 @@ func (l *Loop) registerDefaultTools() {
 		}
 		return nil
 	}})
-
-	// Spawn 工具
-	l.tools.Register(&spawn.Tool{Manager: l.subagents})
 
 	// Cron 工具
 	if l.cronService != nil {
