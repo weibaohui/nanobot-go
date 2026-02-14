@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/tool"
@@ -404,41 +403,8 @@ func (l *Loop) ResumeExecution(ctx context.Context, checkpointID, interruptID st
 		return l.supervisor.Resume(ctx, checkpointID, resumeParams, msg)
 	}
 
-	var (
-		iter *adk.AsyncIterator[*adk.AgentEvent]
-		err  error
-	)
-
-	if err != nil {
-		return "", fmt.Errorf("恢复执行失败: %w", err)
-	}
-
-	var response string
-	for {
-		event, ok := iter.Next()
-		if !ok {
-			break
-		}
-		if event.Err != nil {
-			return "", fmt.Errorf("恢复后执行失败: %w", event.Err)
-		}
-		if event.Output != nil && event.Output.MessageOutput != nil {
-			msgOutput, err := event.Output.MessageOutput.GetMessage()
-			if err != nil {
-				continue
-			}
-			response = msgOutput.Content
-		}
-
-		// 检查是否再次被中断
-		if event.Action != nil && event.Action.Interrupted != nil {
-			// 递归处理新的中断
-			newCheckpointID := fmt.Sprintf("%s_resume_%d", checkpointID, time.Now().UnixNano())
-			return "", l.handleInterrupt(ctx, msg, newCheckpointID, event, nil, sessionKey, isPlan)
-		}
-	}
-
-	return response, nil
+	// 非 Supervisor 模式暂未支持
+	return "", fmt.Errorf("非 Supervisor 模式暂未实现，当前仅支持 Supervisor 模式的中断恢复")
 }
 
 // GetInterruptManager 获取中断管理器
