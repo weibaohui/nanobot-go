@@ -99,7 +99,7 @@ func NewLoop(messageBus *bus.MessageBus, provider providers.LLMProvider, workspa
 
 	// 创建 ADK Agent
 	ctx := context.Background()
-	adapter := eino_adapter.NewProviderAdapter(provider, model)
+	adapter := eino_adapter.NewProviderAdapter(logger, provider, model)
 
 	// 配置适配器：设置技能加载器和已注册工具列表
 	adapter.SetSkillLoader(loop.context.GetSkillsLoader().LoadSkill)

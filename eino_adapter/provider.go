@@ -7,6 +7,7 @@ import (
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/providers"
+	"go.uber.org/zap"
 )
 
 // SkillLoader 技能加载函数类型
@@ -14,6 +15,7 @@ type SkillLoader func(name string) string
 
 // ProviderAdapter adapts providers.LLMProvider to eino's ToolCallingChatModel interface
 type ProviderAdapter struct {
+	logger        *zap.Logger
 	provider      providers.LLMProvider
 	model         string
 	tools         []*schema.ToolInfo
@@ -22,11 +24,12 @@ type ProviderAdapter struct {
 }
 
 // NewProviderAdapter creates a new adapter that wraps nanobot-go's LLMProvider
-func NewProviderAdapter(provider providers.LLMProvider, modelName string) *ProviderAdapter {
+func NewProviderAdapter(logger *zap.Logger, provider providers.LLMProvider, modelName string) *ProviderAdapter {
 	if modelName == "" {
 		modelName = provider.GetDefaultModel()
 	}
 	return &ProviderAdapter{
+		logger:        logger,
 		provider:      provider,
 		model:         modelName,
 		registeredMap: make(map[string]bool),
@@ -48,6 +51,9 @@ func (a *ProviderAdapter) SetRegisteredTools(names []string) {
 
 // isRegisteredTool 检查工具是否已注册
 func (a *ProviderAdapter) isRegisteredTool(name string) bool {
+	if a.registeredMap == nil {
+		return false
+	}
 	return a.registeredMap[name]
 }
 
@@ -126,9 +132,17 @@ func (a *ProviderAdapter) Generate(ctx context.Context, input []*schema.Message,
 	// Call the provider
 	response, err := a.provider.Chat(ctx, messages, tools, modelName, maxTokens, float64(temperature))
 	if err != nil {
+		if a.logger != nil {
+			a.logger.Error("调用 LLM 失败", zap.Error(err))
+		}
 		return nil, err
 	}
 
+	if a.logger != nil {
+		a.logger.Info("原始响应",
+			zap.Any("内容", response),
+		)
+	}
 	// 拦截并转换工具调用
 	a.interceptToolCalls(response)
 
@@ -138,16 +152,30 @@ func (a *ProviderAdapter) Generate(ctx context.Context, input []*schema.Message,
 
 // interceptToolCalls 拦截并转换工具调用
 func (a *ProviderAdapter) interceptToolCalls(response *providers.LLMResponse) {
+	if a.logger != nil {
+		a.logger.Info("原始工具调用列表",
+			zap.Int("数量", len(response.ToolCalls)),
+		)
+	}
+
 	if len(response.ToolCalls) == 0 {
 		return
 	}
 
 	for i, tc := range response.ToolCalls {
+		a.logger.Info("原始工具调用",
+			zap.String("名称", tc.Name),
+			zap.Any("参数", tc.Arguments),
+		)
 		newName, newArgs, err := a.interceptToolCall(tc.Name, tc.Arguments)
 		if err != nil {
 			continue
 		}
 		if newName != tc.Name {
+			a.logger.Info("工具调用被拦截",
+				zap.String("原始名称", tc.Name),
+				zap.String("新名称", newName),
+			)
 			// 工具名被修改了，说明需要转换为技能调用
 			response.ToolCalls[i].Name = newName
 			response.ToolCalls[i].Arguments = newArgs
@@ -177,9 +205,12 @@ func (a *ProviderAdapter) Stream(ctx context.Context, input []*schema.Message, o
 // WithTools returns a new adapter instance with the specified tools bound
 func (a *ProviderAdapter) WithTools(tools []*schema.ToolInfo) (model.ToolCallingChatModel, error) {
 	return &ProviderAdapter{
-		provider: a.provider,
-		model:    a.model,
-		tools:    tools,
+		logger:        a.logger,
+		provider:      a.provider,
+		model:         a.model,
+		tools:         tools,
+		registeredMap: a.registeredMap,
+		skillLoader:   a.skillLoader,
 	}, nil
 }
 

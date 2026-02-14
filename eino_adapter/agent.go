@@ -63,7 +63,7 @@ func NewPlanExecuteAgent(ctx context.Context, cfg *Config) (*PlanExecuteAgent, e
 	}
 
 	// Create the provider adapter
-	adapter := NewProviderAdapter(cfg.Provider, cfg.Model)
+	adapter := NewProviderAdapter(logger, cfg.Provider, cfg.Model)
 
 	// Create planner agent using ToolCallingChatModel (not ChatModelWithFormattedOutput)
 	// This uses tool calling to generate structured Plan output

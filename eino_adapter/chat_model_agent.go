@@ -43,9 +43,6 @@ func NewChatModelAgent(ctx context.Context, cfg *ChatModelAgentConfig) (*ChatMod
 	}
 
 	logger := cfg.Logger
-	if logger == nil {
-		logger = zap.NewNop()
-	}
 
 	maxIterations := cfg.MaxIterations
 	if maxIterations <= 0 {
@@ -53,7 +50,7 @@ func NewChatModelAgent(ctx context.Context, cfg *ChatModelAgentConfig) (*ChatMod
 	}
 
 	// Create the provider adapter
-	adapter := NewProviderAdapter(cfg.Provider, cfg.Model)
+	adapter := NewProviderAdapter(logger, cfg.Provider, cfg.Model)
 
 	// Convert tools to eino format
 	var toolsConfig adk.ToolsConfig
