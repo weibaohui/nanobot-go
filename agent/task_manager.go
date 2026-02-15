@@ -122,7 +122,7 @@ type TaskFile struct {
 	Tasks  []*PersistedTask `yaml:"tasks"`
 }
 
-func NewAgentTaskManager(cfg *AgentTaskManagerConfig) (*AgentTaskManager, error) {
+func NewBackgroundAgentTaskManager(cfg *AgentTaskManagerConfig) (*AgentTaskManager, error) {
 	if cfg == nil {
 		return nil, ErrConfigNil
 	}

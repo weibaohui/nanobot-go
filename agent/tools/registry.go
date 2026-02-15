@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/schema"
 )
 
 // Registry 工具注册表
@@ -41,28 +40,8 @@ func (r *Registry) Get(name string) tool.BaseTool {
 	return r.tools[name]
 }
 
-// GetDefinitions 获取所有工具定义
-func (r *Registry) GetDefinitions(ctx context.Context) []map[string]any {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	var defs []map[string]any
-	for _, baseTool := range r.tools {
-		info, err := baseTool.Info(ctx)
-		if err != nil || info == nil {
-			continue
-		}
-		definition, err := buildToolDefinition(info)
-		if err != nil {
-			continue
-		}
-		defs = append(defs, definition)
-	}
-	return defs
-}
-
-// GetADKTools 获取 ADK 工具列表
-func (r *Registry) GetADKTools() []tool.BaseTool {
+// GetTools 获取 所有工具列表
+func (r *Registry) GetTools() []tool.BaseTool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -73,6 +52,7 @@ func (r *Registry) GetADKTools() []tool.BaseTool {
 	return result
 }
 
+// GetToolNames 获取所有工具名称
 func (r *Registry) GetToolNames(ctx context.Context) []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -88,9 +68,10 @@ func (r *Registry) GetToolNames(ctx context.Context) []string {
 	return names
 }
 
-func (r *Registry) GetADKToolsByNames(names []string) []tool.BaseTool {
+// GetToolsByNames 根据名称获取工具列表
+func (r *Registry) GetToolsByNames(names []string) []tool.BaseTool {
 	if len(names) == 0 {
-		return r.GetADKTools()
+		return r.GetTools()
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -134,34 +115,4 @@ func (r *Registry) resolveToolName(ctx context.Context, baseTool tool.BaseTool) 
 		return ""
 	}
 	return info.Name
-}
-
-// buildToolDefinition 构建工具定义
-func buildToolDefinition(info *schema.ToolInfo) (map[string]any, error) {
-	var params any
-	if info.ParamsOneOf != nil {
-		jsonSchema, err := info.ParamsOneOf.ToJSONSchema()
-		if err != nil {
-			return nil, err
-		}
-		if jsonSchema != nil {
-			data, err := json.Marshal(jsonSchema)
-			if err != nil {
-				return nil, err
-			}
-			var schemaMap map[string]any
-			if err := json.Unmarshal(data, &schemaMap); err != nil {
-				return nil, err
-			}
-			params = schemaMap
-		}
-	}
-	return map[string]any{
-		"type": "function",
-		"function": map[string]any{
-			"name":        info.Name,
-			"description": info.Desc,
-			"parameters":  params,
-		},
-	}, nil
 }

@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/weibaohui/nanobot-go/agent"
@@ -44,13 +45,6 @@ var rootCmd = &cobra.Command{
 	Long:  `🐈 nanobot - 一个轻量级的个人 AI 助手，支持多种渠道和工具。`,
 }
 
-var agentCmd = &cobra.Command{
-	Use:   "agent",
-	Short: "与代理交互",
-	Long:  `直接与 nanobot 代理交互，支持单条消息或交互模式。`,
-	Run:   runAgent,
-}
-
 var gatewayCmd = &cobra.Command{
 	Use:   "gateway",
 	Short: "启动网关服务",
@@ -76,17 +70,9 @@ var versionCmd = &cobra.Command{
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&debugGlobal, "debug", "d", false, "调试模式")
 
-	agentCmd.Flags().StringVarP(&agentMessage, "message", "m", "", "发送给代理的消息")
-	agentCmd.Flags().StringVarP(&agentSession, "session", "s", "cli:default", "会话 ID")
-	agentCmd.Flags().BoolVar(&agentMarkdown, "markdown", true, "渲染 Markdown 输出")
-	agentCmd.Flags().BoolVar(&agentLogs, "logs", false, "显示运行时日志")
-	agentCmd.Flags().StringVarP(&agentModel, "model", "M", "", "模型名称")
-	agentCmd.Flags().StringVarP(&agentWorkspace, "workspace", "w", "", "工作区路径")
-
 	gatewayCmd.Flags().IntVarP(&gatewayPort, "port", "p", 18790, "网关端口")
 	gatewayCmd.Flags().BoolVarP(&gatewayVerbose, "verbose", "v", false, "详细输出")
 
-	rootCmd.AddCommand(agentCmd)
 	rootCmd.AddCommand(gatewayCmd)
 	rootCmd.AddCommand(onboardCmd)
 	rootCmd.AddCommand(versionCmd)
@@ -96,104 +82,6 @@ func main() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
-	}
-}
-
-// ========== Agent 命令实现 ==========
-
-func runAgent(cmd *cobra.Command, args []string) {
-	logger := initLogger(debugGlobal || agentLogs)
-	defer logger.Sync()
-
-	cfg, workspacePath := loadConfigAndWorkspace(logger)
-
-	if agentModel != "" {
-		cfg.Agents.Defaults.Model = agentModel
-	}
-
-	logger.Info("nanobot agent 启动",
-		zap.String("工作区", workspacePath),
-		zap.String("模型", cfg.Agents.Defaults.Model),
-	)
-
-	messageBus := bus.NewMessageBus(logger)
-
-	dataDir := filepath.Join(workspacePath, ".nanobot")
-	sessionManager := session.NewManager(dataDir)
-
-	maxIter := cfg.Agents.MaxIterations
-	if maxIter <= 0 {
-		maxIter = 15
-	}
-	execTimeout := cfg.Tools.Exec.Timeout
-	if execTimeout <= 0 {
-		execTimeout = 120
-	}
-
-	loop := agent.NewLoop(&agent.LoopConfig{
-		Config:              cfg,
-		MessageBus:          messageBus,
-		Workspace:           workspacePath,
-		MaxIterations:       maxIter,
-		ExecTimeout:         execTimeout,
-		RestrictToWorkspace: cfg.Tools.RestrictToWorkspace,
-		CronService:         nil,
-		SessionManager:      sessionManager,
-		Logger:              logger,
-	})
-
-	ctx := context.Background()
-	if agentMessage != "" {
-
-		fmt.Println("发送消息:", agentMessage)
-
-	} else {
-		runInteractiveMode(ctx, loop, logger)
-	}
-}
-
-func runInteractiveMode(ctx context.Context, loop *agent.Loop, logger *zap.Logger) {
-	fmt.Println("🐈 nanobot 交互模式 (输入 'exit' 或按 Ctrl+C 退出)")
-
-	fmt.Println()
-
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	go func() {
-		<-sigChan
-		fmt.Println("\n再见!")
-		os.Exit(0)
-	}()
-
-	for {
-		fmt.Print("You: ")
-		var input string
-		if _, err := fmt.Scanln(&input); err != nil {
-			if err.Error() == "unexpected newline" {
-				continue
-			}
-			break
-		}
-
-		if input == "" {
-			continue
-		}
-
-		if input == "exit" || input == "quit" || input == "/exit" || input == "/quit" {
-			fmt.Println("\n再见!")
-			break
-		}
-
-		var response string
-
-		logger.Info("使用普通模式", zap.String("input", input))
-		// Use normal mode
-
-		fmt.Println()
-		fmt.Println("🐈 nanobot")
-		fmt.Println(response)
-		fmt.Println()
 	}
 }
 
@@ -213,7 +101,7 @@ func runGateway(cmd *cobra.Command, args []string) {
 	messageBus := bus.NewMessageBus(logger)
 
 	dataDir := filepath.Join(workspacePath, ".nanobot")
-	sessionManager := session.NewManager(dataDir)
+	sessionManager := session.NewManager(cfg, dataDir)
 
 	cronStorePath := filepath.Join(dataDir, "cron_jobs.json")
 	cronService := cron.NewService(cronStorePath, logger)
@@ -268,7 +156,7 @@ func runGateway(cmd *cobra.Command, args []string) {
 		func(ctx context.Context, prompt string) (string, error) {
 			return "// TODO 待实现", nil
 		},
-		0,    // 使用默认间隔（30分钟）
+		time.Duration(cfg.Heartbeat.Interval)*time.Second, // 使用配置中的间隔
 		true, // 启用心跳
 		logger,
 	)

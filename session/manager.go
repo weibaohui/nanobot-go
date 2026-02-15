@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/weibaohui/nanobot-go/config"
 )
 
 // Message 会话消息
@@ -37,6 +39,16 @@ func (s *Session) AddMessage(role, content string) {
 
 // GetHistory 获取消息历史
 func (s *Session) GetHistory(maxMessages int) []map[string]any {
+
+	//TODO 过期机制
+	//超过2小时的消息，认为是过期的，不返回
+	if len(s.Messages) > 0 {
+		first := s.Messages[0].Timestamp
+		if time.Since(first) > 2*time.Hour {
+			return nil
+		}
+	}
+
 	var messages []Message
 	if len(s.Messages) > maxMessages {
 		messages = s.Messages[len(s.Messages)-maxMessages:]
@@ -62,16 +74,18 @@ func (s *Session) Clear() {
 
 // Manager 会话管理器
 type Manager struct {
+	cfg         *config.Config
 	sessionsDir string
 	cache       map[string]*Session
 	mu          sync.RWMutex
 }
 
 // NewManager 创建会话管理器
-func NewManager(dataDir string) *Manager {
+func NewManager(cfg *config.Config, dataDir string) *Manager {
 	sessionsDir := filepath.Join(dataDir, "sessions")
 	os.MkdirAll(sessionsDir, 0755)
 	return &Manager{
+		cfg:         cfg,
 		sessionsDir: sessionsDir,
 		cache:       make(map[string]*Session),
 	}
@@ -121,6 +135,7 @@ func (m *Manager) load(key string) *Session {
 
 // Save 保存会话到磁盘
 func (m *Manager) Save(session *Session) error {
+
 	path := m.getSessionPath(session.Key)
 	data, err := json.MarshalIndent(session, "", "  ")
 	if err != nil {
@@ -191,8 +206,18 @@ func (m *Manager) ListSessions() []map[string]any {
 
 // getSessionPath 获取会话文件路径
 func (m *Manager) getSessionPath(key string) string {
+
+	//TODO 做成一个配置项
+	// 以每天 6 点为界，6 点前的会话归档到历史文件
+	// 历史文件命名：safeKey_YYYYMMDD.json
+	now := time.Now()
+	// 如果当前时间在 0~6 点之间，则归档到前一天
+	if now.Hour() < 6 {
+		now = now.AddDate(0, 0, -1)
+	}
+	date := now.Format("20060102")
 	safeKey := safeFilename(strings.ReplaceAll(key, ":", "_"))
-	return filepath.Join(m.sessionsDir, safeKey+".json")
+	return filepath.Join(m.sessionsDir, safeKey+"_"+date+".json")
 }
 
 // safeFilename 转换为安全文件名

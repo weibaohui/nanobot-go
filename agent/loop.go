@@ -91,7 +91,7 @@ func NewLoop(cfg *LoopConfig) *Loop {
 
 	loop.registerDefaultTools()
 
-	loop.taskManager = loop.createTaskManager()
+	loop.taskManager = loop.createBackgroundAgentTaskManager()
 	if loop.taskManager != nil {
 		adapter := NewTaskManagerAdapter(loop.taskManager)
 		loop.registerTaskTools(adapter)
@@ -117,7 +117,7 @@ func NewLoop(cfg *LoopConfig) *Loop {
 	adapter.SetSkillLoader(loop.context.GetSkillsLoader().LoadSkill)
 	adapter.SetRegisteredTools(toolNames)
 
-	adkTools := loop.tools.GetADKToolsByNames(toolNames)
+	adkTools := loop.tools.GetToolsByNames(toolNames)
 
 	supervisor, err := NewSupervisorAgent(ctx, &SupervisorConfig{
 		Cfg:             loop.cfg,
@@ -218,12 +218,12 @@ func (l *Loop) registerTaskTools(manager tasktool.Manager) {
 	l.tools.Register(&tasktool.ListTool{Manager: manager, Logger: l.logger})
 }
 
-// createTaskManager 创建任务管理器
-func (l *Loop) createTaskManager() *AgentTaskManager {
-	taskManager, err := NewAgentTaskManager(&AgentTaskManagerConfig{
+// createBackgroundAgentTaskManager 创建任务管理器
+func (l *Loop) createBackgroundAgentTaskManager() *AgentTaskManager {
+	taskManager, err := NewBackgroundAgentTaskManager(&AgentTaskManagerConfig{
 		Cfg:             l.cfg,
 		Workspace:       l.workspace,
-		Tools:           l.tools.GetADKTools(),
+		Tools:           l.tools.GetTools(),
 		Logger:          l.logger,
 		Context:         l.context,
 		CheckpointStore: l.interruptManager.GetCheckpointStore(),
@@ -361,24 +361,6 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 	l.bus.PublishOutbound(bus.NewOutboundMessage(msg.Channel, msg.ChatID, response))
 	return nil
 
-	// 优先使用 Supervisor Agent 处理消息
-	if l.enableSupervisor && l.supervisor != nil {
-		l.logger.Info("使用 Supervisor Agent 处理消息")
-		response, err := l.supervisor.Process(ctx, msg)
-		if err != nil {
-			// 检查是否是中断
-			if strings.HasPrefix(err.Error(), "INTERRUPT:") {
-				return nil
-			}
-			return fmt.Errorf("Supervisor 处理失败: %w", err)
-		}
-
-		// 发布响应
-		l.bus.PublishOutbound(bus.NewOutboundMessage(msg.Channel, msg.ChatID, response))
-		return nil
-	}
-
-	return nil
 }
 
 // updateToolContext 更新工具上下文
@@ -449,5 +431,5 @@ func (l *Loop) ShouldUseStream(channel string) bool {
 
 // GetTools returns all registered tools as a slice
 func (l *Loop) GetTools() []tool.BaseTool {
-	return l.tools.GetADKTools()
+	return l.tools.GetTools()
 }
