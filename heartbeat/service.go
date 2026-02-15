@@ -26,7 +26,7 @@ If nothing needs attention, reply with just: HEARTBEAT_OK`
 )
 
 // HeartbeatCallback 心跳回调函数类型
-type HeartbeatCallback func(ctx context.Context, prompt string, model string, session string) (string, error)
+type HeartbeatCallback func(ctx context.Context, cfg *config.Config, prompt string, model string, session string) (string, error)
 
 // Service 心跳服务
 type Service struct {
@@ -209,7 +209,7 @@ func (s *Service) Start(ctx context.Context) error {
 		zap.Int("任务ID", int(s.jobID)),
 		zap.String("活跃时段", fmt.Sprintf("%s-%s", s.cfg.Heartbeat.ActiveHours.Start, s.cfg.Heartbeat.ActiveHours.End)),
 		zap.String("时区", s.cfg.Heartbeat.ActiveHours.Timezone),
-		zap.String("模型", s.getModel()),
+		zap.String("接收者", s.cfg.Heartbeat.Target),
 		zap.String("会话", s.getSession()),
 	)
 	return nil
@@ -225,6 +225,8 @@ func (s *Service) Stop() {
 
 // tick 执行单次心跳
 func (s *Service) tick(ctx context.Context) {
+	s.logger.Info("心跳tick触发")
+
 	// 检查是否在活跃时段内
 	if !s.isInActiveHours() {
 		s.logger.Debug("心跳: 当前不在活跃时段内，跳过")
@@ -232,6 +234,7 @@ func (s *Service) tick(ctx context.Context) {
 	}
 
 	content := s.readHeartbeatFile()
+	s.logger.Info("读取HEARTBEAT.md", zap.Bool("为空", isHeartbeatEmpty(content)), zap.Int("长度", len(content)))
 
 	// 如果 HEARTBEAT.md 为空或不存在，跳过
 	if isHeartbeatEmpty(content) {
@@ -242,7 +245,7 @@ func (s *Service) tick(ctx context.Context) {
 	s.logger.Info("心跳: 检查任务...")
 
 	if s.onHeartbeat != nil {
-		response, err := s.onHeartbeat(ctx, content, s.getModel(), s.getSession())
+		response, err := s.onHeartbeat(ctx, s.cfg, content, s.getModel(), s.getSession())
 		if err != nil {
 			s.logger.Error("心跳执行失败", zap.Error(err))
 			return
@@ -264,7 +267,7 @@ func (s *Service) tick(ctx context.Context) {
 // TriggerNow 手动触发心跳
 func (s *Service) TriggerNow(ctx context.Context) (string, error) {
 	if s.onHeartbeat != nil {
-		return s.onHeartbeat(ctx, s.getPrompt(), s.getModel(), s.getSession())
+		return s.onHeartbeat(ctx, s.cfg, s.getPrompt(), s.getModel(), s.getSession())
 	}
 	return "", nil
 }
