@@ -155,8 +155,16 @@ func runGateway(cmd *cobra.Command, args []string) {
 		cfg,
 		workspacePath,
 		func(ctx context.Context, prompt string, model string, session string) (string, error) {
-			// TODO: 实现心跳回调，调用代理执行任务
-			return "// TODO 待实现", nil
+			agent := loop.GetMasterAgent()
+			resp, err := agent.Process(ctx, &bus.InboundMessage{
+				Channel: "heartbeat",
+				Content: prompt,
+			})
+			if err != nil {
+				logger.Error("处理心跳消息失败", zap.Error(err))
+				return "", err
+			}
+			return resp, nil
 		},
 	)
 	if err := heartbeatService.Start(ctx); err != nil {

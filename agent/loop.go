@@ -415,6 +415,11 @@ func (l *Loop) GetInterruptManager() *InterruptManager {
 }
 
 // GetSupervisor 获取 Supervisor Agent
+func (l *Loop) GetMasterAgent() *MasterAgent {
+	return l.masterAgent
+}
+
+// GetSupervisor 获取 Supervisor Agent
 func (l *Loop) GetSupervisor() *SupervisorAgent {
 	return l.supervisor
 }
