@@ -3,6 +3,7 @@ package eino_adapter
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/components/model"
@@ -22,11 +23,22 @@ type ProviderAdapter struct {
 	skillLoader   SkillLoader     // 技能加载器
 }
 
-func createProviderConfig(logger *zap.Logger, cfg *config.Config) (apiKey, apiBase, modelName string) {
+// Sentinel errors 定义包级别的错误常量
+var (
+	ErrNilConfig      = fmt.Errorf("配置不能为空")
+	ErrCreateChatModel = fmt.Errorf("创建 ChatModel 失败")
+	ErrNilAPIKey      = fmt.Errorf("API Key 不能为空")
+)
+
+func createProviderConfig(logger *zap.Logger, cfg *config.Config) (apiKey, apiBase, modelName string, err error) {
+	if cfg == nil {
+		return "", "", "", ErrNilConfig
+	}
+
 	providerCfg := cfg.GetProvider(cfg.Agents.Defaults.Model)
 	if providerCfg == nil || providerCfg.APIKey == "" {
 		logger.Warn("未找到有效的 API Key，请设置环境变量")
-		return "", "", "gpt-4o-mini"
+		return "", "", "gpt-4o-mini", ErrNilAPIKey
 	}
 
 	apiBase = providerCfg.APIBase
@@ -34,13 +46,16 @@ func createProviderConfig(logger *zap.Logger, cfg *config.Config) (apiKey, apiBa
 		apiBase = "https://api.openai.com/v1"
 	}
 
-	return providerCfg.APIKey, apiBase, cfg.Agents.Defaults.Model
+	return providerCfg.APIKey, apiBase, cfg.Agents.Defaults.Model, nil
 }
 
 // NewProviderAdapter 创建 Provider 适配器
-func NewProviderAdapter(logger *zap.Logger, cfg *config.Config) *ProviderAdapter {
-	apiKey, apiBase, modelName := createProviderConfig(logger, cfg)
-	// 使用 eino-ext 的 OpenAI ChatModel
+func NewProviderAdapter(logger *zap.Logger, cfg *config.Config) (*ProviderAdapter, error) {
+	apiKey, apiBase, modelName, err := createProviderConfig(logger, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrNilConfig, err)
+	}
+
 	chatModel, err := openai.NewChatModel(context.Background(), &openai.ChatModelConfig{
 		APIKey:  apiKey,
 		Model:   modelName,
@@ -50,14 +65,14 @@ func NewProviderAdapter(logger *zap.Logger, cfg *config.Config) *ProviderAdapter
 		if logger != nil {
 			logger.Error("创建 OpenAI ChatModel 失败", zap.Error(err))
 		}
-		return nil
+		return nil, fmt.Errorf("%w: %w", ErrCreateChatModel, err)
 	}
 
 	return &ProviderAdapter{
 		logger:        logger,
 		chatModel:     chatModel,
 		registeredMap: make(map[string]bool),
-	}
+	}, nil
 }
 
 // SetSkillLoader 设置技能加载器

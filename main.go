@@ -131,17 +131,17 @@ func runAgent(cmd *cobra.Command, args []string) {
 		execTimeout = 120
 	}
 
-	loop := agent.NewLoop(
-		cfg,
-		messageBus,
-		workspacePath,
-		maxIter,
-		execTimeout,
-		cfg.Tools.RestrictToWorkspace,
-		nil,
-		sessionManager,
-		logger,
-	)
+	loop := agent.NewLoop(&agent.LoopConfig{
+		Config:              cfg,
+		MessageBus:          messageBus,
+		Workspace:           workspacePath,
+		MaxIterations:       maxIter,
+		ExecTimeout:         execTimeout,
+		RestrictToWorkspace: cfg.Tools.RestrictToWorkspace,
+		CronService:         nil,
+		SessionManager:      sessionManager,
+		Logger:              logger,
+	})
 
 	ctx := context.Background()
 	if agentMessage != "" {
@@ -231,17 +231,17 @@ func runGateway(cmd *cobra.Command, args []string) {
 	callbacks := eino_adapter.NewEinoCallbacks(true, logger)
 	eino_adapter.RegisterGlobalCallbacks(callbacks)
 
-	loop := agent.NewLoop(
-		cfg,
-		messageBus,
-		workspacePath,
-		maxIter,
-		execTimeout,
-		cfg.Tools.RestrictToWorkspace,
-		cronService,
-		sessionManager,
-		logger,
-	)
+	loop := agent.NewLoop(&agent.LoopConfig{
+		Config:              cfg,
+		MessageBus:          messageBus,
+		Workspace:           workspacePath,
+		MaxIterations:       maxIter,
+		ExecTimeout:         execTimeout,
+		RestrictToWorkspace: cfg.Tools.RestrictToWorkspace,
+		CronService:         cronService,
+		SessionManager:      sessionManager,
+		Logger:              logger,
+	})
 
 	ctx := context.Background()
 

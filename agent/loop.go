@@ -43,40 +43,51 @@ type Loop struct {
 	running             bool
 	logger              *zap.Logger
 
-	// 中断管理
 	interruptManager *InterruptManager
-
-	// Supervisor 入口 Agent（新增）
-	supervisor *SupervisorAgent
-
-	// 是否启用 Supervisor 模式
+	supervisor       *SupervisorAgent
 	enableSupervisor bool
 }
 
+// LoopConfig Loop 配置
+type LoopConfig struct {
+	Config             *config.Config
+	MessageBus         *bus.MessageBus
+	Workspace          string
+	MaxIterations      int
+	ExecTimeout        int
+	RestrictToWorkspace bool
+	CronService        *cron.Service
+	SessionManager     *session.Manager
+	Logger             *zap.Logger
+}
+
 // NewLoop 创建代理循环
-func NewLoop(cfg *config.Config, messageBus *bus.MessageBus, workspace string, maxIterations int, execTimeout int, restrictToWorkspace bool, cronService *cron.Service, sessionManager *session.Manager, logger *zap.Logger) *Loop {
+func NewLoop(cfg *LoopConfig) *Loop {
+	if cfg == nil {
+		return nil
+	}
+
+	logger := cfg.Logger
 	if logger == nil {
 		logger = zap.NewNop()
 	}
 
 	loop := &Loop{
-		bus:                 messageBus,
-		cfg:                 cfg,
-		workspace:           workspace,
-		maxIterations:       maxIterations,
-		execTimeout:         execTimeout,
-		restrictToWorkspace: restrictToWorkspace,
-		cronService:         cronService,
-		context:             NewContextBuilder(workspace),
-		sessions:            sessionManager,
+		bus:                 cfg.MessageBus,
+		cfg:                 cfg.Config,
+		workspace:           cfg.Workspace,
+		maxIterations:       cfg.MaxIterations,
+		execTimeout:         cfg.ExecTimeout,
+		restrictToWorkspace: cfg.RestrictToWorkspace,
+		cronService:         cfg.CronService,
+		context:             NewContextBuilder(cfg.Workspace),
+		sessions:            cfg.SessionManager,
 		tools:               tools.NewRegistry(),
 		logger:              logger,
 	}
 
-	// 创建中断管理器
-	loop.interruptManager = NewInterruptManager(messageBus, logger)
+	loop.interruptManager = NewInterruptManager(cfg.MessageBus, logger)
 
-	// 注册默认工具
 	loop.registerDefaultTools()
 
 	registeredTools := loop.GetTools()
@@ -94,29 +105,30 @@ func NewLoop(cfg *config.Config, messageBus *bus.MessageBus, workspace string, m
 		zap.Strings("工具列表", toolNames),
 	)
 
-	// 创建 ADK Agent
 	ctx := context.Background()
-	adapter := eino_adapter.NewProviderAdapter(logger, loop.cfg)
+	adapter, err := eino_adapter.NewProviderAdapter(logger, loop.cfg)
+	if err != nil {
+		logger.Error("创建 Provider 适配器失败", zap.Error(err))
+		return loop
+	}
 
-	// 配置适配器：设置技能加载器和已注册工具列表
 	adapter.SetSkillLoader(loop.context.GetSkillsLoader().LoadSkill)
 	adapter.SetRegisteredTools(toolNames)
 
 	adkTools := loop.tools.GetADKTools()
 
-	// 创建 Supervisor Agent（入口型 Agent）
 	supervisor, err := NewSupervisorAgent(ctx, &SupervisorConfig{
 		Cfg:             loop.cfg,
 		Workspace:       loop.workspace,
 		Tools:           adkTools,
 		Logger:          logger,
-		Sessions:        sessionManager,
-		Bus:             messageBus,
-		Context:         loop.context, // 传入上下文构建器，复用基础系统提示词
+		Sessions:        cfg.SessionManager,
+		Bus:             cfg.MessageBus,
+		Context:         loop.context,
 		InterruptMgr:    loop.interruptManager,
 		CheckpointStore: loop.interruptManager.GetCheckpointStore(),
-		MaxIterations:   maxIterations,
-		RegisteredTools: toolNames, // 传入已注册的工具名称列表
+		MaxIterations:   cfg.MaxIterations,
+		RegisteredTools: toolNames,
 	})
 	if err != nil {
 		logger.Error("创建 Supervisor Agent 失败，将使用传统模式", zap.Error(err))

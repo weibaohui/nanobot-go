@@ -44,7 +44,7 @@ type PlanConfig struct {
 // NewPlanSubAgent 创建 Plan 子 Agent
 func NewPlanSubAgent(ctx context.Context, cfg *PlanConfig) (*PlanSubAgent, error) {
 	if cfg == nil {
-		return nil, fmt.Errorf("配置不能为空")
+		return nil, ErrConfigNil
 	}
 
 	logger := cfg.Logger
@@ -57,10 +57,11 @@ func NewPlanSubAgent(ctx context.Context, cfg *PlanConfig) (*PlanSubAgent, error
 		maxIter = 20
 	}
 
-	// 创建 Provider 适配器
-	adapter := eino_adapter.NewProviderAdapter(logger, cfg.Cfg)
+	adapter, err := eino_adapter.NewProviderAdapter(logger, cfg.Cfg)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrProviderAdapter, err)
+	}
 
-	// 配置技能加载器和已注册工具
 	if cfg.SkillsLoader != nil {
 		adapter.SetSkillLoader(cfg.SkillsLoader)
 	}
@@ -68,15 +69,13 @@ func NewPlanSubAgent(ctx context.Context, cfg *PlanConfig) (*PlanSubAgent, error
 		adapter.SetRegisteredTools(cfg.RegisteredTools)
 	}
 
-	// 创建 Planner
 	planner, err := planexecute.NewPlanner(ctx, &planexecute.PlannerConfig{
 		ToolCallingChatModel: adapter,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("创建 Planner 失败: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrPlannerCreate, err)
 	}
 
-	// 收集工具描述
 	var toolDescriptions []string
 	var toolInfos []*schema.ToolInfo
 	for _, t := range cfg.Tools {
@@ -87,10 +86,6 @@ func NewPlanSubAgent(ctx context.Context, cfg *PlanConfig) (*PlanSubAgent, error
 		}
 	}
 
-	//打印工具数量
-	// logger.Info("PlanSubAgent createSubAgents tools数量", zap.Int("tools_count", len(toolInfos)))
-
-	// 绑定工具到适配器
 	var executorModel model.ToolCallingChatModel = adapter
 	if len(toolInfos) > 0 {
 		boundModel, err := adapter.WithTools(toolInfos)
@@ -101,7 +96,6 @@ func NewPlanSubAgent(ctx context.Context, cfg *PlanConfig) (*PlanSubAgent, error
 		}
 	}
 
-	// 创建 Executor
 	var toolsConfig adk.ToolsConfig
 	if len(cfg.Tools) > 0 {
 		toolsConfig = adk.ToolsConfig{
@@ -117,18 +111,16 @@ func NewPlanSubAgent(ctx context.Context, cfg *PlanConfig) (*PlanSubAgent, error
 		GenInputFn:  buildExecutorInputFn(cfg.Workspace, toolDescriptions, logger),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("创建 Executor 失败: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrExecutorCreate, err)
 	}
 
-	// 创建 Replanner
 	replanner, err := planexecute.NewReplanner(ctx, &planexecute.ReplannerConfig{
 		ChatModel: adapter,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("创建 Replanner 失败: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrReplannerCreate, err)
 	}
 
-	// 创建 Plan-Execute-Replan Agent
 	peAgent, err := planexecute.New(ctx, &planexecute.Config{
 		Planner:       planner,
 		Executor:      executor,
@@ -136,7 +128,7 @@ func NewPlanSubAgent(ctx context.Context, cfg *PlanConfig) (*PlanSubAgent, error
 		MaxIterations: maxIter,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("创建 Plan Agent 失败: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrAgentCreate, err)
 	}
 
 	// 包装为有名称的 Agent

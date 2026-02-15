@@ -41,7 +41,7 @@ type ReActConfig struct {
 // NewReActSubAgent 创建 ReAct 子 Agent
 func NewReActSubAgent(ctx context.Context, cfg *ReActConfig) (*ReActSubAgent, error) {
 	if cfg == nil {
-		return nil, fmt.Errorf("配置不能为空")
+		return nil, ErrConfigNil
 	}
 
 	logger := cfg.Logger
@@ -54,10 +54,11 @@ func NewReActSubAgent(ctx context.Context, cfg *ReActConfig) (*ReActSubAgent, er
 		maxIter = 15
 	}
 
-	// 创建 Provider 适配器
-	adapter := eino_adapter.NewProviderAdapter(logger, cfg.Cfg)
+	adapter, err := eino_adapter.NewProviderAdapter(logger, cfg.Cfg)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrProviderAdapter, err)
+	}
 
-	// 配置技能加载器和已注册工具
 	if cfg.SkillsLoader != nil {
 		adapter.SetSkillLoader(cfg.SkillsLoader)
 	}
@@ -65,7 +66,6 @@ func NewReActSubAgent(ctx context.Context, cfg *ReActConfig) (*ReActSubAgent, er
 		adapter.SetRegisteredTools(cfg.RegisteredTools)
 	}
 
-	// 配置工具
 	var toolsConfig adk.ToolsConfig
 	if len(cfg.Tools) > 0 {
 		toolsConfig = adk.ToolsConfig{
@@ -75,7 +75,6 @@ func NewReActSubAgent(ctx context.Context, cfg *ReActConfig) (*ReActSubAgent, er
 		}
 	}
 
-	// 创建 ADK ChatModel Agent
 	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
 		Name:          "react_agent",
 		Description:   "ReAct 模式 Agent，用于工具调用、推理和长对话",
@@ -85,10 +84,9 @@ func NewReActSubAgent(ctx context.Context, cfg *ReActConfig) (*ReActSubAgent, er
 		MaxIterations: maxIter,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("创建 ReAct Agent 失败: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrAgentCreate, err)
 	}
 
-	// 创建 Runner
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{
 		Agent:           agent,
 		EnableStreaming: true,

@@ -19,18 +19,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// SubAgent 子 Agent 接口
-type SubAgent interface {
-	// Name 返回 Agent 名称
-	Name() string
-	// Description 返回 Agent 描述
-	Description() string
-	// Type 返回 Agent 类型
-	Type() AgentType
-	// GetADKAgent 返回底层的 ADK Agent
-	GetADKAgent() adk.Agent
-}
-
 // SupervisorAgent 监督者 Agent
 // 作为统一入口，根据用户输入自动路由到合适的子 Agent
 type SupervisorAgent struct {
@@ -40,24 +28,19 @@ type SupervisorAgent struct {
 	logger    *zap.Logger
 	sessions  *session.Manager
 	bus       *bus.MessageBus
-	context   *ContextBuilder // 上下文构建器，用于复用基础系统提示词
+	context   *ContextBuilder
 
-	// 子 Agent
 	reactAgent SubAgent
 	planAgent  SubAgent
 	chatAgent  SubAgent
 
-	// ADK Supervisor
 	adkSupervisor adk.Agent
 	adkRunner     *adk.Runner
 
-	// 中断管理
 	interruptManager *InterruptManager
 	checkpointStore  compose.CheckPointStore
-
-	// 配置
-	maxIterations   int
-	registeredTools []string // 已注册的工具名称列表
+	maxIterations    int
+	registeredTools  []string
 }
 
 // SupervisorConfig Supervisor 配置
@@ -79,7 +62,7 @@ type SupervisorConfig struct {
 // NewSupervisorAgent 创建 Supervisor Agent
 func NewSupervisorAgent(ctx context.Context, cfg *SupervisorConfig) (*SupervisorAgent, error) {
 	if cfg == nil {
-		return nil, fmt.Errorf("配置不能为空")
+		return nil, ErrConfigNil
 	}
 
 	logger := cfg.Logger
@@ -106,14 +89,12 @@ func NewSupervisorAgent(ctx context.Context, cfg *SupervisorConfig) (*Supervisor
 		registeredTools:  cfg.RegisteredTools,
 	}
 
-	// 创建子 Agent
-	if err := sa.createSubAgents(ctx); err != nil {
-		return nil, fmt.Errorf("创建子 Agent 失败: %w", err)
+	if err := sa.initSubAgents(ctx); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrSubAgentCreate, err)
 	}
 
-	// 创建 ADK Supervisor
-	if err := sa.createADKSupervisor(ctx); err != nil {
-		return nil, fmt.Errorf("创建 ADK Supervisor 失败: %w", err)
+	if err := sa.initSupervisor(ctx); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrSupervisorInit, err)
 	}
 
 	logger.Info("Supervisor Agent 创建成功",
@@ -124,17 +105,15 @@ func NewSupervisorAgent(ctx context.Context, cfg *SupervisorConfig) (*Supervisor
 	return sa, nil
 }
 
-// createSubAgents 创建子 Agent
-func (sa *SupervisorAgent) createSubAgents(ctx context.Context) error {
+// initSubAgents 创建子 Agent
+func (sa *SupervisorAgent) initSubAgents(ctx context.Context) error {
 	var err error
 
-	// 获取技能加载器
 	var skillsLoader func(skillName string) string
 	if sa.context != nil {
 		skillsLoader = sa.context.GetSkillsLoader().LoadSkill
 	}
 
-	// 创建 ReAct Agent
 	sa.reactAgent, err = NewReActSubAgent(ctx, &ReActConfig{
 		Cfg:             sa.cfg,
 		Workspace:       sa.workspace,
@@ -148,8 +127,7 @@ func (sa *SupervisorAgent) createSubAgents(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("创建 ReAct Agent 失败: %w", err)
 	}
-	// sa.logger.Info("SupervisorAgent createSubAgents tools数量", zap.Int("tools_count", len(sa.tools)))
-	// 创建 Plan Agent
+
 	sa.planAgent, err = NewPlanSubAgent(ctx, &PlanConfig{
 		Cfg:             sa.cfg,
 		Workspace:       sa.workspace,
@@ -180,12 +158,13 @@ func (sa *SupervisorAgent) createSubAgents(ctx context.Context) error {
 	return nil
 }
 
-// createADKSupervisor 创建 ADK Supervisor
-func (sa *SupervisorAgent) createADKSupervisor(ctx context.Context) error {
-	// 创建 Supervisor 的 ChatModel
-	adapter := eino_adapter.NewProviderAdapter(sa.logger, sa.cfg)
+// initSupervisor 创建 ADK Supervisor
+func (sa *SupervisorAgent) initSupervisor(ctx context.Context) error {
+	adapter, err := eino_adapter.NewProviderAdapter(sa.logger, sa.cfg)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrProviderAdapter, err)
+	}
 
-	// 创建 Supervisor Agent
 	svAgent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
 		Name:        "supervisor",
 		Description: "统一入口 Agent，负责路由用户请求到合适的子 Agent",
@@ -194,10 +173,9 @@ func (sa *SupervisorAgent) createADKSupervisor(ctx context.Context) error {
 		Exit:        &adk.ExitTool{},
 	})
 	if err != nil {
-		return fmt.Errorf("创建 Supervisor Agent 失败: %w", err)
+		return fmt.Errorf("%w: %w", ErrAgentCreate, err)
 	}
 
-	// 使用 supervisor prebuilt 创建编排
 	sv, err := supervisor.New(ctx, &supervisor.Config{
 		Supervisor: svAgent,
 		SubAgents: []adk.Agent{
@@ -207,12 +185,11 @@ func (sa *SupervisorAgent) createADKSupervisor(ctx context.Context) error {
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("创建 Supervisor 编排失败: %w", err)
+		return fmt.Errorf("%w: %w", ErrSupervisorCreate, err)
 	}
 
 	sa.adkSupervisor = sv
 
-	// 创建 Runner
 	sa.adkRunner = adk.NewRunner(ctx, adk.RunnerConfig{
 		Agent:           sv,
 		CheckPointStore: sa.checkpointStore,
