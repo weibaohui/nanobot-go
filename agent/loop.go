@@ -44,6 +44,7 @@ type Loop struct {
 
 	interruptManager *InterruptManager
 	supervisor       *SupervisorAgent
+	masterAgent      *MasterAgent
 	enableSupervisor bool
 }
 
@@ -126,6 +127,25 @@ func NewLoop(cfg *LoopConfig) *Loop {
 		loop.supervisor = supervisor
 		loop.enableSupervisor = true
 		logger.Info("Supervisor Agent 创建成功，已启用入口型 Agent 模式")
+	}
+
+	masterAgent, err := NewMasterAgent(ctx, &MasterAgentConfig{
+		Cfg:             loop.cfg,
+		Workspace:       loop.workspace,
+		Tools:           adkTools,
+		Logger:          logger,
+		Sessions:        cfg.SessionManager,
+		Bus:             cfg.MessageBus,
+		Context:         loop.context,
+		InterruptMgr:    loop.interruptManager,
+		CheckpointStore: loop.interruptManager.GetCheckpointStore(),
+		MaxIterations:   cfg.MaxIterations,
+		RegisteredTools: toolNames,
+	})
+	if err != nil {
+		logger.Error("创建 Master Agent 失败，将使用传统模式", zap.Error(err))
+	} else {
+		loop.masterAgent = masterAgent
 	}
 
 	return loop
@@ -272,6 +292,21 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 
 	// 更新工具上下文
 	l.updateToolContext(msg.Channel, msg.ChatID)
+
+	l.logger.Info("使用 Master Agent 处理消息")
+	response, err := l.masterAgent.Process(ctx, msg)
+
+	if err != nil {
+		// 检查是否是中断
+		if isInterruptError(err) {
+			return nil
+		}
+		return fmt.Errorf("Master Agent 处理失败: %w", err)
+	}
+
+	// 发布响应
+	l.bus.PublishOutbound(bus.NewOutboundMessage(msg.Channel, msg.ChatID, response))
+	return nil
 
 	// 优先使用 Supervisor Agent 处理消息
 	if l.enableSupervisor && l.supervisor != nil {

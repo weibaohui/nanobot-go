@@ -35,7 +35,7 @@ func (c *ContextBuilder) GetSkillsLoader() *SkillsLoader {
 }
 
 // BuildSystemPrompt 构建系统提示
-func (c *ContextBuilder) BuildSystemPrompt(skillNames []string) string {
+func (c *ContextBuilder) BuildSystemPrompt() string {
 	var parts []string
 
 	// 核心身份
@@ -138,7 +138,7 @@ func (c *ContextBuilder) BuildMessages(history []map[string]any, currentMessage 
 	var messages []map[string]any
 
 	// 系统提示
-	systemPrompt := c.BuildSystemPrompt(skillNames)
+	systemPrompt := c.BuildSystemPrompt()
 	if channel != "" && chatID != "" {
 		systemPrompt += fmt.Sprintf("\n\n## 当前会话\n渠道: %s\n聊天 ID: %s", channel, chatID)
 	}

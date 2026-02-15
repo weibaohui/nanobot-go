@@ -25,6 +25,7 @@ type ChatSubAgent struct {
 // ChatConfig Chat Agent 配置
 type ChatConfig struct {
 	Cfg             *config.Config
+	Workspace       string
 	Tools           []tool.BaseTool
 	Logger          *zap.Logger
 	CheckpointStore compose.CheckPointStore
