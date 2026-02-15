@@ -8,7 +8,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
-	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/weibaohui/nanobot-go/agent"
@@ -152,13 +151,12 @@ func runGateway(cmd *cobra.Command, args []string) {
 
 	// 创建并启动心跳服务
 	heartbeatService := heartbeat.NewService(
+		logger,
+		cfg,
 		workspacePath,
 		func(ctx context.Context, prompt string) (string, error) {
 			return "// TODO 待实现", nil
 		},
-		time.Duration(cfg.Heartbeat.Interval)*time.Second, // 使用配置中的间隔
-		true, // 启用心跳
-		logger,
 	)
 	if err := heartbeatService.Start(ctx); err != nil {
 		logger.Error("启动心跳服务失败", zap.Error(err))

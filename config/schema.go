@@ -17,8 +17,20 @@ type Config struct {
 
 // HeartbeatConfig 心跳配置
 type HeartbeatConfig struct {
-	Enabled  bool `json:"enabled"`
-	Interval int  `json:"interval"` // 心跳间隔，单位秒
+	Every       string      `json:"every,omitempty"`       // 心跳间隔，支持 "30m"/"1h" 或 cron 表达式
+	ActiveHours ActiveHours `json:"activeHours,omitempty"` // 活跃时段配置
+	Model       string      `json:"model,omitempty"`       // 心跳专用模型
+	Session     string      `json:"session,omitempty"`     // 心跳会话键
+	Target      string      `json:"target,omitempty"`      // 心跳目标: "last"/"none" 或 ChannelId
+	Prompt      string      `json:"prompt,omitempty"`      // 心跳提示词
+	AckMaxChars int         `json:"ackMaxChars,omitempty"` // 确认消息最大字符数
+}
+
+// ActiveHours 活跃时段配置
+type ActiveHours struct {
+	Start    string `json:"start,omitempty"`    // 活跃开始时间，如 "09:00"
+	End      string `json:"end,omitempty"`      // 活跃结束时间，如 "18:00"
+	Timezone string `json:"timezone,omitempty"` // 时区，如 "Asia/Shanghai"
 }
 
 // AgentsConfig 代理配置
@@ -169,6 +181,10 @@ func DefaultConfig() *Config {
 			Exec: ExecToolConfig{
 				Timeout: 60,
 			},
+		},
+		Heartbeat: HeartbeatConfig{
+			Every:       "30m",
+			ActiveHours: ActiveHours{Start: "09:00", End: "18:00"},
 		},
 	}
 }

@@ -2,17 +2,16 @@ package heartbeat
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
-	"time"
 
+	"github.com/robfig/cron/v3"
+	"github.com/weibaohui/nanobot-go/config"
 	"go.uber.org/zap"
 )
 
 const (
-	// DefaultHeartbeatInterval 默认心跳间隔（30分钟）
-	DefaultHeartbeatInterval = 30 * time.Minute
-
 	// HeartbeatPrompt 心跳时发送给代理的提示
 	HeartbeatPrompt = `Read HEARTBEAT.md in your workspace (if it exists).
 Follow any instructions or tasks listed there.
@@ -27,29 +26,24 @@ type HeartbeatCallback func(ctx context.Context, prompt string) (string, error)
 
 // Service 心跳服务
 type Service struct {
+	cfg         *config.Config
 	workspace   string
 	onHeartbeat HeartbeatCallback
-	interval    time.Duration
-	enabled     bool
-	running     bool
-	stopChan    chan struct{}
+	cron        *cron.Cron
+	jobID       cron.EntryID
 	logger      *zap.Logger
 }
 
 // NewService 创建心跳服务
-func NewService(workspace string, onHeartbeat HeartbeatCallback, interval time.Duration, enabled bool, logger *zap.Logger) *Service {
+func NewService(logger *zap.Logger, cfg *config.Config, workspace string, onHeartbeat HeartbeatCallback) *Service {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
-	if interval == 0 {
-		interval = DefaultHeartbeatInterval
-	}
+
 	return &Service{
 		workspace:   workspace,
 		onHeartbeat: onHeartbeat,
-		interval:    interval,
-		enabled:     enabled,
-		stopChan:    make(chan struct{}),
+		cron:        cron.New(),
 		logger:      logger,
 	}
 }
@@ -100,41 +94,34 @@ func isHeartbeatEmpty(content string) bool {
 
 // Start 启动心跳服务
 func (s *Service) Start(ctx context.Context) error {
-	if !s.enabled {
-		s.logger.Info("心跳服务已禁用")
-		return nil
+	// 获取心跳间隔，默认30分钟
+	every := s.cfg.Heartbeat.Every
+	if every == "" {
+		every = "30m"
 	}
 
-	s.running = true
-	go s.runLoop(ctx)
+	// 使用 cron 的 @every 语法创建定时任务
+	everySpec := fmt.Sprintf("@every %s", every)
 
-	s.logger.Info("心跳服务已启动", zap.Duration("间隔", s.interval))
+	jobID, err := s.cron.AddFunc(everySpec, func() {
+		s.tick(ctx)
+	})
+	if err != nil {
+		s.logger.Error("添加心跳定时任务失败", zap.Error(err))
+		return err
+	}
+	s.jobID = jobID
+
+	s.cron.Start()
+	s.logger.Info("心跳服务已启动", zap.String("间隔", every), zap.Int("任务ID", int(s.jobID)))
 	return nil
 }
 
 // Stop 停止心跳服务
 func (s *Service) Stop() {
-	s.running = false
-	close(s.stopChan)
-	s.logger.Info("心跳服务已停止")
-}
-
-// runLoop 主心跳循环
-func (s *Service) runLoop(ctx context.Context) {
-	ticker := time.NewTicker(s.interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-s.stopChan:
-			return
-		case <-ticker.C:
-			if s.running {
-				s.tick(ctx)
-			}
-		}
+	if s.cron != nil {
+		s.cron.Stop()
+		s.logger.Info("心跳服务已停止")
 	}
 }
 
@@ -178,5 +165,5 @@ func (s *Service) TriggerNow(ctx context.Context) (string, error) {
 
 // IsRunning 检查服务是否运行中
 func (s *Service) IsRunning() bool {
-	return s.running
+	return s.cron != nil && len(s.cron.Entries()) > 0
 }
