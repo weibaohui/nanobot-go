@@ -369,17 +369,8 @@ func (l *Loop) ResumeExecution(ctx context.Context, checkpointID, interruptID st
 		ChatID:  chatID,
 	}
 
-	// 根据中断类型选择恢复方式
-	if isSupervisor {
-		// Supervisor 模式的中断恢复
-		if l.supervisor == nil {
-			return "", fmt.Errorf("Supervisor Agent 未初始化")
-		}
-		return l.supervisor.Resume(ctx, checkpointID, resumeParams, msg)
-	}
+	return l.masterAgent.Resume(ctx, checkpointID, resumeParams, msg)
 
-	// 非 Supervisor 模式暂未支持
-	return "", fmt.Errorf("非 Supervisor 模式暂未实现，当前仅支持 Supervisor 模式的中断恢复")
 }
 
 // GetInterruptManager 获取中断管理器
