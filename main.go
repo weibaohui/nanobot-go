@@ -164,6 +164,10 @@ func runGateway(cmd *cobra.Command, args []string) {
 				logger.Error("处理心跳消息失败", zap.Error(err))
 				return "", err
 			}
+			messageBus.PublishOutbound(&bus.OutboundMessage{
+				Channel: "heartbeat",
+				Content: resp,
+			})
 			return resp, nil
 		},
 	)

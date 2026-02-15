@@ -159,6 +159,14 @@ func (c *MatrixChannel) Start(ctx context.Context) error {
 		}
 	})
 
+	// 订阅心跳消息
+	c.bus.SubscribeOutbound("heartbeat", func(msg *bus.OutboundMessage) error {
+		if err := c.Send(msg); err != nil {
+			c.logger.Error("发送 Matrix 心跳消息失败", zap.Error(err))
+		}
+		return nil
+	})
+
 	c.logger.Info("Matrix 渠道已启动",
 		zap.String("homeserver", c.config.Homeserver),
 		zap.String("user_id", string(userID)),
