@@ -25,29 +25,11 @@ const (
 	TaskStopped  TaskStatus = "stopped"
 )
 
-type TaskContext struct {
-	SessionKey string
-	Channel    string
-	ChatID     string
-}
-
 type TaskInfo struct {
 	ID            string
 	Status        TaskStatus
 	LastLogs      []string
 	ResultSummary string
-}
-
-// AgentTaskManagerInterface 任务管理器接口
-type AgentTaskManagerInterface interface {
-	// StartTask 创建后台任务并返回任务 ID
-	StartTask(ctx context.Context, work string, taskCtx TaskContext) (string, TaskStatus, error)
-	// GetTask 查询任务状态与最近日志
-	GetTask(taskID string, requesterKey string) (*TaskInfo, error)
-	// StopTask 停止后台任务并返回是否成功
-	StopTask(taskID string, requesterKey string) (bool, TaskStatus, error)
-	// ListTasks 获取任务列表
-	ListTasks(requesterKey string) ([]*TaskInfo, error)
 }
 
 type AgentTaskManagerConfig struct {
@@ -85,7 +67,6 @@ type AgentTaskManager struct {
 
 type AgentTask struct {
 	id            string
-	ownerKey      string
 	work          string
 	status        TaskStatus
 	result        string
@@ -143,7 +124,7 @@ func (m *AgentTaskManager) SetRegisteredTools(names []string) {
 	m.registeredTools = append([]string(nil), names...)
 }
 
-func (m *AgentTaskManager) StartTask(ctx context.Context, work string, taskCtx TaskContext) (string, TaskStatus, error) {
+func (m *AgentTaskManager) StartTask(ctx context.Context, work, channel, chatID string) (string, TaskStatus, error) {
 	if work == "" {
 		return "", "", fmt.Errorf("任务内容不能为空")
 	}
@@ -154,7 +135,6 @@ func (m *AgentTaskManager) StartTask(ctx context.Context, work string, taskCtx T
 	taskID := uuid.NewString()
 	task := &AgentTask{
 		id:          taskID,
-		ownerKey:    taskCtx.SessionKey,
 		work:        work,
 		status:      TaskPending,
 		logCapacity: m.logCapacity,
@@ -166,19 +146,17 @@ func (m *AgentTaskManager) StartTask(ctx context.Context, work string, taskCtx T
 	m.tasks[taskID] = task
 	m.mu.Unlock()
 
-	go m.runTask(ctx, task, taskCtx)
+	go m.runTask(ctx, task, channel, chatID)
 
 	return taskID, TaskRunning, nil
 }
 
-func (m *AgentTaskManager) GetTask(taskID string, requesterKey string) (*TaskInfo, error) {
+func (m *AgentTaskManager) GetTask(taskID string) (*TaskInfo, error) {
 	task := m.getTask(taskID)
 	if task == nil {
 		return nil, fmt.Errorf("任务不存在")
 	}
-	if !task.isOwner(requesterKey) {
-		return nil, fmt.Errorf("无权限访问任务")
-	}
+
 	task.mu.Lock()
 	defer task.mu.Unlock()
 	return &TaskInfo{
@@ -189,14 +167,12 @@ func (m *AgentTaskManager) GetTask(taskID string, requesterKey string) (*TaskInf
 	}, nil
 }
 
-func (m *AgentTaskManager) StopTask(taskID string, requesterKey string) (bool, TaskStatus, error) {
+func (m *AgentTaskManager) StopTask(taskID string) (bool, TaskStatus, error) {
 	task := m.getTask(taskID)
 	if task == nil {
 		return false, "", fmt.Errorf("任务不存在")
 	}
-	if !task.isOwner(requesterKey) {
-		return false, "", fmt.Errorf("无权限访问任务")
-	}
+
 	task.mu.Lock()
 	defer task.mu.Unlock()
 	switch task.status {
@@ -213,18 +189,12 @@ func (m *AgentTaskManager) StopTask(taskID string, requesterKey string) (bool, T
 	}
 }
 
-// ListTasks 获取任务列表
-func (m *AgentTaskManager) ListTasks(requesterKey string) ([]*TaskInfo, error) {
-	if requesterKey == "" {
-		return nil, fmt.Errorf("请求方标识不能为空")
-	}
+// ListTasks 获取所有任务列表
+func (m *AgentTaskManager) ListTasks() ([]*TaskInfo, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	results := make([]*TaskInfo, 0, len(m.tasks))
 	for _, task := range m.tasks {
-		if !task.isOwner(requesterKey) {
-			continue
-		}
 		task.mu.Lock()
 		info := &TaskInfo{
 			ID:            task.id,
@@ -238,8 +208,7 @@ func (m *AgentTaskManager) ListTasks(requesterKey string) ([]*TaskInfo, error) {
 	return results, nil
 }
 
-func (m *AgentTaskManager) runTask(ctx context.Context, task *AgentTask, taskCtx TaskContext) {
-	taskCtxLocal := taskCtx
+func (m *AgentTaskManager) runTask(ctx context.Context, task *AgentTask, channel, chatID string) {
 	execCtx, cancel := m.buildTaskContext(ctx)
 	task.mu.Lock()
 	task.cancel = cancel
@@ -247,7 +216,7 @@ func (m *AgentTaskManager) runTask(ctx context.Context, task *AgentTask, taskCtx
 	task.appendLog("任务启动")
 	task.mu.Unlock()
 
-	result, err := m.executeTask(execCtx, task.work, taskCtxLocal)
+	result, err := m.executeTask(execCtx, task.work, channel, chatID)
 	task.mu.Lock()
 	defer task.mu.Unlock()
 	if task.stopRequested || execCtx.Err() == context.Canceled {
@@ -267,7 +236,7 @@ func (m *AgentTaskManager) runTask(ctx context.Context, task *AgentTask, taskCtx
 	close(task.done)
 }
 
-func (m *AgentTaskManager) executeTask(ctx context.Context, work string, taskCtx TaskContext) (string, error) {
+func (m *AgentTaskManager) executeTask(ctx context.Context, work, channel, chatID string) (string, error) {
 	adapter, err := NewChatModelAdapter(m.logger, m.cfg)
 	if err != nil {
 		return "", err
@@ -307,7 +276,7 @@ func (m *AgentTaskManager) executeTask(ctx context.Context, work string, taskCtx
 	if m.context != nil {
 		systemPrompt = m.context.BuildSystemPrompt()
 	}
-	messages := BuildMessageList(systemPrompt, nil, work, taskCtx.Channel, taskCtx.ChatID)
+	messages := BuildMessageList(systemPrompt, nil, work, channel, chatID)
 	iter := runner.Run(ctx, messages)
 
 	var response string
@@ -374,13 +343,6 @@ func (t *AgentTask) appendLog(message string) {
 	t.lastLogs = append(t.lastLogs, entry)
 }
 
-func (t *AgentTask) isOwner(requesterKey string) bool {
-	if t.ownerKey == "" {
-		return requesterKey == ""
-	}
-	return requesterKey != "" && requesterKey == t.ownerKey
-}
-
 // TaskManagerAdapter 任务管理器工具适配器
 type TaskManagerAdapter struct {
 	manager *AgentTaskManager
@@ -392,24 +354,20 @@ func NewTaskManagerAdapter(manager *AgentTaskManager) *TaskManagerAdapter {
 }
 
 // StartTask 启动任务并返回任务ID与状态
-func (a *TaskManagerAdapter) StartTask(ctx context.Context, work, sessionKey, channel, chatID string) (string, string, error) {
+func (a *TaskManagerAdapter) StartTask(ctx context.Context, work, channel, chatID string) (string, string, error) {
 	if a.manager == nil {
 		return "", "", fmt.Errorf("任务管理器未初始化")
 	}
-	taskID, status, err := a.manager.StartTask(ctx, work, TaskContext{
-		SessionKey: sessionKey,
-		Channel:    channel,
-		ChatID:     chatID,
-	})
+	taskID, status, err := a.manager.StartTask(ctx, work, channel, chatID)
 	return taskID, string(status), err
 }
 
 // GetTask 查询任务信息
-func (a *TaskManagerAdapter) GetTask(ctx context.Context, taskID, requesterKey string) (*tasktools.TaskInfo, error) {
+func (a *TaskManagerAdapter) GetTask(ctx context.Context, taskID string) (*tasktools.TaskInfo, error) {
 	if a.manager == nil {
 		return nil, fmt.Errorf("任务管理器未初始化")
 	}
-	info, err := a.manager.GetTask(taskID, requesterKey)
+	info, err := a.manager.GetTask(taskID)
 	if err != nil {
 		return nil, err
 	}
@@ -422,20 +380,20 @@ func (a *TaskManagerAdapter) GetTask(ctx context.Context, taskID, requesterKey s
 }
 
 // StopTask 停止任务并返回结果
-func (a *TaskManagerAdapter) StopTask(ctx context.Context, taskID, requesterKey string) (bool, string, error) {
+func (a *TaskManagerAdapter) StopTask(ctx context.Context, taskID string) (bool, string, error) {
 	if a.manager == nil {
 		return false, "", fmt.Errorf("任务管理器未初始化")
 	}
-	stopped, status, err := a.manager.StopTask(taskID, requesterKey)
+	stopped, status, err := a.manager.StopTask(taskID)
 	return stopped, string(status), err
 }
 
 // ListTasks 获取任务列表
-func (a *TaskManagerAdapter) ListTasks(ctx context.Context, requesterKey string) ([]*tasktools.TaskInfo, error) {
+func (a *TaskManagerAdapter) ListTasks() ([]*tasktools.TaskInfo, error) {
 	if a.manager == nil {
 		return nil, fmt.Errorf("任务管理器未初始化")
 	}
-	items, err := a.manager.ListTasks(requesterKey)
+	items, err := a.manager.ListTasks()
 	if err != nil {
 		return nil, err
 	}

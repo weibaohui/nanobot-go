@@ -20,10 +20,10 @@ type TaskInfo struct {
 
 // Manager 任务管理器接口
 type Manager interface {
-	StartTask(ctx context.Context, work, sessionKey, channel, chatID string) (string, string, error)
-	GetTask(ctx context.Context, taskID, requesterKey string) (*TaskInfo, error)
-	StopTask(ctx context.Context, taskID, requesterKey string) (bool, string, error)
-	ListTasks(ctx context.Context, requesterKey string) ([]*TaskInfo, error)
+	StartTask(ctx context.Context, work, channel, chatID string) (string, string, error)
+	GetTask(ctx context.Context, taskID string) (*TaskInfo, error)
+	StopTask(ctx context.Context, taskID string) (bool, string, error)
+	ListTasks() ([]*TaskInfo, error)
 }
 
 // StartTool 后台任务创建工具
@@ -50,21 +50,6 @@ func (t *StartTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
 				Desc:     "任务内容或目标",
 				Required: true,
 			},
-			"session_key": {
-				Type:     schema.DataType("string"),
-				Desc:     "会话标识（可选）",
-				Required: false,
-			},
-			"channel": {
-				Type:     schema.DataType("string"),
-				Desc:     "渠道",
-				Required: false,
-			},
-			"chat_id": {
-				Type:     schema.DataType("string"),
-				Desc:     "聊天ID",
-				Required: false,
-			},
 		}),
 	}, nil
 }
@@ -72,10 +57,7 @@ func (t *StartTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
 // Run 执行工具逻辑
 func (t *StartTool) Run(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
 	var args struct {
-		Work       string `json:"work"`
-		SessionKey string `json:"session_key"`
-		Channel    string `json:"channel"`
-		ChatID     string `json:"chat_id"`
+		Work string `json:"work"`
 	}
 	if err := common.DecodeArgs(argumentsInJSON, &args); err != nil {
 		return "", err
@@ -83,18 +65,10 @@ func (t *StartTool) Run(ctx context.Context, argumentsInJSON string, opts ...too
 	if args.Work == "" {
 		return "错误: 任务内容不能为空", nil
 	}
-	channel := args.Channel
-	if channel == "" {
-		channel = t.Channel
-	}
-	chatID := args.ChatID
-	if chatID == "" {
-		chatID = t.ChatID
-	}
 	if t.Manager == nil {
 		return "错误: 任务管理器未配置", nil
 	}
-	taskID, status, err := t.Manager.StartTask(ctx, args.Work, args.SessionKey, channel, chatID)
+	taskID, status, err := t.Manager.StartTask(ctx, args.Work, t.Channel, t.ChatID)
 	if err != nil {
 		return fmt.Sprintf("错误: 创建任务失败: %s", err), nil
 	}
@@ -137,11 +111,6 @@ func (t *GetTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
 				Desc:     "任务ID",
 				Required: true,
 			},
-			"requester_key": {
-				Type:     schema.DataType("string"),
-				Desc:     "请求方标识",
-				Required: true,
-			},
 		}),
 	}, nil
 }
@@ -149,8 +118,7 @@ func (t *GetTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
 // Run 执行工具逻辑
 func (t *GetTool) Run(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
 	var args struct {
-		TaskID       string `json:"task_id"`
-		RequesterKey string `json:"requester_key"`
+		TaskID string `json:"task_id"`
 	}
 	if err := common.DecodeArgs(argumentsInJSON, &args); err != nil {
 		return "", err
@@ -158,13 +126,10 @@ func (t *GetTool) Run(ctx context.Context, argumentsInJSON string, opts ...tool.
 	if args.TaskID == "" {
 		return "错误: 任务ID不能为空", nil
 	}
-	if args.RequesterKey == "" {
-		return "错误: 请求方标识不能为空", nil
-	}
 	if t.Manager == nil {
 		return "错误: 任务管理器未配置", nil
 	}
-	info, err := t.Manager.GetTask(ctx, args.TaskID, args.RequesterKey)
+	info, err := t.Manager.GetTask(ctx, args.TaskID)
 	if err != nil {
 		return fmt.Sprintf("错误: 查询任务失败: %s", err), nil
 	}
@@ -212,11 +177,6 @@ func (t *StopTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
 				Desc:     "任务ID",
 				Required: true,
 			},
-			"requester_key": {
-				Type:     schema.DataType("string"),
-				Desc:     "请求方标识",
-				Required: true,
-			},
 		}),
 	}, nil
 }
@@ -224,8 +184,7 @@ func (t *StopTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
 // Run 执行工具逻辑
 func (t *StopTool) Run(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
 	var args struct {
-		TaskID       string `json:"task_id"`
-		RequesterKey string `json:"requester_key"`
+		TaskID string `json:"task_id"`
 	}
 	if err := common.DecodeArgs(argumentsInJSON, &args); err != nil {
 		return "", err
@@ -233,13 +192,10 @@ func (t *StopTool) Run(ctx context.Context, argumentsInJSON string, opts ...tool
 	if args.TaskID == "" {
 		return "错误: 任务ID不能为空", nil
 	}
-	if args.RequesterKey == "" {
-		return "错误: 请求方标识不能为空", nil
-	}
 	if t.Manager == nil {
 		return "错误: 任务管理器未配置", nil
 	}
-	stopped, status, err := t.Manager.StopTask(ctx, args.TaskID, args.RequesterKey)
+	stopped, status, err := t.Manager.StopTask(ctx, args.TaskID)
 	if err != nil {
 		return fmt.Sprintf("错误: 停止任务失败: %s", err), nil
 	}
@@ -268,33 +224,18 @@ func (t *ListTool) Name() string {
 // Info 返回工具信息
 func (t *ListTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
-		Name: t.Name(),
-		Desc: "列出当前用户的后台任务",
-		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"requester_key": {
-				Type:     schema.DataType("string"),
-				Desc:     "请求方标识",
-				Required: true,
-			},
-		}),
+		Name:        t.Name(),
+		Desc:        "列出所有后台任务",
+		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{}),
 	}, nil
 }
 
 // Run 执行工具逻辑
 func (t *ListTool) Run(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
-	var args struct {
-		RequesterKey string `json:"requester_key"`
-	}
-	if err := common.DecodeArgs(argumentsInJSON, &args); err != nil {
-		return "", err
-	}
-	if args.RequesterKey == "" {
-		return "错误: 请求方标识不能为空", nil
-	}
 	if t.Manager == nil {
 		return "错误: 任务管理器未配置", nil
 	}
-	items, err := t.Manager.ListTasks(ctx, args.RequesterKey)
+	items, err := t.Manager.ListTasks()
 	if err != nil {
 		return fmt.Sprintf("错误: 获取任务列表失败: %s", err), nil
 	}
