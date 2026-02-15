@@ -56,6 +56,7 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	github.com/yargevad/filepathx v1.0.0 // indirect
+	github.com/yuin/goldmark v1.7.16 // indirect
 	go.mau.fi/util v0.9.5 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.24.0 // indirect

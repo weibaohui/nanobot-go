@@ -1,6 +1,7 @@
 package channels
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/weibaohui/nanobot-go/bus"
+	"github.com/yuin/goldmark"
 	"go.uber.org/zap"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -396,6 +398,7 @@ func (c *MatrixChannel) Stop() {
 }
 
 // Send 发送消息
+// 自动将 Markdown 内容转换为 HTML 格式发送
 func (c *MatrixChannel) Send(msg *bus.OutboundMessage) error {
 	if c.client == nil {
 		return fmt.Errorf("Matrix 客户端未初始化")
@@ -404,8 +407,17 @@ func (c *MatrixChannel) Send(msg *bus.OutboundMessage) error {
 	roomID := id.RoomID(msg.ChatID)
 	defer c.stopTypingIndicator(roomID)
 
-	// 发送文本消息
-	_, err := c.client.SendText(c.ctx, roomID, msg.Content)
+	// 将 Markdown 转换为 HTML
+	htmlContent := markdownToHTML(msg.Content)
+
+	content := &event.MessageEventContent{
+		MsgType:       event.MsgText,
+		Body:          msg.Content,
+		Format:        event.FormatHTML,
+		FormattedBody: htmlContent,
+	}
+
+	_, err := c.client.SendMessageEvent(c.ctx, roomID, event.EventMessage, content)
 	if err != nil {
 		return fmt.Errorf("发送消息失败: %w", err)
 	}
@@ -414,6 +426,15 @@ func (c *MatrixChannel) Send(msg *bus.OutboundMessage) error {
 		zap.String("room_id", string(roomID)),
 	)
 	return nil
+}
+
+// markdownToHTML 将 Markdown 转换为 HTML
+func markdownToHTML(md string) string {
+	var buf bytes.Buffer
+	if err := goldmark.Convert([]byte(md), &buf); err != nil {
+		return md
+	}
+	return buf.String()
 }
 
 // SendNotice 发送通知消息（不会产生通知提醒）
