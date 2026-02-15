@@ -13,7 +13,6 @@ import (
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/config"
-	"github.com/weibaohui/nanobot-go/eino_adapter"
 	"go.uber.org/zap"
 )
 
@@ -22,7 +21,7 @@ import (
 type PlanSubAgent struct {
 	agent   adk.ResumableAgent
 	runner  *adk.Runner
-	adapter *eino_adapter.ProviderAdapter
+	adapter *ChatModelAdapter
 	tools   []tool.BaseTool
 	logger  *zap.Logger
 }
@@ -57,9 +56,9 @@ func NewPlanSubAgent(ctx context.Context, cfg *PlanConfig) (*PlanSubAgent, error
 		maxIter = 20
 	}
 
-	adapter, err := eino_adapter.NewProviderAdapter(logger, cfg.Cfg)
+	adapter, err := NewChatModelAdapter(logger, cfg.Cfg)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrProviderAdapter, err)
+		return nil, fmt.Errorf("%w: %w", ErrChatModelAdapter, err)
 	}
 
 	if cfg.SkillsLoader != nil {
@@ -127,8 +126,8 @@ func NewPlanSubAgent(ctx context.Context, cfg *PlanConfig) (*PlanSubAgent, error
 	// 包装为有名称的 Agent
 	namedAgent := &namedPlanAgent{
 		ResumableAgent: peAgent,
-		name:          "plan_agent",
-		description:   "Plan-Execute-Replan 模式 Agent，用于复杂任务的规划与执行",
+		name:           "plan_agent",
+		description:    "Plan-Execute-Replan 模式 Agent，用于复杂任务的规划与执行",
 	}
 
 	// 创建 Runner

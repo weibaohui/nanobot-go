@@ -1,4 +1,4 @@
-package eino_adapter
+package agent
 
 import (
 	"context"

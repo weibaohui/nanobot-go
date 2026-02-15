@@ -10,7 +10,6 @@ import (
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/config"
-	"github.com/weibaohui/nanobot-go/eino_adapter"
 	"go.uber.org/zap"
 )
 
@@ -54,9 +53,9 @@ func NewReActSubAgent(ctx context.Context, cfg *ReActConfig) (*ReActSubAgent, er
 		maxIter = 15
 	}
 
-	adapter, err := eino_adapter.NewProviderAdapter(logger, cfg.Cfg)
+	adapter, err := NewChatModelAdapter(logger, cfg.Cfg)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrProviderAdapter, err)
+		return nil, fmt.Errorf("%w: %w", ErrChatModelAdapter, err)
 	}
 
 	if cfg.SkillsLoader != nil {

@@ -23,7 +23,6 @@ import (
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/cron"
-	"github.com/weibaohui/nanobot-go/eino_adapter"
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
 )
@@ -97,7 +96,7 @@ func NewLoop(cfg *LoopConfig) *Loop {
 		zap.Strings("工具列表", toolNames),
 	)
 
-	adapter, err := eino_adapter.NewProviderAdapter(logger, loop.cfg)
+	adapter, err := NewChatModelAdapter(logger, loop.cfg)
 	if err != nil {
 		logger.Error("创建 Provider 适配器失败", zap.Error(err))
 		return loop

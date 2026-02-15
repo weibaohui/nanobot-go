@@ -14,7 +14,6 @@ import (
 	"github.com/weibaohui/nanobot-go/agent/tools/askuser"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/config"
-	"github.com/weibaohui/nanobot-go/eino_adapter"
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
 )
@@ -160,9 +159,9 @@ func (sa *SupervisorAgent) initSubAgents(ctx context.Context) error {
 
 // initSupervisor 创建 ADK Supervisor
 func (sa *SupervisorAgent) initSupervisor(ctx context.Context) error {
-	adapter, err := eino_adapter.NewProviderAdapter(sa.logger, sa.cfg)
+	adapter, err := NewChatModelAdapter(sa.logger, sa.cfg)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrProviderAdapter, err)
+		return fmt.Errorf("%w: %w", ErrChatModelAdapter, err)
 	}
 
 	var toolsConfig adk.ToolsConfig

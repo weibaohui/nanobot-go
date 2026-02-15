@@ -1,4 +1,4 @@
-package eino_adapter
+package agent
 
 import (
 	"context"
@@ -15,8 +15,11 @@ import (
 // SkillLoader 技能加载函数类型
 type SkillLoader func(name string) string
 
-// ProviderAdapter 包装 eino-ext 的 OpenAI ChatModel，添加拦截功能
-type ProviderAdapter struct {
+// ChatModelAdapter 包装 eino 的 ChatModel，添加工具调用拦截功能
+// 主要功能：
+//   - 实现 model.ToolCallingChatModel 接口
+//   - 拦截未注册的工具调用，转换为技能调用
+type ChatModelAdapter struct {
 	logger        *zap.Logger
 	chatModel     model.ToolCallingChatModel
 	registeredMap map[string]bool // 已注册的工具名称
@@ -25,12 +28,12 @@ type ProviderAdapter struct {
 
 // Sentinel errors 定义包级别的错误常量
 var (
-	ErrNilConfig      = fmt.Errorf("配置不能为空")
+	ErrNilConfig       = fmt.Errorf("配置不能为空")
 	ErrCreateChatModel = fmt.Errorf("创建 ChatModel 失败")
-	ErrNilAPIKey      = fmt.Errorf("API Key 不能为空")
+	ErrNilAPIKey       = fmt.Errorf("API Key 不能为空")
 )
 
-func createProviderConfig(logger *zap.Logger, cfg *config.Config) (apiKey, apiBase, modelName string, err error) {
+func createChatModelConfig(logger *zap.Logger, cfg *config.Config) (apiKey, apiBase, modelName string, err error) {
 	if cfg == nil {
 		return "", "", "", ErrNilConfig
 	}
@@ -49,9 +52,9 @@ func createProviderConfig(logger *zap.Logger, cfg *config.Config) (apiKey, apiBa
 	return providerCfg.APIKey, apiBase, cfg.Agents.Defaults.Model, nil
 }
 
-// NewProviderAdapter 创建 Provider 适配器
-func NewProviderAdapter(logger *zap.Logger, cfg *config.Config) (*ProviderAdapter, error) {
-	apiKey, apiBase, modelName, err := createProviderConfig(logger, cfg)
+// NewChatModelAdapter 创建 ChatModel 适配器
+func NewChatModelAdapter(logger *zap.Logger, cfg *config.Config) (*ChatModelAdapter, error) {
+	apiKey, apiBase, modelName, err := createChatModelConfig(logger, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrNilConfig, err)
 	}
@@ -68,7 +71,7 @@ func NewProviderAdapter(logger *zap.Logger, cfg *config.Config) (*ProviderAdapte
 		return nil, fmt.Errorf("%w: %w", ErrCreateChatModel, err)
 	}
 
-	return &ProviderAdapter{
+	return &ChatModelAdapter{
 		logger:        logger,
 		chatModel:     chatModel,
 		registeredMap: make(map[string]bool),
@@ -76,12 +79,12 @@ func NewProviderAdapter(logger *zap.Logger, cfg *config.Config) (*ProviderAdapte
 }
 
 // SetSkillLoader 设置技能加载器
-func (a *ProviderAdapter) SetSkillLoader(loader SkillLoader) {
+func (a *ChatModelAdapter) SetSkillLoader(loader SkillLoader) {
 	a.skillLoader = loader
 }
 
 // SetRegisteredTools 设置已注册的工具名称列表
-func (a *ProviderAdapter) SetRegisteredTools(names []string) {
+func (a *ChatModelAdapter) SetRegisteredTools(names []string) {
 	a.registeredMap = make(map[string]bool)
 	for _, name := range names {
 		a.registeredMap[name] = true
@@ -89,7 +92,7 @@ func (a *ProviderAdapter) SetRegisteredTools(names []string) {
 }
 
 // isRegisteredTool 检查工具是否已注册
-func (a *ProviderAdapter) isRegisteredTool(name string) bool {
+func (a *ChatModelAdapter) isRegisteredTool(name string) bool {
 	if a.registeredMap == nil {
 		return false
 	}
@@ -97,7 +100,7 @@ func (a *ProviderAdapter) isRegisteredTool(name string) bool {
 }
 
 // isKnownSkill 检查是否是已知技能
-func (a *ProviderAdapter) isKnownSkill(name string) bool {
+func (a *ChatModelAdapter) isKnownSkill(name string) bool {
 	if a.skillLoader == nil {
 		return false
 	}
@@ -105,8 +108,32 @@ func (a *ProviderAdapter) isKnownSkill(name string) bool {
 	return content != ""
 }
 
+// Generate produces a complete model response
+func (a *ChatModelAdapter) Generate(ctx context.Context, input []*schema.Message, opts ...model.Option) (*schema.Message, error) {
+	// 调用底层 ChatModel
+	response, err := a.chatModel.Generate(ctx, input, opts...)
+	if err != nil {
+		if a.logger != nil {
+			a.logger.Error("调用 LLM 失败", zap.Error(err))
+		}
+		return nil, err
+	}
+
+	if a.logger != nil {
+		a.logger.Info("原始响应",
+			zap.String("内容", response.Content),
+			zap.Int("工具调用数", len(response.ToolCalls)),
+		)
+	}
+
+	// 拦截并转换工具调用
+	a.interceptToolCalls(response)
+
+	return response, nil
+}
+
 // interceptToolCall 拦截工具调用，如果工具不存在则转换为技能调用
-func (a *ProviderAdapter) interceptToolCall(toolName string, argumentsJSON string) (string, string, error) {
+func (a *ChatModelAdapter) interceptToolCall(toolName string, argumentsJSON string) (string, string, error) {
 	// 如果工具已注册，不拦截
 	if a.isRegisteredTool(toolName) {
 		return toolName, argumentsJSON, nil
@@ -151,32 +178,8 @@ func (a *ProviderAdapter) interceptToolCall(toolName string, argumentsJSON strin
 	return toolName, argumentsJSON, nil
 }
 
-// Generate produces a complete model response
-func (a *ProviderAdapter) Generate(ctx context.Context, input []*schema.Message, opts ...model.Option) (*schema.Message, error) {
-	// 调用底层 ChatModel
-	response, err := a.chatModel.Generate(ctx, input, opts...)
-	if err != nil {
-		if a.logger != nil {
-			a.logger.Error("调用 LLM 失败", zap.Error(err))
-		}
-		return nil, err
-	}
-
-	if a.logger != nil {
-		a.logger.Info("原始响应",
-			zap.String("内容", response.Content),
-			zap.Int("工具调用数", len(response.ToolCalls)),
-		)
-	}
-
-	// 拦截并转换工具调用
-	a.interceptToolCalls(response)
-
-	return response, nil
-}
-
 // interceptToolCalls 拦截并转换工具调用
-func (a *ProviderAdapter) interceptToolCalls(msg *schema.Message) {
+func (a *ChatModelAdapter) interceptToolCalls(msg *schema.Message) {
 	if len(msg.ToolCalls) == 0 {
 		return
 	}
@@ -209,7 +212,7 @@ func (a *ProviderAdapter) interceptToolCalls(msg *schema.Message) {
 
 // Stream produces a response as a stream
 // 注意：为避免流式响应解析问题，这里使用 Generate 并模拟流式输出
-func (a *ProviderAdapter) Stream(ctx context.Context, input []*schema.Message, opts ...model.Option) (*schema.StreamReader[*schema.Message], error) {
+func (a *ChatModelAdapter) Stream(ctx context.Context, input []*schema.Message, opts ...model.Option) (*schema.StreamReader[*schema.Message], error) {
 	// 直接调用 Generate 获取完整响应
 	msg, err := a.Generate(ctx, input, opts...)
 	if err != nil {
@@ -227,14 +230,14 @@ func (a *ProviderAdapter) Stream(ctx context.Context, input []*schema.Message, o
 }
 
 // WithTools returns a new adapter instance with the specified tools bound
-func (a *ProviderAdapter) WithTools(tools []*schema.ToolInfo) (model.ToolCallingChatModel, error) {
+func (a *ChatModelAdapter) WithTools(tools []*schema.ToolInfo) (model.ToolCallingChatModel, error) {
 	// 绑定工具到底层 ChatModel
 	boundModel, err := a.chatModel.WithTools(tools)
 	if err != nil {
 		return nil, err
 	}
 
-	return &ProviderAdapter{
+	return &ChatModelAdapter{
 		logger:        a.logger,
 		chatModel:     boundModel,
 		registeredMap: a.registeredMap,

@@ -15,7 +15,6 @@ import (
 	"github.com/weibaohui/nanobot-go/channels"
 	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/cron"
-	"github.com/weibaohui/nanobot-go/eino_adapter"
 	"github.com/weibaohui/nanobot-go/heartbeat"
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
@@ -228,8 +227,8 @@ func runGateway(cmd *cobra.Command, args []string) {
 		execTimeout = 120
 	}
 
-	callbacks := eino_adapter.NewEinoCallbacks(true, logger)
-	eino_adapter.RegisterGlobalCallbacks(callbacks)
+	callbacks := agent.NewEinoCallbacks(true, logger)
+	agent.RegisterGlobalCallbacks(callbacks)
 
 	loop := agent.NewLoop(&agent.LoopConfig{
 		Config:              cfg,
