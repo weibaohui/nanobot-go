@@ -165,11 +165,32 @@ func (sa *SupervisorAgent) initSupervisor(ctx context.Context) error {
 		return fmt.Errorf("%w: %w", ErrProviderAdapter, err)
 	}
 
+	var toolsConfig adk.ToolsConfig
+	var askUserTool tool.BaseTool
+	for _, t := range sa.tools {
+		if t == nil {
+			continue
+		}
+		info, err := t.Info(context.Background())
+		if err == nil && info != nil && info.Name == "ask_user" {
+			askUserTool = t
+			break
+		}
+	}
+	if askUserTool != nil {
+		toolsConfig = adk.ToolsConfig{
+			ToolsNodeConfig: compose.ToolsNodeConfig{
+				Tools: []tool.BaseTool{askUserTool},
+			},
+		}
+	}
+
 	svAgent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
 		Name:        "supervisor",
 		Description: "统一入口 Agent，负责路由用户请求到合适的子 Agent",
 		Instruction: sa.buildSupervisorInstruction(),
 		Model:       adapter,
+		ToolsConfig: toolsConfig,
 		Exit:        &adk.ExitTool{},
 	})
 	if err != nil {
