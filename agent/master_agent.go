@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/cloudwego/eino/adk"
@@ -137,7 +136,7 @@ func (sa *MasterAgent) Process(ctx context.Context, msg *bus.InboundMessage) (st
 	sess := sa.sessions.GetOrCreate(sessionKey)
 
 	// 构建消息
-	history := sa.convertHistory(sess.GetHistory(10))
+	history := sa.convertHistory(sess.GetHistory(2))
 	messages := sa.buildMessages(history, msg.Content, msg.Channel, msg.ChatID)
 
 	// 生成 checkpoint ID
@@ -149,11 +148,7 @@ func (sa *MasterAgent) Process(ctx context.Context, msg *bus.InboundMessage) (st
 
 	response, err = sa.processNormal(ctx, messages, checkpointID, msg)
 
-	if err != nil {
-		// 检查是否是中断
-		if strings.HasPrefix(err.Error(), "INTERRUPT:") {
-			return "", err
-		}
+	if err != nil && isInterruptError(err) {
 		return "", err
 	}
 
