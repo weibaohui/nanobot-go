@@ -72,6 +72,7 @@ func NewChatSubAgent(ctx context.Context, cfg *ChatConfig) (*ChatSubAgent, error
 		Model:         adapter,
 		ToolsConfig:   toolsConfig,
 		MaxIterations: 5,
+		Exit:          &adk.ExitTool{},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrAgentCreate, err)
@@ -120,6 +121,12 @@ func buildChatInstruction() string {
 - 回答直接，不啰嗦
 - 适当使用表情符号增加亲和力
 - 如果问题超出你的能力范围，诚实告知用户
+
+## 重要约束
+- 不要调用任何工具，包括 transfer_to_agent
+- 直接回答用户的问题
+- 保持上下文理解
+- 对话完成后，调用 exit 工具结束
 
 ## 注意事项
 - 对于需要文件操作、网络搜索等复杂任务，建议用户重新描述需求
