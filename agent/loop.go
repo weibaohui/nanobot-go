@@ -50,15 +50,15 @@ type Loop struct {
 
 // LoopConfig Loop 配置
 type LoopConfig struct {
-	Config             *config.Config
-	MessageBus         *bus.MessageBus
-	Workspace          string
-	MaxIterations      int
-	ExecTimeout        int
+	Config              *config.Config
+	MessageBus          *bus.MessageBus
+	Workspace           string
+	MaxIterations       int
+	ExecTimeout         int
 	RestrictToWorkspace bool
-	CronService        *cron.Service
-	SessionManager     *session.Manager
-	Logger             *zap.Logger
+	CronService         *cron.Service
+	SessionManager      *session.Manager
+	Logger              *zap.Logger
 }
 
 // NewLoop 创建代理循环
@@ -317,68 +317,6 @@ func (l *Loop) updateToolContext(channel, chatID string) {
 	if at, ok := l.tools.Get("ask_user").(tools.ContextSetter); ok {
 		at.SetContext(channel, chatID)
 	}
-}
-
-// handleInterrupt 处理中断
-func (l *Loop) handleInterrupt(ctx context.Context, msg *bus.InboundMessage, checkpointID string, event *adk.AgentEvent, sess *session.Session, sessionKey string, isPlan bool) error {
-	if event.Action == nil || event.Action.Interrupted == nil {
-		return nil
-	}
-
-	// 获取中断上下文
-	interruptCtx := event.Action.Interrupted.InterruptContexts[0]
-	interruptID := interruptCtx.ID
-
-	// 解析中断信息
-	var question string
-	var options []string
-	isAskUser := false
-
-	if info, ok := interruptCtx.Info.(*askuser.AskUserInfo); ok {
-		question = info.Question
-		options = append(options, info.Options...)
-		isAskUser = true
-	} else if info, ok := interruptCtx.Info.(map[string]any); ok {
-		if q, ok := info["question"].(string); ok {
-			question = q
-		}
-		if opts, ok := info["options"].([]any); ok {
-			for _, opt := range opts {
-				if s, ok := opt.(string); ok {
-					options = append(options, s)
-				}
-			}
-		}
-	} else {
-		// 尝试直接作为 Stringer
-		question = fmt.Sprintf("%v", interruptCtx.Info)
-	}
-	if sessionKey == "" && msg != nil {
-		sessionKey = msg.SessionKey()
-	}
-
-	// 发送中断请求到用户
-	l.interruptManager.HandleInterrupt(&InterruptInfo{
-		CheckpointID: checkpointID,
-		InterruptID:  interruptID,
-		Channel:      msg.Channel,
-		ChatID:       msg.ChatID,
-		Question:     question,
-		Options:      options,
-		SessionKey:   sessionKey,
-		IsAskUser:    isAskUser,
-		IsPlan:       isPlan,
-	})
-
-	l.logger.Info("等待用户输入以恢复执行",
-		zap.String("checkpoint_id", checkpointID),
-		zap.String("interrupt_id", interruptID),
-		zap.String("question", question),
-	)
-
-	// 注意：这里不等待用户响应，而是返回
-	// 用户响应会通过 SubmitUserResponse 提交，然后通过 ResumeExecution 恢复
-	return fmt.Errorf("INTERRUPT:%s:%s", checkpointID, interruptID)
 }
 
 // ResumeExecution 恢复被中断的执行
