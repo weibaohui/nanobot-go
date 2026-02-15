@@ -23,6 +23,7 @@ type Manager interface {
 	StartTask(ctx context.Context, work, sessionKey, channel, chatID string) (string, string, error)
 	GetTask(ctx context.Context, taskID, requesterKey string) (*TaskInfo, error)
 	StopTask(ctx context.Context, taskID, requesterKey string) (bool, string, error)
+	ListTasks(ctx context.Context, requesterKey string) ([]*TaskInfo, error)
 }
 
 // StartTool 后台任务创建工具
@@ -250,5 +251,72 @@ func (t *StopTool) Run(ctx context.Context, argumentsInJSON string, opts ...tool
 
 // InvokableRun 可直接调用的执行入口
 func (t *StopTool) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
+	return t.Run(ctx, argumentsInJSON, opts...)
+}
+
+// ListTool 后台任务列表工具
+type ListTool struct {
+	Manager Manager
+	Logger  *zap.Logger
+}
+
+// Name 返回工具名称
+func (t *ListTool) Name() string {
+	return "list_task"
+}
+
+// Info 返回工具信息
+func (t *ListTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
+	return &schema.ToolInfo{
+		Name: t.Name(),
+		Desc: "列出当前用户的后台任务",
+		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
+			"requester_key": {
+				Type:     schema.DataType("string"),
+				Desc:     "请求方标识",
+				Required: true,
+			},
+		}),
+	}, nil
+}
+
+// Run 执行工具逻辑
+func (t *ListTool) Run(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
+	var args struct {
+		RequesterKey string `json:"requester_key"`
+	}
+	if err := common.DecodeArgs(argumentsInJSON, &args); err != nil {
+		return "", err
+	}
+	if args.RequesterKey == "" {
+		return "错误: 请求方标识不能为空", nil
+	}
+	if t.Manager == nil {
+		return "错误: 任务管理器未配置", nil
+	}
+	items, err := t.Manager.ListTasks(ctx, args.RequesterKey)
+	if err != nil {
+		return fmt.Sprintf("错误: 获取任务列表失败: %s", err), nil
+	}
+	if t.Logger != nil {
+		t.Logger.Info("获取任务列表完成", zap.Int("数量", len(items)))
+	}
+	if len(items) == 0 {
+		return "任务列表为空", nil
+	}
+	var result string
+	for i, item := range items {
+		line := fmt.Sprintf("任务ID: %s | 状态: %s | 摘要: %s", item.ID, item.Status, item.ResultSummary)
+		if i == 0 {
+			result = line
+		} else {
+			result += "\n" + line
+		}
+	}
+	return result, nil
+}
+
+// InvokableRun 可直接调用的执行入口
+func (t *ListTool) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
 	return t.Run(ctx, argumentsInJSON, opts...)
 }

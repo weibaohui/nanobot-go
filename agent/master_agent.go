@@ -142,7 +142,7 @@ func (sa *MasterAgent) Process(ctx context.Context, msg *bus.InboundMessage) (st
 	sess := sa.sessions.GetOrCreate(sessionKey)
 
 	// 构建消息
-	history := sa.convertHistory(sess.GetHistory(2))
+	history := sa.convertHistory(sess.GetHistory(0))
 	messages := sa.buildMessages(history, msg.Content, msg.Channel, msg.ChatID)
 
 	// 生成 checkpoint ID

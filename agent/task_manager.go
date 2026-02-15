@@ -46,6 +46,8 @@ type AgentTaskManagerInterface interface {
 	GetTask(taskID string, requesterKey string) (*TaskInfo, error)
 	// StopTask 停止后台任务并返回是否成功
 	StopTask(taskID string, requesterKey string) (bool, TaskStatus, error)
+	// ListTasks 获取任务列表
+	ListTasks(requesterKey string) ([]*TaskInfo, error)
 }
 
 type AgentTaskManagerConfig struct {
@@ -209,6 +211,31 @@ func (m *AgentTaskManager) StopTask(taskID string, requesterKey string) (bool, T
 		task.appendLog("任务已停止")
 		return true, task.status, nil
 	}
+}
+
+// ListTasks 获取任务列表
+func (m *AgentTaskManager) ListTasks(requesterKey string) ([]*TaskInfo, error) {
+	if requesterKey == "" {
+		return nil, fmt.Errorf("请求方标识不能为空")
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	results := make([]*TaskInfo, 0, len(m.tasks))
+	for _, task := range m.tasks {
+		if !task.isOwner(requesterKey) {
+			continue
+		}
+		task.mu.Lock()
+		info := &TaskInfo{
+			ID:            task.id,
+			Status:        task.status,
+			LastLogs:      append([]string(nil), task.lastLogs...),
+			ResultSummary: task.result,
+		}
+		task.mu.Unlock()
+		results = append(results, info)
+	}
+	return results, nil
 }
 
 func (m *AgentTaskManager) runTask(ctx context.Context, task *AgentTask, taskCtx TaskContext) {
@@ -401,4 +428,25 @@ func (a *TaskManagerAdapter) StopTask(ctx context.Context, taskID, requesterKey 
 	}
 	stopped, status, err := a.manager.StopTask(taskID, requesterKey)
 	return stopped, string(status), err
+}
+
+// ListTasks 获取任务列表
+func (a *TaskManagerAdapter) ListTasks(ctx context.Context, requesterKey string) ([]*tasktools.TaskInfo, error) {
+	if a.manager == nil {
+		return nil, fmt.Errorf("任务管理器未初始化")
+	}
+	items, err := a.manager.ListTasks(requesterKey)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*tasktools.TaskInfo, 0, len(items))
+	for _, item := range items {
+		result = append(result, &tasktools.TaskInfo{
+			ID:            item.ID,
+			Status:        string(item.Status),
+			LastLogs:      append([]string(nil), item.LastLogs...),
+			ResultSummary: item.ResultSummary,
+		})
+	}
+	return result, nil
 }

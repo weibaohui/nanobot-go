@@ -469,6 +469,34 @@ func (c *MatrixChannel) SendReply(msg *bus.OutboundMessage, replyToEventID id.Ev
 	return nil
 }
 
+// SendHTML 发送 HTML 格式消息
+// plainText 是纯文本回退内容，htmlContent 是 HTML 格式内容
+func (c *MatrixChannel) SendHTML(msg *bus.OutboundMessage, htmlContent string) error {
+	if c.client == nil {
+		return fmt.Errorf("Matrix 客户端未初始化")
+	}
+
+	roomID := id.RoomID(msg.ChatID)
+	defer c.stopTypingIndicator(roomID)
+
+	content := &event.MessageEventContent{
+		MsgType:       event.MsgText,
+		Body:          msg.Content,
+		Format:        event.FormatHTML,
+		FormattedBody: htmlContent,
+	}
+
+	_, err := c.client.SendMessageEvent(c.ctx, roomID, event.EventMessage, content)
+	if err != nil {
+		return fmt.Errorf("发送 HTML 消息失败: %w", err)
+	}
+
+	c.logger.Debug("Matrix HTML 消息已发送",
+		zap.String("room_id", string(roomID)),
+	)
+	return nil
+}
+
 // JoinRoom 加入房间
 func (c *MatrixChannel) JoinRoom(roomIDOrAlias string, serverNames []string) error {
 	if c.client == nil {

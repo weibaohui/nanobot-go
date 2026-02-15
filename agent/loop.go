@@ -215,6 +215,7 @@ func (l *Loop) registerTaskTools(manager tasktool.Manager) {
 	l.tools.Register(&tasktool.StartTool{Manager: manager, Logger: l.logger})
 	l.tools.Register(&tasktool.GetTool{Manager: manager, Logger: l.logger})
 	l.tools.Register(&tasktool.StopTool{Manager: manager, Logger: l.logger})
+	l.tools.Register(&tasktool.ListTool{Manager: manager, Logger: l.logger})
 }
 
 // createTaskManager 创建任务管理器
