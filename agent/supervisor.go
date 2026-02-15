@@ -294,7 +294,8 @@ func (sa *SupervisorAgent) buildSupervisorInstruction() string {
 ## 转移输出格式
 
 - 当需要转移时，仅输出 transfer_to_agent 的函数调用
-- 例子：{"name":"transfer_to_agent","arguments":{"agent_name":"react_agent"}}
+- 示例函数调用：
+  transfer_to_agent(agent_name="react_agent")
 `
 }
 
