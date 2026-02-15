@@ -90,22 +90,13 @@ func NewLoop(cfg *LoopConfig) *Loop {
 
 	loop.registerDefaultTools()
 
-	registeredTools := loop.GetTools()
-	toolNames := make([]string, 0, len(registeredTools))
-	for _, t := range registeredTools {
-		if t != nil {
-			info, err := t.Info(context.Background())
-			if err == nil && info != nil && info.Name != "" {
-				toolNames = append(toolNames, info.Name)
-			}
-		}
-	}
+	ctx := context.Background()
+	toolNames := loop.tools.GetToolNames(ctx)
 	logger.Info("已注册工具",
-		zap.Int("数量", len(registeredTools)),
+		zap.Int("数量", len(toolNames)),
 		zap.Strings("工具列表", toolNames),
 	)
 
-	ctx := context.Background()
 	adapter, err := eino_adapter.NewProviderAdapter(logger, loop.cfg)
 	if err != nil {
 		logger.Error("创建 Provider 适配器失败", zap.Error(err))
@@ -115,7 +106,7 @@ func NewLoop(cfg *LoopConfig) *Loop {
 	adapter.SetSkillLoader(loop.context.GetSkillsLoader().LoadSkill)
 	adapter.SetRegisteredTools(toolNames)
 
-	adkTools := loop.tools.GetADKTools()
+	adkTools := loop.tools.GetADKToolsByNames(toolNames)
 
 	supervisor, err := NewSupervisorAgent(ctx, &SupervisorConfig{
 		Cfg:             loop.cfg,

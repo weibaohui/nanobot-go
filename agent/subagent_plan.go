@@ -96,14 +96,7 @@ func NewPlanSubAgent(ctx context.Context, cfg *PlanConfig) (*PlanSubAgent, error
 		}
 	}
 
-	var toolsConfig adk.ToolsConfig
-	if len(cfg.Tools) > 0 {
-		toolsConfig = adk.ToolsConfig{
-			ToolsNodeConfig: compose.ToolsNodeConfig{
-				Tools: cfg.Tools,
-			},
-		}
-	}
+	toolsConfig := buildToolsConfig(cfg.Tools)
 
 	executor, err := planexecute.NewExecutor(ctx, &planexecute.ExecutorConfig{
 		Model:       executorModel,

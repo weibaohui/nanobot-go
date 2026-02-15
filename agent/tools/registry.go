@@ -73,6 +73,37 @@ func (r *Registry) GetADKTools() []tool.BaseTool {
 	return result
 }
 
+func (r *Registry) GetToolNames(ctx context.Context) []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	names := make([]string, 0, len(r.tools))
+	for _, baseTool := range r.tools {
+		info, err := baseTool.Info(ctx)
+		if err != nil || info == nil || info.Name == "" {
+			continue
+		}
+		names = append(names, info.Name)
+	}
+	return names
+}
+
+func (r *Registry) GetADKToolsByNames(names []string) []tool.BaseTool {
+	if len(names) == 0 {
+		return r.GetADKTools()
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	result := make([]tool.BaseTool, 0, len(names))
+	for _, name := range names {
+		if t, ok := r.tools[name]; ok {
+			result = append(result, t)
+		}
+	}
+	return result
+}
+
 // Execute 执行工具
 func (r *Registry) Execute(ctx context.Context, name string, params map[string]any) (string, error) {
 	r.mu.RLock()

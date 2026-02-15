@@ -66,14 +66,7 @@ func NewReActSubAgent(ctx context.Context, cfg *ReActConfig) (*ReActSubAgent, er
 		adapter.SetRegisteredTools(cfg.RegisteredTools)
 	}
 
-	var toolsConfig adk.ToolsConfig
-	if len(cfg.Tools) > 0 {
-		toolsConfig = adk.ToolsConfig{
-			ToolsNodeConfig: compose.ToolsNodeConfig{
-				Tools: cfg.Tools,
-			},
-		}
-	}
+	toolsConfig := buildToolsConfig(cfg.Tools)
 
 	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
 		Name:          "react_agent",
@@ -105,6 +98,17 @@ func NewReActSubAgent(ctx context.Context, cfg *ReActConfig) (*ReActSubAgent, er
 		tools:  cfg.Tools,
 		logger: logger,
 	}, nil
+}
+
+func buildToolsConfig(tools []tool.BaseTool) adk.ToolsConfig {
+	if len(tools) == 0 {
+		return adk.ToolsConfig{}
+	}
+	return adk.ToolsConfig{
+		ToolsNodeConfig: compose.ToolsNodeConfig{
+			Tools: tools,
+		},
+	}
 }
 
 // buildReActInstruction 构建 ReAct Agent 指令

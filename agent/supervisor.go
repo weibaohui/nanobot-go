@@ -165,24 +165,12 @@ func (sa *SupervisorAgent) initSupervisor(ctx context.Context) error {
 		return fmt.Errorf("%w: %w", ErrProviderAdapter, err)
 	}
 
-
-	// 入口型Agent需要哪些工具？
 	var toolsConfig adk.ToolsConfig
-	var askUserTool tool.BaseTool
-	for _, t := range sa.tools {
-		if t == nil {
-			continue
-		}
-		info, err := t.Info(context.Background())
-		if err == nil && info != nil && info.Name == "ask_user" {
-			askUserTool = t
-			break
-		}
-	}
-	if askUserTool != nil {
+	supervisorTools := filterToolsByNames(sa.tools, map[string]bool{"ask_user": true})
+	if len(supervisorTools) > 0 {
 		toolsConfig = adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{
-				Tools: []tool.BaseTool{askUserTool},
+				Tools: supervisorTools,
 			},
 		}
 	}
@@ -219,6 +207,27 @@ func (sa *SupervisorAgent) initSupervisor(ctx context.Context) error {
 	})
 
 	return nil
+}
+
+func filterToolsByNames(tools []tool.BaseTool, allowed map[string]bool) []tool.BaseTool {
+	if len(allowed) == 0 {
+		return nil
+	}
+	ctx := context.Background()
+	result := make([]tool.BaseTool, 0, len(allowed))
+	for _, t := range tools {
+		if t == nil {
+			continue
+		}
+		info, err := t.Info(ctx)
+		if err != nil || info == nil || info.Name == "" {
+			continue
+		}
+		if allowed[info.Name] {
+			result = append(result, t)
+		}
+	}
+	return result
 }
 
 // buildSupervisorInstruction 构建 Supervisor 指令

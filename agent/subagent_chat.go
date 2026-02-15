@@ -64,14 +64,7 @@ func NewChatSubAgent(ctx context.Context, cfg *ChatConfig) (*ChatSubAgent, error
 		adapter.SetRegisteredTools(cfg.RegisteredTools)
 	}
 
-	var toolsConfig adk.ToolsConfig
-	if len(cfg.Tools) > 0 {
-		toolsConfig = adk.ToolsConfig{
-			ToolsNodeConfig: compose.ToolsNodeConfig{
-				Tools: cfg.Tools,
-			},
-		}
-	}
+	toolsConfig := buildToolsConfig(cfg.Tools)
 
 	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
 		Name:          "chat_agent",
