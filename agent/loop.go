@@ -7,7 +7,6 @@ import (
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/agent/tools"
 	"github.com/weibaohui/nanobot-go/agent/tools/askuser"
 	toolcron "github.com/weibaohui/nanobot-go/agent/tools/cron"
@@ -17,6 +16,7 @@ import (
 	"github.com/weibaohui/nanobot-go/agent/tools/message"
 	"github.com/weibaohui/nanobot-go/agent/tools/readfile"
 	"github.com/weibaohui/nanobot-go/agent/tools/skill"
+	tasktool "github.com/weibaohui/nanobot-go/agent/tools/task"
 	"github.com/weibaohui/nanobot-go/agent/tools/webfetch"
 	"github.com/weibaohui/nanobot-go/agent/tools/websearch"
 	"github.com/weibaohui/nanobot-go/agent/tools/writefile"
@@ -46,6 +46,7 @@ type Loop struct {
 	supervisor       *SupervisorAgent
 	masterAgent      *MasterAgent
 	enableSupervisor bool
+	taskManager      *AgentTaskManager
 }
 
 // LoopConfig Loop 配置
@@ -90,12 +91,22 @@ func NewLoop(cfg *LoopConfig) *Loop {
 
 	loop.registerDefaultTools()
 
+	loop.taskManager = loop.createTaskManager()
+	if loop.taskManager != nil {
+		adapter := NewTaskManagerAdapter(loop.taskManager)
+		loop.registerTaskTools(adapter)
+	}
+
 	ctx := context.Background()
 	toolNames := loop.tools.GetToolNames(ctx)
 	logger.Info("已注册工具",
 		zap.Int("数量", len(toolNames)),
 		zap.Strings("工具列表", toolNames),
 	)
+
+	if loop.taskManager != nil {
+		loop.taskManager.SetRegisteredTools(toolNames)
+	}
 
 	adapter, err := NewChatModelAdapter(logger, loop.cfg)
 	if err != nil {
@@ -194,6 +205,34 @@ func (l *Loop) registerDefaultTools() {
 	// 注册通用技能工具（用于拦截后的技能调用）
 	l.tools.Register(skill.NewGenericSkillTool(l.context.GetSkillsLoader().LoadSkill))
 
+}
+
+// registerTaskTools 注册后台任务工具
+func (l *Loop) registerTaskTools(manager tasktool.Manager) {
+	if manager == nil {
+		return
+	}
+	l.tools.Register(&tasktool.StartTool{Manager: manager, Logger: l.logger})
+	l.tools.Register(&tasktool.GetTool{Manager: manager, Logger: l.logger})
+	l.tools.Register(&tasktool.StopTool{Manager: manager, Logger: l.logger})
+}
+
+// createTaskManager 创建任务管理器
+func (l *Loop) createTaskManager() *AgentTaskManager {
+	taskManager, err := NewAgentTaskManager(&AgentTaskManagerConfig{
+		Cfg:             l.cfg,
+		Workspace:       l.workspace,
+		Tools:           l.tools.GetADKTools(),
+		Logger:          l.logger,
+		Context:         l.context,
+		CheckpointStore: l.interruptManager.GetCheckpointStore(),
+		MaxIterations:   l.maxIterations,
+	})
+	if err != nil {
+		l.logger.Error("创建任务管理器失败", zap.Error(err))
+		return nil
+	}
+	return taskManager
 }
 
 // Run 运行代理循环
@@ -333,14 +372,15 @@ func (l *Loop) updateToolContext(channel, chatID string) {
 	if mt, ok := l.tools.Get("message").(tools.ContextSetter); ok {
 		mt.SetContext(channel, chatID)
 	}
-	if st, ok := l.tools.Get("spawn").(tools.ContextSetter); ok {
-		st.SetContext(channel, chatID)
-	}
+
 	if ct, ok := l.tools.Get("cron").(tools.ContextSetter); ok {
 		ct.SetContext(channel, chatID)
 	}
 	if at, ok := l.tools.Get("ask_user").(tools.ContextSetter); ok {
 		at.SetContext(channel, chatID)
+	}
+	if st, ok := l.tools.Get("start_task").(tools.ContextSetter); ok {
+		st.SetContext(channel, chatID)
 	}
 }
 
@@ -386,26 +426,6 @@ func (l *Loop) GetSupervisor() *SupervisorAgent {
 // IsSupervisorEnabled 检查是否启用 Supervisor 模式
 func (l *Loop) IsSupervisorEnabled() bool {
 	return l.enableSupervisor && l.supervisor != nil
-}
-
-// convertHistory 转换会话历史为 eino Message 格式
-func (l *Loop) convertHistory(history []map[string]any) []*schema.Message {
-	result := make([]*schema.Message, 0, len(history))
-	for _, h := range history {
-		role := schema.User
-		if r, ok := h["role"].(string); ok && r == "assistant" {
-			role = schema.Assistant
-		}
-		content := ""
-		if c, ok := h["content"].(string); ok {
-			content = c
-		}
-		result = append(result, &schema.Message{
-			Role:    role,
-			Content: content,
-		})
-	}
-	return result
 }
 
 // ShouldUseStream 判断是否应该使用流式处理
