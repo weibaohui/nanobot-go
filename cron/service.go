@@ -44,9 +44,7 @@ func (s *Service) Start(ctx context.Context) error {
 	s.saveStore()
 	s.armTimer(ctx)
 
-	s.logger.Info("定时任务服务已启动",
-		zap.Int("任务数量", len(s.store.Jobs)),
-	)
+	s.logger.Info("定时任务服务已启动")
 
 	return nil
 }

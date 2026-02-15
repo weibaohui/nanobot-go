@@ -154,7 +154,8 @@ func runGateway(cmd *cobra.Command, args []string) {
 		logger,
 		cfg,
 		workspacePath,
-		func(ctx context.Context, prompt string) (string, error) {
+		func(ctx context.Context, prompt string, model string, session string) (string, error) {
+			// TODO: 实现心跳回调，调用代理执行任务
 			return "// TODO 待实现", nil
 		},
 	)
