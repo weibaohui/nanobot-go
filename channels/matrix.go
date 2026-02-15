@@ -40,6 +40,9 @@ type MatrixChannel struct {
 
 	// 忽略自己发送的消息
 	botUserID id.UserID
+
+	typingMu     sync.Mutex
+	typingCancel map[id.RoomID]context.CancelFunc
 }
 
 // MatrixConfig Matrix 配置
@@ -57,9 +60,10 @@ func NewMatrixChannel(config *MatrixConfig, messageBus *bus.MessageBus, logger *
 		logger = zap.NewNop()
 	}
 	return &MatrixChannel{
-		BaseChannel: NewBaseChannel("matrix", messageBus),
-		config:      config,
-		logger:      logger,
+		BaseChannel:  NewBaseChannel("matrix", messageBus),
+		config:       config,
+		logger:       logger,
+		typingCancel: make(map[id.RoomID]context.CancelFunc),
 	}
 }
 
@@ -203,6 +207,91 @@ func (c *MatrixChannel) runSync() {
 	}
 }
 
+// startTypingIndicator 启动房间 typing 状态刷新
+func (c *MatrixChannel) startTypingIndicator(roomID id.RoomID) {
+	if c.client == nil {
+		return
+	}
+
+	c.typingMu.Lock()
+	if c.typingCancel == nil {
+		c.typingCancel = make(map[id.RoomID]context.CancelFunc)
+	}
+	if cancel, ok := c.typingCancel[roomID]; ok {
+		cancel()
+	}
+	typingCtx, cancel := context.WithCancel(context.Background())
+	c.typingCancel[roomID] = cancel
+	c.typingMu.Unlock()
+
+	c.bgTasks.Add(1)
+	go func() {
+		defer c.bgTasks.Done()
+
+		typingTimeout := 30 * time.Second
+		refreshInterval := 20 * time.Second
+		c.sendTypingStatus(roomID, true, typingTimeout)
+
+		ticker := time.NewTicker(refreshInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-typingCtx.Done():
+				c.sendTypingStatus(roomID, false, 0)
+				return
+			case <-ticker.C:
+				c.sendTypingStatus(roomID, true, typingTimeout)
+			}
+		}
+	}()
+}
+
+// stopTypingIndicator 停止房间 typing 状态刷新
+func (c *MatrixChannel) stopTypingIndicator(roomID id.RoomID) {
+	c.typingMu.Lock()
+	cancel, ok := c.typingCancel[roomID]
+	if ok {
+		delete(c.typingCancel, roomID)
+	}
+	c.typingMu.Unlock()
+
+	if ok {
+		cancel()
+	}
+}
+
+// stopAllTypingIndicators 停止所有房间 typing 状态刷新
+func (c *MatrixChannel) stopAllTypingIndicators() {
+	c.typingMu.Lock()
+	cancels := make([]context.CancelFunc, 0, len(c.typingCancel))
+	for _, cancel := range c.typingCancel {
+		cancels = append(cancels, cancel)
+	}
+	c.typingCancel = make(map[id.RoomID]context.CancelFunc)
+	c.typingMu.Unlock()
+
+	for _, cancel := range cancels {
+		cancel()
+	}
+}
+
+// sendTypingStatus 发送 typing 状态
+func (c *MatrixChannel) sendTypingStatus(roomID id.RoomID, typing bool, timeout time.Duration) {
+	if c.client == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if _, err := c.client.UserTyping(ctx, roomID, typing, timeout); err != nil {
+		c.logger.Debug("发送 Matrix typing 状态失败",
+			zap.String("room_id", string(roomID)),
+			zap.Error(err),
+		)
+	}
+}
+
 // onMessage 处理消息事件
 func (c *MatrixChannel) onMessage(ctx context.Context, evt *event.Event) {
 	// 忽略自己发送的消息
@@ -249,6 +338,8 @@ func (c *MatrixChannel) onMessage(ctx context.Context, evt *event.Event) {
 		zap.String("content", text),
 	)
 
+	c.startTypingIndicator(id.RoomID(evt.RoomID))
+
 	// 发布消息到总线
 	c.bus.PublishInbound(&bus.InboundMessage{
 		Channel:   "matrix",
@@ -285,6 +376,8 @@ func (c *MatrixChannel) Stop() {
 		c.client.StopSync()
 	}
 
+	c.stopAllTypingIndicators()
+
 	if c.cancel != nil {
 		c.cancel()
 	}
@@ -309,6 +402,7 @@ func (c *MatrixChannel) Send(msg *bus.OutboundMessage) error {
 	}
 
 	roomID := id.RoomID(msg.ChatID)
+	defer c.stopTypingIndicator(roomID)
 
 	// 发送文本消息
 	_, err := c.client.SendText(c.ctx, roomID, msg.Content)
@@ -329,6 +423,7 @@ func (c *MatrixChannel) SendNotice(msg *bus.OutboundMessage) error {
 	}
 
 	roomID := id.RoomID(msg.ChatID)
+	defer c.stopTypingIndicator(roomID)
 
 	// 发送通知消息
 	_, err := c.client.SendNotice(c.ctx, roomID, msg.Content)
@@ -349,6 +444,7 @@ func (c *MatrixChannel) SendReply(msg *bus.OutboundMessage, replyToEventID id.Ev
 	}
 
 	roomID := id.RoomID(msg.ChatID)
+	defer c.stopTypingIndicator(roomID)
 
 	// 构建包含回复的消息内容
 	content := &event.MessageEventContent{
