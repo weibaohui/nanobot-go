@@ -165,6 +165,8 @@ func (sa *SupervisorAgent) initSupervisor(ctx context.Context) error {
 		return fmt.Errorf("%w: %w", ErrProviderAdapter, err)
 	}
 
+
+	// 入口型Agent需要哪些工具？
 	var toolsConfig adk.ToolsConfig
 	var askUserTool tool.BaseTool
 	for _, t := range sa.tools {
