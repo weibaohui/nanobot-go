@@ -252,7 +252,7 @@ func (l *Loop) createBackgroundAgentTaskManager() *AgentTaskManager {
 // Run 运行代理循环
 func (l *Loop) Run(ctx context.Context) error {
 	l.running = true
-	l.logger.Info("代理循环已启动")
+	l.logger.Info("消息监听循环处理功能已启动")
 
 	for l.running {
 		select {

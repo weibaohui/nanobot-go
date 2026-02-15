@@ -80,9 +80,6 @@ func NewChatModelAdapter(logger *zap.Logger, cfg *config.Config) (*ChatModelAdap
 
 // SetSkillLoader 设置技能加载器
 func (a *ChatModelAdapter) SetSkillLoader(loader SkillLoader) {
-	if a.logger != nil {
-		a.logger.Info("ChatModelAdapter 设置技能加载器", zap.String("加载器", fmt.Sprintf("%T", loader)))
-	}
 	a.skillLoader = loader
 }
 

@@ -159,8 +159,6 @@ func runGateway(cmd *cobra.Command, args []string) {
 		cfg,
 		workspacePath,
 		func(ctx context.Context, cfg *config.Config, prompt string, model string, session string) (string, error) {
-			logger.Info("心跳回调被调用", zap.String("prompt", prompt))
-
 			agent := loop.GetMasterAgent()
 			resp, err := agent.Process(ctx, &bus.InboundMessage{
 				Channel: "heartbeat",
@@ -173,15 +171,12 @@ func runGateway(cmd *cobra.Command, args []string) {
 
 			// 获取心跳目标并发送消息
 			target := cfg.Heartbeat.Target
-			logger.Info("心跳响应准备发送", zap.String("target", target), zap.String("resp", resp))
-
 			if target != "" && target != "none" {
 				messageBus.PublishOutbound(&bus.OutboundMessage{
 					Channel: "heartbeat",
 					ChatID:  target,
-					Content: resp + target,
+					Content: resp,
 				})
-				logger.Info("心跳消息已发布到消息总线")
 			}
 			return resp, nil
 		},

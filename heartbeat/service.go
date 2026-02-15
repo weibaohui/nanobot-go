@@ -225,8 +225,6 @@ func (s *Service) Stop() {
 
 // tick 执行单次心跳
 func (s *Service) tick(ctx context.Context) {
-	s.logger.Info("心跳tick触发")
-
 	// 检查是否在活跃时段内
 	if !s.isInActiveHours() {
 		s.logger.Debug("心跳: 当前不在活跃时段内，跳过")
@@ -234,7 +232,6 @@ func (s *Service) tick(ctx context.Context) {
 	}
 
 	content := s.readHeartbeatFile()
-	s.logger.Info("读取HEARTBEAT.md", zap.Bool("为空", isHeartbeatEmpty(content)), zap.Int("长度", len(content)))
 
 	// 如果 HEARTBEAT.md 为空或不存在，跳过
 	if isHeartbeatEmpty(content) {

@@ -88,7 +88,6 @@ func (b *MessageBus) SubscribeOutbound(channel string, callback OutboundCallback
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.outboundSubscribers[channel] = append(b.outboundSubscribers[channel], callback)
-	b.logger.Info("订阅出站消息", zap.String("channel", channel), zap.Int("当前订阅者数量", len(b.outboundSubscribers[channel])))
 }
 
 // SubscribeStream 订阅特定渠道的流式消息
@@ -140,8 +139,6 @@ func (b *MessageBus) dispatchToSubscribers(msg *OutboundMessage) {
 	b.mu.RLock()
 	subscribers := b.outboundSubscribers[msg.Channel]
 	b.mu.RUnlock()
-
-	b.logger.Info("分发出站消息", zap.String("channel", msg.Channel), zap.Int("订阅者数量", len(subscribers)))
 
 	for _, callback := range subscribers {
 		if err := callback(msg); err != nil {
