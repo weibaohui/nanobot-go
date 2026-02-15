@@ -14,7 +14,6 @@ import (
 type TaskInfo struct {
 	ID            string
 	Status        string
-	LastLogs      []string
 	ResultSummary string
 }
 
@@ -136,18 +135,7 @@ func (t *GetTool) Run(ctx context.Context, argumentsInJSON string, opts ...tool.
 	if t.Logger != nil {
 		t.Logger.Info("查询后台任务成功", zap.String("任务ID", info.ID), zap.String("状态", info.Status))
 	}
-	logs := "无"
-	if len(info.LastLogs) > 0 {
-		logs = ""
-		for i, log := range info.LastLogs {
-			if i == 0 {
-				logs = log
-				continue
-			}
-			logs += "\n" + log
-		}
-	}
-	return fmt.Sprintf("任务ID: %s\n状态: %s\n结果摘要: %s\n最近日志:\n%s", info.ID, info.Status, info.ResultSummary, logs), nil
+	return fmt.Sprintf("任务ID: %s\n状态: %s\n结果摘要: %s", info.ID, info.Status, info.ResultSummary), nil
 }
 
 // InvokableRun 可直接调用的执行入口

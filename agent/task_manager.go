@@ -3,16 +3,21 @@ package agent
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
-	"github.com/google/uuid"
 	tasktools "github.com/weibaohui/nanobot-go/agent/tools/task"
 	"github.com/weibaohui/nanobot-go/config"
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 )
 
 type TaskStatus string
@@ -28,7 +33,6 @@ const (
 type TaskInfo struct {
 	ID            string
 	Status        TaskStatus
-	LastLogs      []string
 	ResultSummary string
 }
 
@@ -45,6 +49,8 @@ type AgentTaskManagerConfig struct {
 	TaskTimeoutSeconds    int
 	TaskLogCapacity       int
 	TaskMaxToolIterations int
+	// OnTaskComplete 任务完成回调，用于发送完成通知
+	OnTaskComplete func(channel, chatID, taskID string, status TaskStatus, result string)
 }
 
 type AgentTaskManager struct {
@@ -61,8 +67,22 @@ type AgentTaskManager struct {
 	taskTimeout   time.Duration
 	logCapacity   int
 
-	mu    sync.RWMutex
-	tasks map[string]*AgentTask
+	// onTaskComplete 任务完成回调
+	onTaskComplete func(channel, chatID, taskID string, status TaskStatus, result string)
+
+	// taskCounter 任务ID计数器（0-999999循环）
+	taskCounter uint32
+
+	// tasksDir 任务存储目录
+	tasksDir string
+
+	// mu 保护内存中的任务
+	mu sync.RWMutex
+	// runningTasks 内存中的运行中/待处理任务（必须保留在内存中以便管理）
+	runningTasks map[string]*AgentTask
+
+	// persistMu 保护文件写入
+	persistMu sync.Mutex
 }
 
 type AgentTask struct {
@@ -76,6 +96,30 @@ type AgentTask struct {
 	cancel        context.CancelFunc
 	done          chan struct{}
 	mu            sync.Mutex
+	// 任务上下文，用于完成回调
+	channel string
+	chatID  string
+	// 创建时间
+	createdAt time.Time
+}
+
+// PersistedTask 持久化的任务结构（用于YAML存储）
+type PersistedTask struct {
+	ID          string     `yaml:"id"`
+	Work        string     `yaml:"work,omitempty"`
+	Status      TaskStatus `yaml:"status"`
+	Result      string     `yaml:"result,omitempty"`
+	Channel     string     `yaml:"channel,omitempty"`
+	ChatID      string     `yaml:"chat_id,omitempty"`
+	CreatedAt   time.Time  `yaml:"created_at"`
+	CompletedAt time.Time  `yaml:"completed_at,omitempty"`
+}
+
+// TaskFile YAML文件结构
+type TaskFile struct {
+	Date   string           `yaml:"date"`
+	LastID uint32           `yaml:"last_id"`
+	Tasks  []*PersistedTask `yaml:"tasks"`
 }
 
 func NewAgentTaskManager(cfg *AgentTaskManagerConfig) (*AgentTaskManager, error) {
@@ -103,7 +147,10 @@ func NewAgentTaskManager(cfg *AgentTaskManagerConfig) (*AgentTaskManager, error)
 		timeout = 0
 	}
 
-	return &AgentTaskManager{
+	// 任务存储目录
+	tasksDir := filepath.Join(cfg.Workspace, "tasks")
+
+	m := &AgentTaskManager{
 		cfg:             cfg.Cfg,
 		workspace:       cfg.Workspace,
 		tools:           cfg.Tools,
@@ -115,8 +162,15 @@ func NewAgentTaskManager(cfg *AgentTaskManagerConfig) (*AgentTaskManager, error)
 		maxConcurrent:   maxConcurrent,
 		taskTimeout:     timeout,
 		logCapacity:     logCapacity,
-		tasks:           make(map[string]*AgentTask),
-	}, nil
+		onTaskComplete:  cfg.OnTaskComplete,
+		tasksDir:        tasksDir,
+		runningTasks:    make(map[string]*AgentTask),
+	}
+
+	// 加载计数器状态
+	m.loadCounter()
+
+	return m, nil
 }
 
 // SetRegisteredTools 设置已注册的工具名称
@@ -132,18 +186,22 @@ func (m *AgentTaskManager) StartTask(ctx context.Context, work, channel, chatID 
 		return "", "", fmt.Errorf("任务并发已达上限")
 	}
 
-	taskID := uuid.NewString()
+	// 生成6位数字任务ID（000000-999999循环）
+	taskID := m.generateTaskID()
 	task := &AgentTask{
 		id:          taskID,
 		work:        work,
 		status:      TaskPending,
 		logCapacity: m.logCapacity,
 		done:        make(chan struct{}),
+		channel:     channel,
+		chatID:      chatID,
+		createdAt:   time.Now(),
 	}
 	task.appendLog("任务已创建")
 
 	m.mu.Lock()
-	m.tasks[taskID] = task
+	m.runningTasks[taskID] = task
 	m.mu.Unlock()
 
 	go m.runTask(ctx, task, channel, chatID)
@@ -151,26 +209,54 @@ func (m *AgentTaskManager) StartTask(ctx context.Context, work, channel, chatID 
 	return taskID, TaskRunning, nil
 }
 
+// generateTaskID 生成6位数字任务ID
+func (m *AgentTaskManager) generateTaskID() string {
+	// 原子递增，取模1000000实现循环
+	n := atomic.AddUint32(&m.taskCounter, 1) % 1000000
+	return fmt.Sprintf("%06d", n)
+}
+
+// normalizeTaskID 标准化任务ID（忽略前导零）
+func normalizeTaskID(taskID string) string {
+	// 去除前导零
+	n, err := strconv.Atoi(strings.TrimSpace(taskID))
+	if err != nil {
+		return taskID
+	}
+	return fmt.Sprintf("%06d", n)
+}
+
 func (m *AgentTaskManager) GetTask(taskID string) (*TaskInfo, error) {
-	task := m.getTask(taskID)
-	if task == nil {
-		return nil, fmt.Errorf("任务不存在")
+	normalizedID := normalizeTaskID(taskID)
+
+	// 先查运行中的任务
+	m.mu.RLock()
+	task, ok := m.runningTasks[normalizedID]
+	m.mu.RUnlock()
+
+	if ok {
+		task.mu.Lock()
+		defer task.mu.Unlock()
+		return &TaskInfo{
+			ID:            task.id,
+			Status:        task.status,
+			ResultSummary: task.result,
+		}, nil
 	}
 
-	task.mu.Lock()
-	defer task.mu.Unlock()
-	return &TaskInfo{
-		ID:            task.id,
-		Status:        task.status,
-		LastLogs:      append([]string(nil), task.lastLogs...),
-		ResultSummary: task.result,
-	}, nil
+	// 从文件加载已完成任务
+	return m.loadTaskFromFile(normalizedID)
 }
 
 func (m *AgentTaskManager) StopTask(taskID string) (bool, TaskStatus, error) {
-	task := m.getTask(taskID)
-	if task == nil {
-		return false, "", fmt.Errorf("任务不存在")
+	normalizedID := normalizeTaskID(taskID)
+
+	m.mu.RLock()
+	task, ok := m.runningTasks[normalizedID]
+	m.mu.RUnlock()
+
+	if !ok {
+		return false, "", fmt.Errorf("任务不存在或已完成")
 	}
 
 	task.mu.Lock()
@@ -191,20 +277,30 @@ func (m *AgentTaskManager) StopTask(taskID string) (bool, TaskStatus, error) {
 
 // ListTasks 获取所有任务列表
 func (m *AgentTaskManager) ListTasks() ([]*TaskInfo, error) {
+	results := make([]*TaskInfo, 0)
+
+	// 运行中的任务
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-	results := make([]*TaskInfo, 0, len(m.tasks))
-	for _, task := range m.tasks {
+	for _, task := range m.runningTasks {
 		task.mu.Lock()
 		info := &TaskInfo{
 			ID:            task.id,
 			Status:        task.status,
-			LastLogs:      append([]string(nil), task.lastLogs...),
 			ResultSummary: task.result,
 		}
 		task.mu.Unlock()
 		results = append(results, info)
 	}
+	m.mu.RUnlock()
+
+	// 从文件加载当天已完成的任务
+	todayTasks, err := m.loadTodayCompletedTasks()
+	if err != nil {
+		m.logger.Warn("加载当天任务失败", zap.Error(err))
+	} else {
+		results = append(results, todayTasks...)
+	}
+
 	return results, nil
 }
 
@@ -223,6 +319,9 @@ func (m *AgentTaskManager) runTask(ctx context.Context, task *AgentTask, channel
 		task.status = TaskStopped
 		task.appendLog("任务已停止")
 		close(task.done)
+		m.persistTask(task)
+		m.notifyComplete(task, "")
+		m.removeFromRunning(task.id)
 		return
 	}
 	if err != nil {
@@ -234,6 +333,39 @@ func (m *AgentTaskManager) runTask(ctx context.Context, task *AgentTask, channel
 		task.appendLog("任务完成")
 	}
 	close(task.done)
+	m.persistTask(task)
+	m.notifyComplete(task, result)
+	m.removeFromRunning(task.id)
+}
+
+// removeFromRunning 从运行中任务列表移除
+func (m *AgentTaskManager) removeFromRunning(taskID string) {
+	m.mu.Lock()
+	delete(m.runningTasks, taskID)
+	m.mu.Unlock()
+}
+
+// persistTask 持久化任务到文件
+func (m *AgentTaskManager) persistTask(task *AgentTask) {
+	pt := &PersistedTask{
+		ID:          task.id,
+		Work:        task.work,
+		Status:      task.status,
+		Result:      task.result,
+		Channel:     task.channel,
+		ChatID:      task.chatID,
+		CreatedAt:   task.createdAt,
+		CompletedAt: time.Now(),
+	}
+
+	m.appendTaskToFile(pt)
+}
+
+// notifyComplete 通知任务完成
+func (m *AgentTaskManager) notifyComplete(task *AgentTask, result string) {
+	if m.onTaskComplete != nil {
+		m.onTaskComplete(task.channel, task.chatID, task.id, task.status, result)
+	}
 }
 
 func (m *AgentTaskManager) executeTask(ctx context.Context, work, channel, chatID string) (string, error) {
@@ -318,7 +450,7 @@ func (m *AgentTaskManager) reachedLimit() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	running := 0
-	for _, task := range m.tasks {
+	for _, task := range m.runningTasks {
 		task.mu.Lock()
 		status := task.status
 		task.mu.Unlock()
@@ -329,10 +461,151 @@ func (m *AgentTaskManager) reachedLimit() bool {
 	return running >= m.maxConcurrent
 }
 
-func (m *AgentTaskManager) getTask(taskID string) *AgentTask {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.tasks[taskID]
+// getTaskFilePath 获取任务文件路径
+func (m *AgentTaskManager) getTaskFilePath(date string) string {
+	return filepath.Join(m.tasksDir, date+".yaml")
+}
+
+// loadCounter 加载计数器状态
+func (m *AgentTaskManager) loadCounter() {
+	today := time.Now().Format("2006-01-02")
+	filePath := m.getTaskFilePath(today)
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return
+	}
+
+	var tf TaskFile
+	if err := yaml.Unmarshal(data, &tf); err != nil {
+		return
+	}
+
+	if tf.LastID > 0 {
+		atomic.StoreUint32(&m.taskCounter, tf.LastID)
+		m.logger.Info("恢复任务计数器", zap.Uint32("last_id", tf.LastID))
+	}
+}
+
+// loadTodayCompletedTasks 加载当天已完成的任务
+func (m *AgentTaskManager) loadTodayCompletedTasks() ([]*TaskInfo, error) {
+	today := time.Now().Format("2006-01-02")
+	filePath := m.getTaskFilePath(today)
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var tf TaskFile
+	if err := yaml.Unmarshal(data, &tf); err != nil {
+		return nil, err
+	}
+
+	results := make([]*TaskInfo, 0, len(tf.Tasks))
+	for _, pt := range tf.Tasks {
+		// 只返回已完成的任务
+		if pt.Status != TaskPending && pt.Status != TaskRunning {
+			results = append(results, &TaskInfo{
+				ID:            pt.ID,
+				Status:        pt.Status,
+				ResultSummary: pt.Result,
+			})
+		}
+	}
+
+	return results, nil
+}
+
+// loadTaskFromFile 从文件加载任务
+func (m *AgentTaskManager) loadTaskFromFile(taskID string) (*TaskInfo, error) {
+	// 遍历任务目录下的所有yaml文件
+	files, err := filepath.Glob(filepath.Join(m.tasksDir, "*.yaml"))
+	if err != nil {
+		return nil, fmt.Errorf("读取任务目录失败: %w", err)
+	}
+
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			continue
+		}
+
+		var tf TaskFile
+		if err := yaml.Unmarshal(data, &tf); err != nil {
+			continue
+		}
+
+		for _, pt := range tf.Tasks {
+			if normalizeTaskID(pt.ID) == taskID {
+				return &TaskInfo{
+					ID:            pt.ID,
+					Status:        pt.Status,
+					ResultSummary: pt.Result,
+				}, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("任务不存在")
+}
+
+// appendTaskToFile 追加任务到文件（根据创建时间决定写入哪一天的文件）
+func (m *AgentTaskManager) appendTaskToFile(pt *PersistedTask) {
+	m.persistMu.Lock()
+	defer m.persistMu.Unlock()
+
+	// 根据任务创建时间决定写入哪一天的文件
+	date := pt.CreatedAt.Format("2006-01-02")
+	filePath := m.getTaskFilePath(date)
+
+	// 确保目录存在
+	if err := os.MkdirAll(m.tasksDir, 0755); err != nil {
+		m.logger.Error("创建任务目录失败", zap.Error(err))
+		return
+	}
+
+	// 读取现有文件
+	var tf TaskFile
+	data, err := os.ReadFile(filePath)
+	if err == nil {
+		yaml.Unmarshal(data, &tf)
+	}
+
+	// 检查是否已存在（避免重复追加）
+	for _, existing := range tf.Tasks {
+		if existing.ID == pt.ID {
+			m.logger.Debug("任务已存在，跳过追加", zap.String("task_id", pt.ID))
+			return
+		}
+	}
+
+	// 更新日期、计数器和任务列表
+	tf.Date = date
+	tf.LastID = atomic.LoadUint32(&m.taskCounter)
+	tf.Tasks = append(tf.Tasks, pt)
+
+	// 写入文件
+	out, err := yaml.Marshal(&tf)
+	if err != nil {
+		m.logger.Error("序列化任务失败", zap.Error(err))
+		return
+	}
+
+	if err := os.WriteFile(filePath, out, 0644); err != nil {
+		m.logger.Error("写入任务文件失败", zap.Error(err))
+		return
+	}
+
+	m.logger.Debug("持久化任务完成", zap.String("task_id", pt.ID), zap.String("file", filePath))
+}
+
+// Close 关闭任务管理器
+func (m *AgentTaskManager) Close() {
+	// 无需额外操作，任务完成时已持久化
 }
 
 func (t *AgentTask) appendLog(message string) {
@@ -374,7 +647,6 @@ func (a *TaskManagerAdapter) GetTask(ctx context.Context, taskID string) (*taskt
 	return &tasktools.TaskInfo{
 		ID:            info.ID,
 		Status:        string(info.Status),
-		LastLogs:      append([]string(nil), info.LastLogs...),
 		ResultSummary: info.ResultSummary,
 	}, nil
 }
@@ -402,7 +674,6 @@ func (a *TaskManagerAdapter) ListTasks() ([]*tasktools.TaskInfo, error) {
 		result = append(result, &tasktools.TaskInfo{
 			ID:            item.ID,
 			Status:        string(item.Status),
-			LastLogs:      append([]string(nil), item.LastLogs...),
 			ResultSummary: item.ResultSummary,
 		})
 	}

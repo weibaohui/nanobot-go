@@ -228,6 +228,19 @@ func (l *Loop) createTaskManager() *AgentTaskManager {
 		Context:         l.context,
 		CheckpointStore: l.interruptManager.GetCheckpointStore(),
 		MaxIterations:   l.maxIterations,
+		OnTaskComplete: func(channel, chatID, taskID string, status TaskStatus, result string) {
+			// 任务完成时发送通知消息
+			statusText := map[TaskStatus]string{
+				TaskFinished: "完成",
+				TaskFailed:   "失败",
+				TaskStopped:  "已停止",
+			}[status]
+			msg := fmt.Sprintf("后台任务 %s\n状态: %s\n任务ID: %s", statusText, statusText, taskID)
+			if result != "" && status == TaskFinished {
+				msg = fmt.Sprintf("后台任务完成\n任务ID: %s\n\n%s", taskID, result)
+			}
+			l.bus.PublishOutbound(bus.NewOutboundMessage(channel, chatID, msg))
+		},
 	})
 	if err != nil {
 		l.logger.Error("创建任务管理器失败", zap.Error(err))
