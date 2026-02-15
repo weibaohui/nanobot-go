@@ -242,7 +242,7 @@ func (s *Service) tick(ctx context.Context) {
 	s.logger.Info("心跳: 检查任务...")
 
 	if s.onHeartbeat != nil {
-		response, err := s.onHeartbeat(ctx, s.getPrompt(), s.getModel(), s.getSession())
+		response, err := s.onHeartbeat(ctx, content, s.getModel(), s.getSession())
 		if err != nil {
 			s.logger.Error("心跳执行失败", zap.Error(err))
 			return
