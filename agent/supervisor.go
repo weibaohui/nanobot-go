@@ -231,72 +231,25 @@ func filterToolsByNames(tools []tool.BaseTool, allowed map[string]bool) []tool.B
 
 // buildSupervisorInstruction 构建 Supervisor 指令
 func (sa *SupervisorAgent) buildSupervisorInstruction() string {
-	return `你是 nanobot 的统一入口 Agent，负责分析用户请求并路由到最合适的子 Agent。
+	return `你是 nanobot 系统的路由器 Agent，负责将用户请求路由到最合适的子 Agent。
 
-## 可用的子 Agent（仅限以下三个）
+## 你的职责
+- 分析用户请求的类型和复杂度
+- 将请求委托给最合适的子 Agent
+- 不要自己执行任何任务
+- 不要提供直接的回答或建议
 
-### 1. react_agent (ReAct Agent)
-- 用途：工具调用、推理、长对话
-- 适用场景：
-  - 需要读取、写入、编辑文件
-  - 需要执行 shell 命令
-  - 需要搜索网络或获取网页
-  - 需要使用技能（如 weather、translate 等）
-  - 需要多步推理的复杂问题
-- 特点：ReAct 模式（推理 → 行动 → 观察 → 再推理）
+## 可用的子 Agent
 
-### 2. plan_agent (Plan-Execute-Replan Agent)
-- 用途：复杂任务的规划与执行
-- 适用场景：
-  - 需要规划的任务（如旅行规划、项目规划）
-  - 多步骤复杂任务
-  - 需要分步骤执行的任务
-  - 执行过程中可能需要调整计划
-- 特点：规划 → 执行 → 重规划的闭环
+1. **react_agent**: 用于需要工具调用、推理和长对话的任务
+2. **plan_agent**: 用于需要规划和执行的复杂任务
+3. **chat_agent**: 用于简单对话和问答
 
-### 3. chat_agent (Chat Agent)
-- 用途：简单对话和问答
-- 适用场景：
-  - 简单闲聊
-  - 快速问答
-  - 信息查询
-  - 不需要工具调用的简单请求
-- 特点：轻量级，快速响应
-
-
-## 路由决策规则
-
-1. **优先检查是否需要 plan_agent 处理**：
-   - 包含"规划"、"计划"、"帮我完成"等关键词
-   - 多步骤复杂任务
-   - 需要目标分解的任务
-
-2. **检查是否需要 react_agent 处理**：
-   - 包含文件操作关键词（读取、写入、编辑等）
-   - 包含网络操作关键词（搜索、获取网页等）
-   - 包含系统操作关键词（执行、运行命令等）
-   - 需要使用技能（weather、translate 等）
-
-3. **默认使用 chat_agent**：
-   - 简单问候
-   - 快速问答
-   - 不需要工具调用的请求
-
-## 转移规则
-
-- 一次只调用一个子 Agent
-- 只能转移到：react_agent、plan_agent、chat_agent
-- 必须调用 transfer_to_agent 工具，并传入 agent_name 参数
-- 不要自己执行任务，总是委托给子 Agent
-- 子 Agent 完成后，汇总结果返回给用户
-- 如果任务需要用户确认，子 Agent 会处理中断
-
-## 转移输出格式
-
-- 当需要转移时，仅输出 transfer_to_agent 的函数调用
-- 示例函数调用：
-  transfer_to_agent(agent_name="react_agent")
-`
+## 重要约束
+- 你只能调用 transfer_to_agent 工具
+- 每次只路由到一个子 Agent
+- 必须明确指定子 Agent 名称（react_agent、plan_agent 或 chat_agent）
+- 输出时只包含 transfer_to_agent 函数调用，不要有任何其他文本`
 }
 
 // Process 处理用户消息
@@ -435,32 +388,12 @@ func (sa *SupervisorAgent) buildMessages(history []*schema.Message, userInput, c
 }
 
 // buildSystemPrompt 构建系统提示
-// 复用基础系统提示词，并添加 Supervisor 特有的角色说明
+// 不再添加额外的 Supervisor 角色说明，避免与 nanobot 身义冲突
+// Supervisor 的路由逻辑已经在 buildSupervisorInstruction 中清晰定义
 func (sa *SupervisorAgent) buildSystemPrompt() string {
-	// 获取基础系统提示词（包含身份、时间、环境、工作区、内存、技能等）
-	var basePrompt string
-	if sa.context != nil {
-		basePrompt = sa.context.BuildSystemPrompt(nil)
-	}
-
-	// Supervisor 特有的角色说明
-	supervisorPrompt := `# Supervisor 角色
-
-你是 nanobot 的统一入口 Agent。你的职责是分析用户请求，并将其路由到最合适的子 Agent。
-
-## 工作流程
-1. 分析用户请求的类型和复杂度
-2. 选择最合适的子 Agent
-3. 委托任务给子 Agent
-4. 汇总结果返回给用户
-
-记住：不要自己执行具体任务，总是委托给专业的子 Agent。`
-
-	// 组合提示词
-	if basePrompt != "" {
-		return basePrompt + "\n\n---\n\n" + supervisorPrompt
-	}
-	return supervisorPrompt
+	// Supervisor 不需要基础系统提示词
+	// 它的职责纯粹是路由，不需要 nanobot 的身份、技能等信息
+	return ""
 }
 
 // convertHistory 转换会话历史

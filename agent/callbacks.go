@@ -200,7 +200,16 @@ func (ec *EinoCallbacks) logModelInput(input callbacks.CallbackInput, info *call
 		if msg == nil {
 			continue
 		}
-		// 在调试级别下记录完整内容
+
+		// 特别处理 System Message（包含指令），以 Info 级别记录
+		if msg.Role == schema.System {
+			ec.logger.Info("[EinoCallback] System Message (包含注入的指令)",
+				zap.String("content", msg.Content),
+			)
+			continue  // System Message 已在 Info 级别记录，跳过 Debug 记录
+		}
+
+		// 其他消息在调试级别下记录完整内容
 		ec.logger.Debug("[EinoCallback]   Message Content",
 			zap.String("role", string(msg.Role)),
 			zap.String("content", msg.Content),
