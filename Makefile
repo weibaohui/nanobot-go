@@ -29,7 +29,7 @@ dev:
 	@command -v air >/dev/null 2>&1 || (echo "错误: air 未安装，请运行: go install github.com/cosmtrek/air@latest" && exit 1)
 	air
 
-build:
+build: clean
 	@echo "开始交叉编译..."
 	@mkdir -p $(OUT_DIR)
 	@for platform in $(PLATFORMS); do \
