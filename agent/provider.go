@@ -80,6 +80,9 @@ func NewChatModelAdapter(logger *zap.Logger, cfg *config.Config) (*ChatModelAdap
 
 // SetSkillLoader 设置技能加载器
 func (a *ChatModelAdapter) SetSkillLoader(loader SkillLoader) {
+	if a.logger != nil {
+		a.logger.Info("ChatModelAdapter 设置技能加载器", zap.String("加载器", fmt.Sprintf("%T", loader)))
+	}
 	a.skillLoader = loader
 }
 
@@ -134,13 +137,16 @@ func (a *ChatModelAdapter) Generate(ctx context.Context, input []*schema.Message
 
 // interceptToolCall 拦截工具调用，如果工具不存在则转换为技能调用
 func (a *ChatModelAdapter) interceptToolCall(toolName string, argumentsJSON string) (string, string, error) {
+
 	// 如果工具已注册，不拦截
 	if a.isRegisteredTool(toolName) {
+		a.logger.Info("工具已注册，不拦截", zap.String("名称", toolName))
 		return toolName, argumentsJSON, nil
 	}
 
 	// 如果是已知技能，将工具调用转换为技能调用
 	if a.isKnownSkill(toolName) {
+		a.logger.Info("isKnownSkill 工具转换为技能调用", zap.String("名称", toolName))
 		// 解析原始参数
 		var originalArgs map[string]any
 		if err := json.Unmarshal([]byte(argumentsJSON), &originalArgs); err != nil {
@@ -174,6 +180,7 @@ func (a *ChatModelAdapter) interceptToolCall(toolName string, argumentsJSON stri
 		return "use_skill", string(newArgsJSON), nil
 	}
 
+	a.logger.Info("既不是工具也不是技能，保持原样", zap.String("名称", toolName))
 	// 既不是工具也不是技能，保持原样（会在执行时报错）
 	return toolName, argumentsJSON, nil
 }
@@ -192,6 +199,7 @@ func (a *ChatModelAdapter) interceptToolCalls(msg *schema.Message) {
 			)
 		}
 		newName, newArgs, err := a.interceptToolCall(tc.Function.Name, tc.Function.Arguments)
+
 		if err != nil {
 			continue
 		}

@@ -100,6 +100,12 @@ func (sa *MasterAgent) initMaster(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrChatModelAdapter, err)
 	}
+	if sa.context != nil {
+		adapter.SetSkillLoader(sa.context.GetSkillsLoader().LoadSkill)
+	}
+	if len(sa.registeredTools) > 0 {
+		adapter.SetRegisteredTools(sa.registeredTools)
+	}
 
 	var toolsConfig adk.ToolsConfig
 	if len(sa.tools) > 0 {
