@@ -541,3 +541,14 @@ func (sa *SupervisorAgent) Resume(ctx context.Context, checkpointID string, resu
 
 	return response, nil
 }
+
+func buildToolsConfig(tools []tool.BaseTool) adk.ToolsConfig {
+	if len(tools) == 0 {
+		return adk.ToolsConfig{}
+	}
+	return adk.ToolsConfig{
+		ToolsNodeConfig: compose.ToolsNodeConfig{
+			Tools: tools,
+		},
+	}
+}

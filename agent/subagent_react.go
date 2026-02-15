@@ -100,16 +100,6 @@ func NewReActSubAgent(ctx context.Context, cfg *ReActConfig) (*ReActSubAgent, er
 	}, nil
 }
 
-func buildToolsConfig(tools []tool.BaseTool) adk.ToolsConfig {
-	if len(tools) == 0 {
-		return adk.ToolsConfig{}
-	}
-	return adk.ToolsConfig{
-		ToolsNodeConfig: compose.ToolsNodeConfig{
-			Tools: tools,
-		},
-	}
-}
 
 // buildReActInstruction 构建 ReAct Agent 指令
 func buildReActInstruction(workspace string) string {
