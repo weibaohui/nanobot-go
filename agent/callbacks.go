@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/cloudwego/eino/callbacks"
@@ -126,16 +127,43 @@ func (ec *EinoCallbacks) onError(ctx context.Context, info *callbacks.RunInfo, e
 		duration = time.Since(startTime)
 	}
 
-	ec.logger.Error("[EinoCallback] 节点执行出错",
-		zap.Error(err),
-		zap.String("component", string(info.Component)),
-		zap.String("type", info.Type),
-		zap.String("name", info.Name),
-		zap.Int64("duration_ms", duration.Milliseconds()),
-	)
+	if isInterruptError(err) {
+		ec.logger.Info("[EinoCallback] 节点触发中断",
+			zap.Error(err),
+			zap.String("component", string(info.Component)),
+			zap.String("type", info.Type),
+			zap.String("name", info.Name),
+			zap.Int64("duration_ms", duration.Milliseconds()),
+		)
+	} else {
+		ec.logger.Error("[EinoCallback] 节点执行出错",
+			zap.Error(err),
+			zap.String("component", string(info.Component)),
+			zap.String("type", info.Type),
+			zap.String("name", info.Name),
+			zap.Int64("duration_ms", duration.Milliseconds()),
+		)
+	}
 
 	delete(ec.startTimes, nodeKey)
 	return ctx
+}
+
+func isInterruptError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	if strings.HasPrefix(msg, "INTERRUPT:") {
+		return true
+	}
+	if strings.Contains(msg, "interrupt signal:") {
+		return true
+	}
+	if strings.Contains(msg, "interrupt happened") {
+		return true
+	}
+	return false
 }
 
 // onStartWithStreamInput 处理流式输入开始的回调
@@ -206,7 +234,7 @@ func (ec *EinoCallbacks) logModelInput(input callbacks.CallbackInput, info *call
 			ec.logger.Info("[EinoCallback] System Message (包含注入的指令)",
 				zap.String("content", msg.Content),
 			)
-			continue  // System Message 已在 Info 级别记录，跳过 Debug 记录
+			continue // System Message 已在 Info 级别记录，跳过 Debug 记录
 		}
 
 		// 其他消息在调试级别下记录完整内容
