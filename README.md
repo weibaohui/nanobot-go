@@ -8,7 +8,7 @@
 
 ## 项目简介
 
-nanobot-go 是一个基于 [CloudWeGo Eino](https://github.com/cloudwego/eino) 框架构建的轻量级 AI 个人助理。它是 [nanobot](https://github.com/hkuds/nanobot) 的 Go 语言重写版本，采用现代化的 Agent 架构设计，支持多种消息渠道和丰富的工具能力。
+nanobot-go 是一个基于 [CloudWeGo Eino](https://github.com/cloudwego/eino) 框架构建的轻量级 AI 个人助理。基于 [nanobot](https://github.com/hkuds/nanobot) 的 Go 语言重写版本，采用现代化的 Agent 架构设计，支持多种消息渠道和丰富的工具能力。
 
 ### 核心特性
 
