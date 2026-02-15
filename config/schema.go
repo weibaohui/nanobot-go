@@ -3,6 +3,8 @@ package config
 import (
 	"encoding/json"
 	"os"
+
+	"github.com/weibaohui/nanobot-go/utils"
 )
 
 // Config 根配置结构
@@ -251,7 +253,7 @@ func (c *Config) GetProvider(model string) *ProviderConfig {
 
 	for _, p := range providers {
 		for _, kw := range p.keywords {
-			if contains(modelLower, kw) && p.config.APIKey != "" {
+			if utils.ContainsInsensitive(modelLower, kw) && p.config.APIKey != "" {
 				return &p.config
 			}
 		}
@@ -265,7 +267,7 @@ func (c *Config) GetProvider(model string) *ProviderConfig {
 	if c.Providers.SiliconFlow.APIKey != "" {
 		siliconflowPrefixes := []string{"Qwen/", "deepseek-ai/", "meta-llama/", "THUDM/", "mistralai/", "google/"}
 		for _, prefix := range siliconflowPrefixes {
-			if contains(modelLower, prefix) {
+			if utils.ContainsInsensitive(modelLower, prefix) {
 				return &c.Providers.SiliconFlow
 			}
 		}
@@ -301,35 +303,4 @@ func (c *Config) GetAPIBase(model string) string {
 		return p.APIBase
 	}
 	return ""
-}
-
-// TODO 迁移到utils
-// contains 检查字符串是否包含子串（不区分大小写）
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsLower(s, substr))
-}
-
-// TODO 迁移到utils
-func containsLower(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		match := true
-		for j := 0; j < len(substr); j++ {
-			sc := s[i+j]
-			if sc >= 'A' && sc <= 'Z' {
-				sc += 32
-			}
-			subc := substr[j]
-			if subc >= 'A' && subc <= 'Z' {
-				subc += 32
-			}
-			if sc != subc {
-				match = false
-				break
-			}
-		}
-		if match {
-			return true
-		}
-	}
-	return false
 }
