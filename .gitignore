@@ -2,3 +2,4 @@ nanobot
 nanobot-go
 .nanobot/
 tmp/
+bin/
