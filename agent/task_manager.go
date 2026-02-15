@@ -347,6 +347,12 @@ func (m *AgentTaskManager) removeFromRunning(taskID string) {
 
 // persistTask 持久化任务到文件
 func (m *AgentTaskManager) persistTask(task *AgentTask) {
+	m.logger.Info("persistTask 被调用",
+		zap.String("task_id", task.id),
+		zap.String("status", string(task.status)),
+		zap.Time("created_at", task.createdAt),
+	)
+
 	pt := &PersistedTask{
 		ID:          task.id,
 		Work:        task.work,
@@ -473,17 +479,37 @@ func (m *AgentTaskManager) loadCounter() {
 
 	data, err := os.ReadFile(filePath)
 	if err != nil {
+		m.logger.Info("当天任务文件不存在，计数器从0开始", zap.String("date", today))
 		return
 	}
 
 	var tf TaskFile
 	if err := yaml.Unmarshal(data, &tf); err != nil {
+		m.logger.Warn("解析任务文件失败", zap.Error(err))
 		return
 	}
 
+	// 优先使用文件中保存的 LastID
 	if tf.LastID > 0 {
 		atomic.StoreUint32(&m.taskCounter, tf.LastID)
-		m.logger.Info("恢复任务计数器", zap.Uint32("last_id", tf.LastID))
+		m.logger.Info("从文件恢复任务计数器", zap.Uint32("last_id", tf.LastID))
+		return
+	}
+
+	// 如果 LastID 为0，从任务列表中计算最大ID
+	maxID := uint32(0)
+	for _, pt := range tf.Tasks {
+		// 解析任务ID
+		var id uint32
+		if _, err := fmt.Sscanf(pt.ID, "%d", &id); err == nil {
+			if id > maxID {
+				maxID = id
+			}
+		}
+	}
+	if maxID > 0 {
+		atomic.StoreUint32(&m.taskCounter, maxID)
+		m.logger.Info("从任务列表恢复计数器", zap.Uint32("max_id", maxID))
 	}
 }
 
@@ -562,9 +588,16 @@ func (m *AgentTaskManager) appendTaskToFile(pt *PersistedTask) {
 	date := pt.CreatedAt.Format("2006-01-02")
 	filePath := m.getTaskFilePath(date)
 
+	m.logger.Info("准备持久化任务",
+		zap.String("task_id", pt.ID),
+		zap.String("status", string(pt.Status)),
+		zap.String("tasks_dir", m.tasksDir),
+		zap.String("file", filePath),
+	)
+
 	// 确保目录存在
 	if err := os.MkdirAll(m.tasksDir, 0755); err != nil {
-		m.logger.Error("创建任务目录失败", zap.Error(err))
+		m.logger.Error("创建任务目录失败", zap.Error(err), zap.String("tasks_dir", m.tasksDir))
 		return
 	}
 
@@ -596,11 +629,11 @@ func (m *AgentTaskManager) appendTaskToFile(pt *PersistedTask) {
 	}
 
 	if err := os.WriteFile(filePath, out, 0644); err != nil {
-		m.logger.Error("写入任务文件失败", zap.Error(err))
+		m.logger.Error("写入任务文件失败", zap.Error(err), zap.String("file", filePath))
 		return
 	}
 
-	m.logger.Debug("持久化任务完成", zap.String("task_id", pt.ID), zap.String("file", filePath))
+	m.logger.Info("持久化任务成功", zap.String("task_id", pt.ID), zap.String("file", filePath))
 }
 
 // Close 关闭任务管理器
