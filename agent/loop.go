@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/tool"
@@ -300,52 +299,10 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 		zap.String("内容", preview),
 	)
 
-	// 检查是否有待处理的中断需要响应
-	sessionKey := msg.SessionKey()
-	if pendingInterrupt := l.interruptManager.GetPendingInterrupt(sessionKey); pendingInterrupt != nil {
-		l.logger.Info("检测到待处理的中断，尝试恢复执行",
-			zap.String("checkpoint_id", pendingInterrupt.CheckpointID),
-			zap.String("session_key", sessionKey),
-		)
-
-		// 提交用户响应
-		response := &UserResponse{
-			CheckpointID: pendingInterrupt.CheckpointID,
-			Answer:       msg.Content,
-		}
-		if err := l.interruptManager.SubmitUserResponse(response); err != nil {
-			l.logger.Error("提交用户响应失败", zap.Error(err))
-			return err
-		}
-
-		// 恢复执行
-		result, err := l.ResumeExecution(ctx, pendingInterrupt.CheckpointID, pendingInterrupt.InterruptID, msg.Content, msg.Channel, msg.ChatID, sessionKey, pendingInterrupt.IsAskUser, pendingInterrupt.IsPlan, pendingInterrupt.IsSupervisor)
-		if err != nil {
-			// 检查是否是新的中断
-			if strings.HasPrefix(err.Error(), "INTERRUPT:") {
-				// 新的中断已由 handleInterrupt 处理
-				return nil
-			}
-			return fmt.Errorf("恢复执行失败: %w", err)
-		}
-
-		// 清理已完成的中断
-		l.interruptManager.ClearInterrupt(pendingInterrupt.CheckpointID)
-
-		// 发布恢复后的响应
-		l.bus.PublishOutbound(bus.NewOutboundMessage(msg.Channel, msg.ChatID, result))
-
-		// 保存会话
-		sess := l.sessions.GetOrCreate(sessionKey)
-		sess.AddMessage("user", msg.Content)
-		l.sessions.Save(sess)
-
-		return nil
-	}
-
 	// 更新工具上下文
 	l.updateToolContext(msg.Channel, msg.ChatID)
 
+	// 使用 Master Agent 处理消息（包括中断恢复和正常处理）
 	l.logger.Info("使用 Master Agent 处理消息")
 	response, err := l.masterAgent.Process(ctx, msg)
 

@@ -144,6 +144,66 @@ func (sa *MasterAgent) Process(ctx context.Context, msg *bus.InboundMessage) (st
 	// 将 session key 放入 context，用于记录 token 用量
 	ctx = context.WithValue(ctx, SessionKeyContextKey, sessionKey)
 
+	// 检查是否有待处理的中断需要响应
+	if pendingInterrupt := sa.interruptManager.GetPendingInterrupt(sessionKey); pendingInterrupt != nil {
+		sa.logger.Info("检测到待处理的中断，尝试恢复执行",
+			zap.String("checkpoint_id", pendingInterrupt.CheckpointID),
+			zap.String("session_key", sessionKey),
+		)
+
+		// 提交用户响应
+		response := &UserResponse{
+			CheckpointID: pendingInterrupt.CheckpointID,
+			Answer:       msg.Content,
+		}
+		if err := sa.interruptManager.SubmitUserResponse(response); err != nil {
+			return "", fmt.Errorf("提交用户响应失败: %w", err)
+		}
+
+		// 准备恢复参数
+		var resumePayload any
+		if pendingInterrupt.IsAskUser {
+			resumePayload = &askuser.AskUserInfo{
+				UserAnswer: msg.Content,
+			}
+		} else {
+			resumePayload = map[string]any{
+				"user_answer": msg.Content,
+			}
+		}
+		resumeParams := &adk.ResumeParams{
+			Targets: map[string]any{
+				pendingInterrupt.InterruptID: resumePayload,
+			},
+		}
+
+		// 构建消息对象用于恢复执行
+		resumeMsg := &bus.InboundMessage{
+			Channel:  msg.Channel,
+			ChatID:   msg.ChatID,
+			SenderID: sessionKey,
+		}
+
+		// 恢复执行
+		result, err := sa.Resume(ctx, pendingInterrupt.CheckpointID, resumeParams, resumeMsg)
+		if err != nil {
+			// 检查是否是新的中断
+			if isInterruptError(err) {
+				return "", err
+			}
+			return "", fmt.Errorf("恢复执行失败: %w", err)
+		}
+
+		// 清理已完成的中断
+		sa.interruptManager.ClearInterrupt(pendingInterrupt.CheckpointID)
+
+		// 保存会话
+		sess.AddMessage("user", msg.Content)
+		sa.sessions.Save(sess)
+
+		return result, nil
+	}
+
 	// 构建消息
 	history := sa.convertHistory(sess.GetHistory(10))
 	messages := sa.buildMessages(history, msg.Content, msg.Channel, msg.ChatID)
