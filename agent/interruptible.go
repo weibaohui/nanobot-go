@@ -94,6 +94,27 @@ func newInterruptible(ctx context.Context, cfg *interruptibleConfig) (*interrupt
 	return i, nil
 }
 
+// BuildChatModelAdapter 创建并配置 ChatModelAdapter
+// 将 LLM 初始化逻辑集中在此，避免遗漏必要配置
+func (i *interruptible) BuildChatModelAdapter() (*ChatModelAdapter, error) {
+	llm, err := NewChatModelAdapter(i.logger, i.cfg, i.sessions)
+	if err != nil {
+		return nil, err
+	}
+
+	// 设置 SkillLoader
+	if i.context != nil {
+		llm.SetSkillLoader(i.context.GetSkillsLoader().LoadSkill)
+	}
+
+	// 设置 RegisteredTools
+	if len(i.registeredTools) > 0 {
+		llm.SetRegisteredTools(i.registeredTools)
+	}
+
+	return llm, nil
+}
+
 // Process 处理用户消息的统一入口
 // 包含中断检查和恢复逻辑
 func (i *interruptible) Process(ctx context.Context, msg *bus.InboundMessage, buildMessagesFunc func(history []*schema.Message, userInput, channel, chatID string) []*schema.Message) (string, error) {

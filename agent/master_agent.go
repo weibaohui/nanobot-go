@@ -88,15 +88,9 @@ func NewMasterAgent(ctx context.Context, cfg *MasterAgentConfig) (*MasterAgent, 
 	}
 
 	// 创建 ADK Runner
-	llm, err := NewChatModelAdapter(sa.logger, sa.cfg, sa.sessions)
+	llm, err := interruptible.BuildChatModelAdapter()
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrChatModelAdapter, err)
-	}
-	if sa.context != nil {
-		llm.SetSkillLoader(sa.context.GetSkillsLoader().LoadSkill)
-	}
-	if len(cfg.RegisteredTools) > 0 {
-		llm.SetRegisteredTools(cfg.RegisteredTools)
 	}
 
 	var toolsConfig adk.ToolsConfig

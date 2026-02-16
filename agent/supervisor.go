@@ -172,15 +172,9 @@ func (sa *SupervisorAgent) initSubAgents(ctx context.Context) error {
 
 // initSupervisor 创建 ADK Supervisor
 func (sa *SupervisorAgent) initSupervisor(ctx context.Context) error {
-	llm, err := NewChatModelAdapter(sa.logger, sa.cfg, sa.sessions)
+	llm, err := sa.interruptible.BuildChatModelAdapter()
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrChatModelAdapter, err)
-	}
-	if sa.context != nil {
-		llm.SetSkillLoader(sa.context.GetSkillsLoader().LoadSkill)
-	}
-	if len(sa.registeredTools) > 0 {
-		llm.SetRegisteredTools(sa.registeredTools)
 	}
 
 	var toolsConfig adk.ToolsConfig
