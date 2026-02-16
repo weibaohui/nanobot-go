@@ -139,26 +139,3 @@ func (sa *MasterAgent) buildMessages(history []*schema.Message, userInput, chann
 	// 复用公共方法构建消息列表
 	return BuildMessageList("", history, userInput, channel, chatID)
 }
-
-// convertHistory 转换会话历史
-func (sa *MasterAgent) convertHistory(history []map[string]any) []*schema.Message {
-	result := make([]*schema.Message, 0, len(history))
-	for _, h := range history {
-		role := schema.User
-		if r, ok := h["role"].(string); ok && r == "assistant" {
-			role = schema.Assistant
-		}
-
-		content, _ := h["content"].(string)
-		result = append(result, &schema.Message{
-			Role:    role,
-			Content: content,
-		})
-	}
-	return result
-}
-
-// GetADKRunner 获取 ADK Runner
-func (sa *MasterAgent) GetADKRunner() *adk.Runner {
-	return sa.adkRunner
-}

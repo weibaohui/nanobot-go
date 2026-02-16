@@ -308,38 +308,6 @@ func (sa *SupervisorAgent) buildSystemPrompt() string {
 	return ""
 }
 
-// convertHistory 转换会话历史
-func (sa *SupervisorAgent) convertHistory(history []map[string]any) []*schema.Message {
-	result := make([]*schema.Message, 0, len(history))
-	for _, h := range history {
-		role := schema.User
-		if r, ok := h["role"].(string); ok && r == "assistant" {
-			role = schema.Assistant
-		}
-
-		content, _ := h["content"].(string)
-		result = append(result, &schema.Message{
-			Role:    role,
-			Content: content,
-		})
-	}
-	return result
-}
-
-// GetSubAgents 获取子 Agent
-func (sa *SupervisorAgent) GetSubAgents() map[AgentType]SubAgent {
-	return map[AgentType]SubAgent{
-		AgentTypeReAct: sa.reactAgent,
-		AgentTypePlan:  sa.planAgent,
-		AgentTypeChat:  sa.chatAgent,
-	}
-}
-
-// GetADKRunner 获取 ADK Runner
-func (sa *SupervisorAgent) GetADKRunner() *adk.Runner {
-	return sa.adkRunner
-}
-
 func buildToolsConfig(tools []tool.BaseTool) adk.ToolsConfig {
 	if len(tools) == 0 {
 		return adk.ToolsConfig{}
