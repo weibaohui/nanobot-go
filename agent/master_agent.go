@@ -330,19 +330,8 @@ func (sa *MasterAgent) handleInterrupt(msg *bus.InboundMessage, checkpointID str
 
 // buildMessages 构建消息列表
 func (sa *MasterAgent) buildMessages(history []*schema.Message, userInput, channel, chatID string) []*schema.Message {
-	// 构建系统提示
-	systemPrompt := sa.buildSystemPrompt()
 	// 复用公共方法构建消息列表
-	return BuildMessageList(systemPrompt, history, userInput, channel, chatID)
-}
-
-// buildSystemPrompt 构建系统提示
-// 不再添加额外的 Master 角色说明，避免与 nanobot 身义冲突
-// Master 的路由逻辑已经在 buildMasterInstruction 中清晰定义
-func (sa *MasterAgent) buildSystemPrompt() string {
-	// Master 不需要基础系统提示词
-	// 它的职责纯粹是路由，不需要 nanobot 的身份、技能等信息
-	return ""
+	return BuildMessageList("", history, userInput, channel, chatID)
 }
 
 // convertHistory 转换会话历史
