@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/components/model"
@@ -127,16 +128,8 @@ func (a *ChatModelAdapter) Generate(ctx context.Context, input []*schema.Message
 		return nil, err
 	}
 
-	if a.logger != nil {
-		a.logger.Info("原始响应",
-			zap.String("内容", response.Content),
-			zap.Int("工具调用数", len(response.ToolCalls)),
-		)
-	}
-
 	// 拦截并转换工具调用
 	a.interceptToolCalls(response)
-
 	// 记录 token 用量到 session
 	a.recordTokenUsage(ctx, response)
 
@@ -172,8 +165,20 @@ func (a *ChatModelAdapter) recordTokenUsage(ctx context.Context, response *schem
 	}
 
 	sess := a.sessions.GetOrCreate(key)
-	sess.AddMessageWithTokenUsage("assistant", response.Content, tokenUsage)
-	a.logger.Info("记录Session TokenUsage", zap.Any("Usage", tokenUsage))
+
+	content := response.Content
+	role := "assistant"
+	if len(response.ToolCalls) > 0 {
+		role = "tool"
+		//拼接所有的 Name(Arguments)
+		var toolCallsStr strings.Builder
+		for _, toolCall := range response.ToolCalls {
+			fmt.Fprintf(&toolCallsStr, "%s(%s)", toolCall.Function.Name, toolCall.Function.Arguments)
+		}
+		content = fmt.Sprintf("%s", toolCallsStr.String())
+	}
+
+	sess.AddMessageWithTokenUsage(role, content, tokenUsage)
 	if err := a.sessions.Save(sess); err != nil {
 		if a.logger != nil {
 			a.logger.Error("保存 token 用量失败", zap.Error(err))
