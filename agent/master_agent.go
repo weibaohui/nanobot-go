@@ -26,15 +26,12 @@ type MasterAgent struct {
 	tools     []tool.BaseTool
 	logger    *zap.Logger
 	sessions  *session.Manager
-	bus       *bus.MessageBus
 	context   *ContextBuilder
 
-	adkMaster adk.Agent
 	adkRunner *adk.Runner
 
 	interruptManager *InterruptManager
 	checkpointStore  compose.CheckPointStore
-	maxIterations    int
 	registeredTools  []string
 }
 
@@ -65,22 +62,15 @@ func NewMasterAgent(ctx context.Context, cfg *MasterAgentConfig) (*MasterAgent, 
 		logger = zap.NewNop()
 	}
 
-	maxIter := cfg.MaxIterations
-	if maxIter <= 0 {
-		maxIter = 10
-	}
-
 	sa := &MasterAgent{
 		cfg:              cfg.Cfg,
 		workspace:        cfg.Workspace,
 		tools:            cfg.Tools,
 		logger:           logger,
 		sessions:         cfg.Sessions,
-		bus:              cfg.Bus,
 		context:          cfg.Context,
 		interruptManager: cfg.InterruptMgr,
 		checkpointStore:  cfg.CheckpointStore,
-		maxIterations:    maxIter,
 		registeredTools:  cfg.RegisteredTools,
 	}
 
@@ -89,8 +79,7 @@ func NewMasterAgent(ctx context.Context, cfg *MasterAgentConfig) (*MasterAgent, 
 	}
 
 	logger.Info("Master Agent 创建成功",
-		zap.String("model", cfg.Context.workspace),
-		zap.Int("max_iterations", maxIter),
+		zap.String("model", cfg.Workspace),
 	)
 
 	return sa, nil
