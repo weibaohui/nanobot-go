@@ -16,6 +16,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const interruptErrorPrefix = "INTERRUPT:"
+
 // MasterAgent 监督者 Agent
 // 作为统一入口，根据用户输入自动路由到合适的子 Agent
 type MasterAgent struct {
@@ -160,10 +162,15 @@ func (sa *MasterAgent) Process(ctx context.Context, msg *bus.InboundMessage) (st
 	}
 
 	// 保存用户消息（assistant 消息在 Generate 中已自动保存）
-	sess.AddMessage("user", msg.Content)
-	sa.sessions.Save(sess)
+	sa.saveSession(sess, msg.Content)
 
 	return response, nil
+}
+
+// saveSession 保存用户消息到会话
+func (sa *MasterAgent) saveSession(sess *session.Session, userMessage string) {
+	sess.AddMessage("user", userMessage)
+	sa.sessions.Save(sess)
 }
 
 // processInterrupted 处理中断恢复流程
@@ -211,8 +218,7 @@ func (sa *MasterAgent) processInterrupted(ctx context.Context, sess *session.Ses
 	// 清理已完成的中断
 	sa.interruptManager.ClearInterrupt(pendingInterrupt.CheckpointID)
 	// 保存会话
-	sess.AddMessage("user", msg.Content)
-	sa.sessions.Save(sess)
+	sa.saveSession(sess, msg.Content)
 
 	return result, nil
 }
@@ -319,7 +325,7 @@ func (sa *MasterAgent) handleInterrupt(msg *bus.InboundMessage, checkpointID str
 		zap.String("question", question),
 	)
 
-	return fmt.Errorf("INTERRUPT:%s:%s", checkpointID, interruptID)
+	return fmt.Errorf("%s%s:%s", interruptErrorPrefix, checkpointID, interruptID)
 }
 
 // buildMessages 构建消息列表
