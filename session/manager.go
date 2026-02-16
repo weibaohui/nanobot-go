@@ -12,19 +12,39 @@ import (
 	"github.com/weibaohui/nanobot-go/config"
 )
 
+// TokenUsage Token 用量统计
+type TokenUsage struct {
+	PromptTokens     int `json:"prompt_tokens"`     // 输入 token 数量
+	CompletionTokens int `json:"completion_tokens"` // 输出 token 数量
+	TotalTokens      int `json:"total_tokens"`      // 总 token 数量
+	ReasoningTokens  int `json:"reasoning_tokens"`  // 推理 token 数量 (o1 等模型)
+	CachedTokens     int `json:"cached_tokens"`     // 缓存 token 数量 (缓存命中)
+}
+
+// Add 将另一个 TokenUsage 累加到当前用量
+func (t *TokenUsage) Add(other TokenUsage) {
+	t.PromptTokens += other.PromptTokens
+	t.CompletionTokens += other.CompletionTokens
+	t.TotalTokens += other.TotalTokens
+	t.ReasoningTokens += other.ReasoningTokens
+	t.CachedTokens += other.CachedTokens
+}
+
 // Message 会话消息
 type Message struct {
-	Role      string    `json:"role"`
-	Content   string    `json:"content"`
-	Timestamp time.Time `json:"timestamp"`
+	Role       string      `json:"role"`
+	Content    string      `json:"content"`
+	Timestamp  time.Time   `json:"timestamp"`
+	TokenUsage *TokenUsage `json:"token_usage,omitempty"` // 该消息对应的 token 用量
 }
 
 // Session 会话
 type Session struct {
-	Key       string    `json:"key"`
-	Messages  []Message `json:"messages"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	Key        string     `json:"key"`
+	Messages   []Message  `json:"messages"`
+	TokenUsage TokenUsage `json:"token_usage"` // 累加的 token 用量
+	CreatedAt  time.Time  `json:"createdAt"`
+	UpdatedAt  time.Time  `json:"updatedAt"`
 }
 
 // AddMessage 添加消息到会话
@@ -34,6 +54,27 @@ func (s *Session) AddMessage(role, content string) {
 		Content:   content,
 		Timestamp: time.Now(),
 	})
+	s.UpdatedAt = time.Now()
+}
+
+// AddMessageWithTokenUsage 添加消息到会话并记录 token 用量
+func (s *Session) AddMessageWithTokenUsage(role, content string, usage TokenUsage) {
+	msg := Message{
+		Role:       role,
+		Content:    content,
+		Timestamp:  time.Now(),
+		TokenUsage: &usage,
+	}
+	s.Messages = append(s.Messages, msg)
+
+	// 累加到 Session 级别的 TokenUsage
+	s.TokenUsage.Add(usage)
+	s.UpdatedAt = time.Now()
+}
+
+// UpdateTokenUsage 更新 Session 级别的累加 token 用量
+func (s *Session) UpdateTokenUsage(usage TokenUsage) {
+	s.TokenUsage.Add(usage)
 	s.UpdatedAt = time.Now()
 }
 

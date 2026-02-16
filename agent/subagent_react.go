@@ -53,7 +53,7 @@ func NewReActSubAgent(ctx context.Context, cfg *ReActConfig) (*ReActSubAgent, er
 		maxIter = 15
 	}
 
-	adapter, err := NewChatModelAdapter(logger, cfg.Cfg)
+	adapter, err := NewChatModelAdapter(logger, cfg.Cfg, nil)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrChatModelAdapter, err)
 	}

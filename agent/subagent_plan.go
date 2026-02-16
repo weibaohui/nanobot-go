@@ -56,7 +56,7 @@ func NewPlanSubAgent(ctx context.Context, cfg *PlanConfig) (*PlanSubAgent, error
 		maxIter = 20
 	}
 
-	adapter, err := NewChatModelAdapter(logger, cfg.Cfg)
+	adapter, err := NewChatModelAdapter(logger, cfg.Cfg, nil)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrChatModelAdapter, err)
 	}

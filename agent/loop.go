@@ -108,7 +108,7 @@ func NewLoop(cfg *LoopConfig) *Loop {
 		loop.taskManager.SetRegisteredTools(toolNames)
 	}
 
-	adapter, err := NewChatModelAdapter(logger, loop.cfg)
+	adapter, err := NewChatModelAdapter(logger, loop.cfg, loop.sessions)
 	if err != nil {
 		logger.Error("创建 Provider 适配器失败", zap.Error(err))
 		return loop
@@ -228,6 +228,7 @@ func (l *Loop) createBackgroundAgentTaskManager() *AgentTaskManager {
 		Context:         l.context,
 		CheckpointStore: l.interruptManager.GetCheckpointStore(),
 		MaxIterations:   l.maxIterations,
+		Sessions:        l.sessions,
 		OnTaskComplete: func(channel, chatID, taskID string, status TaskStatus, result string) {
 			// 任务完成时发送通知消息
 			statusText := map[TaskStatus]string{

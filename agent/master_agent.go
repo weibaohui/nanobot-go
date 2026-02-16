@@ -96,7 +96,7 @@ func NewMasterAgent(ctx context.Context, cfg *MasterAgentConfig) (*MasterAgent, 
 
 // initMaster 创建 ADK Master
 func (sa *MasterAgent) initMaster(ctx context.Context) error {
-	adapter, err := NewChatModelAdapter(sa.logger, sa.cfg)
+	adapter, err := NewChatModelAdapter(sa.logger, sa.cfg, sa.sessions)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrChatModelAdapter, err)
 	}
@@ -140,6 +140,11 @@ func (sa *MasterAgent) initMaster(ctx context.Context) error {
 func (sa *MasterAgent) Process(ctx context.Context, msg *bus.InboundMessage) (string, error) {
 	sessionKey := msg.SessionKey()
 	sess := sa.sessions.GetOrCreate(sessionKey)
+
+	// 设置当前会话 key 到全局回调，以便记录 token 用量
+	if globalCallbacks := GetGlobalEinoCallbacks(); globalCallbacks != nil {
+		globalCallbacks.SetSessionKey(sessionKey)
+	}
 
 	// 构建消息
 	history := sa.convertHistory(sess.GetHistory(10))

@@ -52,7 +52,7 @@ func NewChatSubAgent(ctx context.Context, cfg *ChatConfig) (*ChatSubAgent, error
 		maxIter = 15
 	}
 
-	adapter, err := NewChatModelAdapter(logger, cfg.Cfg)
+	adapter, err := NewChatModelAdapter(logger, cfg.Cfg, nil)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrChatModelAdapter, err)
 	}

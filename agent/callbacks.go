@@ -11,6 +11,7 @@ import (
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
+	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
 )
 
@@ -24,6 +25,8 @@ type EinoCallbacks struct {
 	logger       *zap.Logger          // 日志记录器
 	startTimes   map[string]time.Time // 记录各节点开始时间
 	callSequence int                  // 调用序列号
+	sessionMgr   *session.Manager     // 会话管理器，用于保存 token 用量
+	sessionKey   string               // 当前会话 key
 }
 
 // NewEinoCallbacks 创建新的 Eino 回调处理器
@@ -38,6 +41,16 @@ func NewEinoCallbacks(enabled bool, logger *zap.Logger) *EinoCallbacks {
 		logger:     logger,
 		startTimes: make(map[string]time.Time),
 	}
+}
+
+// SetSessionManager 设置会话管理器，用于保存 token 用量
+func (ec *EinoCallbacks) SetSessionManager(mgr *session.Manager) {
+	ec.sessionMgr = mgr
+}
+
+// SetSessionKey 设置当前会话 key
+func (ec *EinoCallbacks) SetSessionKey(key string) {
+	ec.sessionKey = key
 }
 
 // Handler 获取 Eino 的 Handler 接口实现
@@ -314,6 +327,9 @@ func (ec *EinoCallbacks) logModelOutput(output callbacks.CallbackOutput, info *c
 			zap.Int("reasoning_tokens", modelOutput.TokenUsage.CompletionTokensDetails.ReasoningTokens),
 			zap.Int("cached_tokens", modelOutput.TokenUsage.PromptTokenDetails.CachedTokens),
 		)
+
+		// 保存 token 用量到 session
+		ec.saveTokenUsage(modelOutput.TokenUsage)
 	} else {
 		ec.logger.Info("[EinoCallback] Model Token 使用情况",
 			zap.String("token_usage", "未返回"),
@@ -400,6 +416,27 @@ func (ec *EinoCallbacks) logGenericOutput(output callbacks.CallbackOutput, info 
 	)
 }
 
+// saveTokenUsage 将 token 用量保存到 session
+func (ec *EinoCallbacks) saveTokenUsage(tokenUsage *model.TokenUsage) {
+	if ec.sessionMgr == nil || ec.sessionKey == "" {
+		return
+	}
+
+	usage := session.TokenUsage{
+		PromptTokens:     tokenUsage.PromptTokens,
+		CompletionTokens: tokenUsage.CompletionTokens,
+		TotalTokens:      tokenUsage.TotalTokens,
+		ReasoningTokens:  tokenUsage.CompletionTokensDetails.ReasoningTokens,
+		CachedTokens:     tokenUsage.PromptTokenDetails.CachedTokens,
+	}
+
+	sess := ec.sessionMgr.GetOrCreate(ec.sessionKey)
+	sess.UpdateTokenUsage(usage)
+	if err := ec.sessionMgr.Save(sess); err != nil {
+		ec.logger.Error("保存 token 用量失败", zap.Error(err))
+	}
+}
+
 // nodeKey 生成节点唯一键
 func (ec *EinoCallbacks) nodeKey(info *callbacks.RunInfo) string {
 	return fmt.Sprintf("%s:%s:%s", info.Component, info.Type, info.Name)
@@ -407,11 +444,19 @@ func (ec *EinoCallbacks) nodeKey(info *callbacks.RunInfo) string {
 
 // ========== 全局回调注册 ==========
 
+var globalEinoCallbacks *EinoCallbacks
+
 // RegisterGlobalCallbacks 注册全局回调处理器
 // 全局回调会在所有 Chain/Graph 执行前被调用
 // 注意：此函数不是线程安全的，应在程序初始化时调用
 func RegisterGlobalCallbacks(einoCallbacks *EinoCallbacks) {
+	globalEinoCallbacks = einoCallbacks
 	if einoCallbacks != nil && einoCallbacks.enabled {
 		callbacks.AppendGlobalHandlers(einoCallbacks.Handler())
 	}
+}
+
+// GetGlobalEinoCallbacks 获取全局回调处理器
+func GetGlobalEinoCallbacks() *EinoCallbacks {
+	return globalEinoCallbacks
 }

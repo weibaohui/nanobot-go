@@ -159,7 +159,7 @@ func (sa *SupervisorAgent) initSubAgents(ctx context.Context) error {
 
 // initSupervisor 创建 ADK Supervisor
 func (sa *SupervisorAgent) initSupervisor(ctx context.Context) error {
-	adapter, err := NewChatModelAdapter(sa.logger, sa.cfg)
+	adapter, err := NewChatModelAdapter(sa.logger, sa.cfg, sa.sessions)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrChatModelAdapter, err)
 	}

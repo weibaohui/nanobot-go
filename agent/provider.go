@@ -9,8 +9,14 @@ import (
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/config"
+	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
 )
+
+// ContextKey session key 的 context key
+type ContextKey string
+
+const SessionKeyContextKey ContextKey = "session_key"
 
 // SkillLoader 技能加载函数类型
 type SkillLoader func(name string) string
@@ -22,8 +28,9 @@ type SkillLoader func(name string) string
 type ChatModelAdapter struct {
 	logger        *zap.Logger
 	chatModel     model.ToolCallingChatModel
-	registeredMap map[string]bool // 已注册的工具名称
-	skillLoader   SkillLoader     // 技能加载器
+	registeredMap map[string]bool  // 已注册的工具名称
+	skillLoader   SkillLoader      // 技能加载器
+	sessions      *session.Manager // 会话管理器，用于记录 token 用量
 }
 
 // Sentinel errors 定义包级别的错误常量
@@ -53,7 +60,7 @@ func createChatModelConfig(logger *zap.Logger, cfg *config.Config) (apiKey, apiB
 }
 
 // NewChatModelAdapter 创建 ChatModel 适配器
-func NewChatModelAdapter(logger *zap.Logger, cfg *config.Config) (*ChatModelAdapter, error) {
+func NewChatModelAdapter(logger *zap.Logger, cfg *config.Config, sessions *session.Manager) (*ChatModelAdapter, error) {
 	apiKey, apiBase, modelName, err := createChatModelConfig(logger, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrNilConfig, err)
@@ -75,6 +82,7 @@ func NewChatModelAdapter(logger *zap.Logger, cfg *config.Config) (*ChatModelAdap
 		logger:        logger,
 		chatModel:     chatModel,
 		registeredMap: make(map[string]bool),
+		sessions:      sessions,
 	}, nil
 }
 
@@ -129,7 +137,46 @@ func (a *ChatModelAdapter) Generate(ctx context.Context, input []*schema.Message
 	// 拦截并转换工具调用
 	a.interceptToolCalls(response)
 
+	// 记录 token 用量到 session
+	a.recordTokenUsage(ctx, response)
+
 	return response, nil
+}
+
+// recordTokenUsage 记录 token 用量到 session
+func (a *ChatModelAdapter) recordTokenUsage(ctx context.Context, response *schema.Message) {
+	if a.sessions == nil {
+		return
+	}
+
+	sessionKey := ctx.Value(SessionKeyContextKey)
+	if sessionKey == nil {
+		return
+	}
+
+	key, ok := sessionKey.(string)
+	if !ok || key == "" {
+		return
+	}
+
+	usage := response.ResponseMeta.Usage
+	if usage == nil {
+		return
+	}
+
+	tokenUsage := session.TokenUsage{
+		PromptTokens:     usage.PromptTokens,
+		CompletionTokens: usage.CompletionTokens,
+		TotalTokens:      usage.TotalTokens,
+	}
+
+	sess := a.sessions.GetOrCreate(key)
+	sess.AddMessageWithTokenUsage("assistant", response.Content, tokenUsage)
+	if err := a.sessions.Save(sess); err != nil {
+		if a.logger != nil {
+			a.logger.Error("保存 token 用量失败", zap.Error(err))
+		}
+	}
 }
 
 // interceptToolCall 拦截工具调用，如果工具不存在则转换为技能调用

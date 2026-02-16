@@ -16,6 +16,7 @@ import (
 	"github.com/cloudwego/eino/compose"
 	tasktools "github.com/weibaohui/nanobot-go/agent/tools/task"
 	"github.com/weibaohui/nanobot-go/config"
+	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
@@ -49,6 +50,7 @@ type AgentTaskManagerConfig struct {
 	TaskTimeoutSeconds    int
 	TaskLogCapacity       int
 	TaskMaxToolIterations int
+	Sessions              *session.Manager // 会话管理器
 	// OnTaskComplete 任务完成回调，用于发送完成通知
 	OnTaskComplete func(channel, chatID, taskID string, status TaskStatus, result string)
 }
@@ -62,6 +64,7 @@ type AgentTaskManager struct {
 	checkpointStore compose.CheckPointStore
 	maxIterations   int
 	registeredTools []string
+	sessions        *session.Manager // 会话管理器，用于记录 token 用量
 
 	maxConcurrent int
 	taskTimeout   time.Duration
@@ -159,6 +162,7 @@ func NewBackgroundAgentTaskManager(cfg *AgentTaskManagerConfig) (*AgentTaskManag
 		checkpointStore: cfg.CheckpointStore,
 		maxIterations:   maxIter,
 		registeredTools: cfg.RegisteredTools,
+		sessions:        cfg.Sessions,
 		maxConcurrent:   maxConcurrent,
 		taskTimeout:     timeout,
 		logCapacity:     logCapacity,
@@ -375,7 +379,7 @@ func (m *AgentTaskManager) notifyComplete(task *AgentTask, result string) {
 }
 
 func (m *AgentTaskManager) executeTask(ctx context.Context, work, channel, chatID string) (string, error) {
-	adapter, err := NewChatModelAdapter(m.logger, m.cfg)
+	adapter, err := NewChatModelAdapter(m.logger, m.cfg, m.sessions)
 	if err != nil {
 		return "", err
 	}
