@@ -338,7 +338,6 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 		// 保存会话
 		sess := l.sessions.GetOrCreate(sessionKey)
 		sess.AddMessage("user", msg.Content)
-		sess.AddMessage("assistant", result)
 		l.sessions.Save(sess)
 
 		return nil
@@ -402,8 +401,9 @@ func (l *Loop) ResumeExecution(ctx context.Context, checkpointID, interruptID st
 
 	// 构建消息对象（用于 Supervisor 模式的中断恢复）
 	msg := &bus.InboundMessage{
-		Channel: channel,
-		ChatID:  chatID,
+		Channel:  channel,
+		ChatID:   chatID,
+		SenderID: sessionKey,
 	}
 
 	return l.masterAgent.Resume(ctx, checkpointID, resumeParams, msg)
