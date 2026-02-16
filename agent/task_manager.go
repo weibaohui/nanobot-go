@@ -421,7 +421,8 @@ func (m *AgentTaskManager) executeTask(ctx context.Context, work, channel, chatI
 	messages := BuildMessageList(systemPrompt, nil, work, channel, chatID)
 
 	// 为后台任务创建唯一的 session key，用于记录 token 用量
-	sessionKey := fmt.Sprintf("task_%s_%s_%s", channel, chatID, time.Now().Format("20060102150405"))
+	// 不再包含时间戳，日期由 session manager 的 getSessionPath 方法自动添加
+	sessionKey := fmt.Sprintf("task_%s_%s", channel, chatID)
 	ctx = context.WithValue(ctx, SessionKeyContextKey, sessionKey)
 
 	iter := runner.Run(ctx, messages)
