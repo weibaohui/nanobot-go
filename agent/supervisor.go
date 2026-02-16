@@ -118,6 +118,7 @@ func (sa *SupervisorAgent) initSubAgents(ctx context.Context) error {
 		Workspace:       sa.workspace,
 		Tools:           sa.tools,
 		Logger:          sa.logger,
+		Sessions:        sa.sessions,
 		CheckpointStore: sa.checkpointStore,
 		MaxIterations:   sa.maxIterations,
 		SkillsLoader:    skillsLoader,
@@ -132,6 +133,7 @@ func (sa *SupervisorAgent) initSubAgents(ctx context.Context) error {
 		Workspace:       sa.workspace,
 		Tools:           sa.tools,
 		Logger:          sa.logger,
+		Sessions:        sa.sessions,
 		CheckpointStore: sa.checkpointStore,
 		MaxIterations:   sa.maxIterations,
 		SkillsLoader:    skillsLoader,
@@ -146,6 +148,7 @@ func (sa *SupervisorAgent) initSubAgents(ctx context.Context) error {
 		Cfg:             sa.cfg,
 		Tools:           sa.tools,
 		Logger:          sa.logger,
+		Sessions:        sa.sessions,
 		CheckpointStore: sa.checkpointStore,
 		SkillsLoader:    skillsLoader,
 		RegisteredTools: sa.registeredTools,
@@ -283,6 +286,9 @@ func (sa *SupervisorAgent) buildSupervisorInstruction() string {
 func (sa *SupervisorAgent) Process(ctx context.Context, msg *bus.InboundMessage) (string, error) {
 	sessionKey := msg.SessionKey()
 	sess := sa.sessions.GetOrCreate(sessionKey)
+
+	// 将 session key 放入 context，用于记录 token 用量
+	ctx = context.WithValue(ctx, SessionKeyContextKey, sessionKey)
 
 	// 构建消息
 	history := sa.convertHistory(sess.GetHistory(0))

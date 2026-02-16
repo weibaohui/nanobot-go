@@ -146,6 +146,7 @@ func (a *ChatModelAdapter) Generate(ctx context.Context, input []*schema.Message
 // recordTokenUsage 记录 token 用量到 session
 func (a *ChatModelAdapter) recordTokenUsage(ctx context.Context, response *schema.Message) {
 	if a.sessions == nil {
+		a.logger.Info("Session 为Nil ，跳过记录TokenUsage")
 		return
 	}
 
@@ -172,6 +173,7 @@ func (a *ChatModelAdapter) recordTokenUsage(ctx context.Context, response *schem
 
 	sess := a.sessions.GetOrCreate(key)
 	sess.AddMessageWithTokenUsage("assistant", response.Content, tokenUsage)
+	a.logger.Info("记录Session TokenUsage", zap.Any("Usage", tokenUsage))
 	if err := a.sessions.Save(sess); err != nil {
 		if a.logger != nil {
 			a.logger.Error("保存 token 用量失败", zap.Error(err))
@@ -294,5 +296,6 @@ func (a *ChatModelAdapter) WithTools(tools []*schema.ToolInfo) (model.ToolCallin
 		chatModel:     boundModel,
 		registeredMap: a.registeredMap,
 		skillLoader:   a.skillLoader,
+		sessions:      a.sessions,
 	}, nil
 }

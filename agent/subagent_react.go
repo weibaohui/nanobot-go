@@ -10,17 +10,19 @@ import (
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/config"
+	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
 )
 
 // ReActSubAgent ReAct 模式子 Agent
 // 适用于工具调用、推理、长对话场景
 type ReActSubAgent struct {
-	cfg    *config.Config
-	agent  *adk.ChatModelAgent
-	runner *adk.Runner
-	tools  []tool.BaseTool
-	logger *zap.Logger
+	cfg      *config.Config
+	sessions *session.Manager
+	agent    *adk.ChatModelAgent
+	runner   *adk.Runner
+	tools    []tool.BaseTool
+	logger   *zap.Logger
 }
 
 // ReActConfig ReAct Agent 配置
@@ -29,6 +31,7 @@ type ReActConfig struct {
 	Workspace       string
 	Tools           []tool.BaseTool
 	Logger          *zap.Logger
+	Sessions        *session.Manager
 	CheckpointStore compose.CheckPointStore
 	MaxIterations   int
 	// 技能加载器
@@ -53,7 +56,7 @@ func NewReActSubAgent(ctx context.Context, cfg *ReActConfig) (*ReActSubAgent, er
 		maxIter = 15
 	}
 
-	adapter, err := NewChatModelAdapter(logger, cfg.Cfg, nil)
+	adapter, err := NewChatModelAdapter(logger, cfg.Cfg, cfg.Sessions)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrChatModelAdapter, err)
 	}
@@ -88,14 +91,16 @@ func NewReActSubAgent(ctx context.Context, cfg *ReActConfig) (*ReActSubAgent, er
 	logger.Info("ReAct Agent 创建成功",
 		zap.Int("max_iterations", maxIter),
 		zap.Int("tools_count", len(cfg.Tools)),
+		zap.Bool("has_sessions", cfg.Sessions != nil),
 	)
 
 	return &ReActSubAgent{
-		agent:  agent,
-		runner: runner,
-		cfg:    cfg.Cfg,
-		tools:  cfg.Tools,
-		logger: logger,
+		agent:    agent,
+		runner:   runner,
+		cfg:      cfg.Cfg,
+		sessions: cfg.Sessions,
+		tools:    cfg.Tools,
+		logger:   logger,
 	}, nil
 }
 

@@ -13,17 +13,19 @@ import (
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/config"
+	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
 )
 
 // PlanSubAgent Plan-Execute-Replan 模式子 Agent
 // 适用于复杂任务的规划、执行和动态调整
 type PlanSubAgent struct {
-	agent   adk.ResumableAgent
-	runner  *adk.Runner
-	adapter *ChatModelAdapter
-	tools   []tool.BaseTool
-	logger  *zap.Logger
+	agent    adk.ResumableAgent
+	runner   *adk.Runner
+	adapter  *ChatModelAdapter
+	sessions *session.Manager
+	tools    []tool.BaseTool
+	logger   *zap.Logger
 }
 
 // PlanConfig Plan Agent 配置
@@ -32,6 +34,7 @@ type PlanConfig struct {
 	Workspace       string
 	Tools           []tool.BaseTool
 	Logger          *zap.Logger
+	Sessions        *session.Manager
 	CheckpointStore compose.CheckPointStore
 	MaxIterations   int
 	// 技能加载器
@@ -56,7 +59,7 @@ func NewPlanSubAgent(ctx context.Context, cfg *PlanConfig) (*PlanSubAgent, error
 		maxIter = 20
 	}
 
-	adapter, err := NewChatModelAdapter(logger, cfg.Cfg, nil)
+	adapter, err := NewChatModelAdapter(logger, cfg.Cfg, cfg.Sessions)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrChatModelAdapter, err)
 	}
@@ -140,14 +143,16 @@ func NewPlanSubAgent(ctx context.Context, cfg *PlanConfig) (*PlanSubAgent, error
 	logger.Info("Plan Agent 创建成功",
 		zap.Int("max_iterations", maxIter),
 		zap.Int("tools_count", len(cfg.Tools)),
+		zap.Bool("has_sessions", cfg.Sessions != nil),
 	)
 
 	return &PlanSubAgent{
-		agent:   namedAgent,
-		runner:  runner,
-		adapter: adapter,
-		tools:   cfg.Tools,
-		logger:  logger,
+		agent:    namedAgent,
+		runner:   runner,
+		adapter:  adapter,
+		sessions: cfg.Sessions,
+		tools:    cfg.Tools,
+		logger:   logger,
 	}, nil
 }
 

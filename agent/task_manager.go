@@ -419,6 +419,11 @@ func (m *AgentTaskManager) executeTask(ctx context.Context, work, channel, chatI
 		systemPrompt = m.context.BuildSystemPrompt()
 	}
 	messages := BuildMessageList(systemPrompt, nil, work, channel, chatID)
+
+	// 为后台任务创建唯一的 session key，用于记录 token 用量
+	sessionKey := fmt.Sprintf("task_%s_%s_%s", channel, chatID, time.Now().Format("20060102150405"))
+	ctx = context.WithValue(ctx, SessionKeyContextKey, sessionKey)
+
 	iter := runner.Run(ctx, messages)
 
 	var response string

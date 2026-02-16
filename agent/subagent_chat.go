@@ -9,17 +9,19 @@ import (
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/config"
+	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
 )
 
 // ChatSubAgent Chat 模式子 Agent
 // 适用于简单对话和问答场景
 type ChatSubAgent struct {
-	Cfg    *config.Config
-	agent  *adk.ChatModelAgent
-	runner *adk.Runner
-	tools  []tool.BaseTool
-	logger *zap.Logger
+	Cfg      *config.Config
+	sessions *session.Manager
+	agent    *adk.ChatModelAgent
+	runner   *adk.Runner
+	tools    []tool.BaseTool
+	logger   *zap.Logger
 }
 
 // ChatConfig Chat Agent 配置
@@ -28,6 +30,7 @@ type ChatConfig struct {
 	Workspace       string
 	Tools           []tool.BaseTool
 	Logger          *zap.Logger
+	Sessions        *session.Manager
 	CheckpointStore compose.CheckPointStore
 	MaxIterations   int
 	// 技能加载器
@@ -52,7 +55,7 @@ func NewChatSubAgent(ctx context.Context, cfg *ChatConfig) (*ChatSubAgent, error
 		maxIter = 15
 	}
 
-	adapter, err := NewChatModelAdapter(logger, cfg.Cfg, nil)
+	adapter, err := NewChatModelAdapter(logger, cfg.Cfg, cfg.Sessions)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrChatModelAdapter, err)
 	}
@@ -88,11 +91,13 @@ func NewChatSubAgent(ctx context.Context, cfg *ChatConfig) (*ChatSubAgent, error
 	logger.Info("Chat Agent 创建成功",
 		zap.Int("max_iterations", maxIter),
 		zap.Int("tools_count", len(cfg.Tools)),
+		zap.Bool("has_sessions", cfg.Sessions != nil),
 	)
 	return &ChatSubAgent{
-		Cfg:    cfg.Cfg,
-		agent:  agent,
-		runner: runner,
+		Cfg:      cfg.Cfg,
+		sessions: cfg.Sessions,
+		agent:    agent,
+		runner:   runner,
 
 		tools:  cfg.Tools,
 		logger: logger,
