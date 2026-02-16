@@ -16,6 +16,27 @@ import (
 	"go.uber.org/zap"
 )
 
+// buildChatModelAdapter 创建并配置 ChatModelAdapter
+// 将 LLM 初始化逻辑集中在此，避免遗漏必要配置
+func buildChatModelAdapter(logger *zap.Logger, cfg *config.Config, sessions *session.Manager, skillsLoader func(string) string, registeredTools []string) (*ChatModelAdapter, error) {
+	llm, err := NewChatModelAdapter(logger, cfg, sessions)
+	if err != nil {
+		return nil, err
+	}
+
+	// 设置 SkillLoader
+	if skillsLoader != nil {
+		llm.SetSkillLoader(skillsLoader)
+	}
+
+	// 设置 RegisteredTools
+	if len(registeredTools) > 0 {
+		llm.SetRegisteredTools(registeredTools)
+	}
+
+	return llm, nil
+}
+
 // interruptible 可嵌入的中断处理能力
 // 为 Agent 提供中断处理、恢复执行等通用能力
 type interruptible struct {
@@ -380,14 +401,4 @@ func (i *interruptible) convertHistory(history []map[string]any) []*schema.Messa
 		})
 	}
 	return result
-}
-
-// GetADKRunner 获取 ADK Runner
-func (i *interruptible) GetADKRunner() *adk.Runner {
-	return i.adkRunner
-}
-
-// GetInterruptManager 获取中断管理器
-func (i *interruptible) GetInterruptManager() *InterruptManager {
-	return i.interruptManager
 }

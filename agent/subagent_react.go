@@ -56,16 +56,10 @@ func NewReActSubAgent(ctx context.Context, cfg *ReActConfig) (*ReActSubAgent, er
 		maxIter = 15
 	}
 
-	adapter, err := NewChatModelAdapter(logger, cfg.Cfg, cfg.Sessions)
+	// 使用统一的 LLM 初始化方法
+	llm, err := buildChatModelAdapter(logger, cfg.Cfg, cfg.Sessions, cfg.SkillsLoader, cfg.RegisteredTools)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrChatModelAdapter, err)
-	}
-
-	if cfg.SkillsLoader != nil {
-		adapter.SetSkillLoader(cfg.SkillsLoader)
-	}
-	if len(cfg.RegisteredTools) > 0 {
-		adapter.SetRegisteredTools(cfg.RegisteredTools)
 	}
 
 	toolsConfig := buildToolsConfig(cfg.Tools)
@@ -74,7 +68,7 @@ func NewReActSubAgent(ctx context.Context, cfg *ReActConfig) (*ReActSubAgent, er
 		Name:          "react_agent",
 		Description:   "ReAct 模式 Agent，用于工具调用、推理和长对话",
 		Instruction:   buildReActInstruction(cfg.Workspace),
-		Model:         adapter,
+		Model:         llm,
 		ToolsConfig:   toolsConfig,
 		MaxIterations: maxIter,
 	})

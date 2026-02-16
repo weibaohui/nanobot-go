@@ -55,16 +55,10 @@ func NewChatSubAgent(ctx context.Context, cfg *ChatConfig) (*ChatSubAgent, error
 		maxIter = 15
 	}
 
-	adapter, err := NewChatModelAdapter(logger, cfg.Cfg, cfg.Sessions)
+	// 使用统一的 LLM 初始化方法
+	llm, err := buildChatModelAdapter(logger, cfg.Cfg, cfg.Sessions, cfg.SkillsLoader, cfg.RegisteredTools)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrChatModelAdapter, err)
-	}
-
-	if cfg.SkillsLoader != nil {
-		adapter.SetSkillLoader(cfg.SkillsLoader)
-	}
-	if len(cfg.RegisteredTools) > 0 {
-		adapter.SetRegisteredTools(cfg.RegisteredTools)
 	}
 
 	toolsConfig := buildToolsConfig(cfg.Tools)
@@ -73,7 +67,7 @@ func NewChatSubAgent(ctx context.Context, cfg *ChatConfig) (*ChatSubAgent, error
 		Name:          "chat_agent",
 		Description:   "Chat 模式 Agent，用于简单对话和问答",
 		Instruction:   buildChatInstruction(),
-		Model:         adapter,
+		Model:         llm,
 		ToolsConfig:   toolsConfig,
 		MaxIterations: 5,
 		Exit:          &adk.ExitTool{},

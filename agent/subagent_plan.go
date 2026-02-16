@@ -59,20 +59,14 @@ func NewPlanSubAgent(ctx context.Context, cfg *PlanConfig) (*PlanSubAgent, error
 		maxIter = 20
 	}
 
-	adapter, err := NewChatModelAdapter(logger, cfg.Cfg, cfg.Sessions)
+	// 使用统一的 LLM 初始化方法
+	llm, err := buildChatModelAdapter(logger, cfg.Cfg, cfg.Sessions, cfg.SkillsLoader, cfg.RegisteredTools)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrChatModelAdapter, err)
 	}
 
-	if cfg.SkillsLoader != nil {
-		adapter.SetSkillLoader(cfg.SkillsLoader)
-	}
-	if len(cfg.RegisteredTools) > 0 {
-		adapter.SetRegisteredTools(cfg.RegisteredTools)
-	}
-
 	planner, err := planexecute.NewPlanner(ctx, &planexecute.PlannerConfig{
-		ToolCallingChatModel: adapter,
+		ToolCallingChatModel: llm,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrPlannerCreate, err)
@@ -88,9 +82,9 @@ func NewPlanSubAgent(ctx context.Context, cfg *PlanConfig) (*PlanSubAgent, error
 		}
 	}
 
-	var executorModel model.ToolCallingChatModel = adapter
+	var executorModel model.ToolCallingChatModel = llm
 	if len(toolInfos) > 0 {
-		boundModel, err := adapter.WithTools(toolInfos)
+		boundModel, err := llm.WithTools(toolInfos)
 		if err != nil {
 			logger.Warn("绑定工具到执行器失败", zap.Error(err))
 		} else {
@@ -110,7 +104,7 @@ func NewPlanSubAgent(ctx context.Context, cfg *PlanConfig) (*PlanSubAgent, error
 	}
 
 	replanner, err := planexecute.NewReplanner(ctx, &planexecute.ReplannerConfig{
-		ChatModel: adapter,
+		ChatModel: llm,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrReplannerCreate, err)
@@ -149,7 +143,7 @@ func NewPlanSubAgent(ctx context.Context, cfg *PlanConfig) (*PlanSubAgent, error
 	return &PlanSubAgent{
 		agent:    namedAgent,
 		runner:   runner,
-		adapter:  adapter,
+		adapter:  llm,
 		sessions: cfg.Sessions,
 		tools:    cfg.Tools,
 		logger:   logger,
