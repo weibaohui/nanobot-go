@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/tool"
@@ -168,55 +167,4 @@ func (sa *MasterAgent) convertHistory(history []map[string]any) []*schema.Messag
 // GetADKRunner 获取 ADK Runner
 func (sa *MasterAgent) GetADKRunner() *adk.Runner {
 	return sa.adkRunner
-}
-
-// Resume 恢复被中断的执行
-// 用于处理 Master 模式下的中断恢复
-func (sa *MasterAgent) Resume(ctx context.Context, checkpointID string, resumeParams *adk.ResumeParams, msg *bus.InboundMessage) (string, error) {
-	if sa.adkRunner == nil {
-		return "", fmt.Errorf("ADK Runner 未初始化")
-	}
-
-	// 将 session key 放入 context，用于记录 token 用量
-	sessionKey := msg.SenderID
-	ctx = context.WithValue(ctx, SessionKeyContextKey, sessionKey)
-
-	// 使用 Master 的 Runner 恢复执行
-	iter, err := sa.adkRunner.ResumeWithParams(ctx, checkpointID, resumeParams)
-	if err != nil {
-		return "", fmt.Errorf("Master 恢复执行失败: %w", err)
-	}
-
-	var response string
-	var lastEvent *adk.AgentEvent
-
-	for {
-		event, ok := iter.Next()
-		if !ok {
-			break
-		}
-
-		if event.Err != nil {
-			return "", fmt.Errorf("Master 恢复后执行失败: %w", event.Err)
-		}
-
-		if event.Output != nil && event.Output.MessageOutput != nil {
-			msgOutput, err := event.Output.MessageOutput.GetMessage()
-			if err != nil {
-				continue
-			}
-			response = msgOutput.Content
-		}
-
-		lastEvent = event
-	}
-
-	// 检查是否再次被中断
-	if lastEvent != nil && lastEvent.Action != nil && lastEvent.Action.Interrupted != nil {
-		// 生成新的 checkpoint ID
-		newCheckpointID := fmt.Sprintf("%s_resume_%d", checkpointID, time.Now().UnixNano())
-		return "", sa.handleInterrupt(msg, newCheckpointID, checkpointID, lastEvent)
-	}
-
-	return response, nil
 }
