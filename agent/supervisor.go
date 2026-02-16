@@ -3,14 +3,12 @@ package agent
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/adk/prebuilt/supervisor"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
-	"github.com/weibaohui/nanobot-go/agent/tools/askuser"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/session"
@@ -87,13 +85,13 @@ func NewSupervisorAgent(ctx context.Context, cfg *SupervisorConfig) (*Supervisor
 	// 初始化 SupervisorAgent
 	sa := &SupervisorAgent{
 		interruptible: interruptible,
-		cfg:          cfg.Cfg,
-		workspace:    cfg.Workspace,
-		tools:        cfg.Tools,
-		logger:       logger,
-		sessions:     cfg.Sessions,
-		bus:          cfg.Bus,
-		context:      cfg.Context,
+		cfg:           cfg.Cfg,
+		workspace:     cfg.Workspace,
+		tools:         cfg.Tools,
+		logger:        logger,
+		sessions:      cfg.Sessions,
+		bus:           cfg.Bus,
+		context:       cfg.Context,
 	}
 
 	// 初始化子 Agent
@@ -174,15 +172,15 @@ func (sa *SupervisorAgent) initSubAgents(ctx context.Context) error {
 
 // initSupervisor 创建 ADK Supervisor
 func (sa *SupervisorAgent) initSupervisor(ctx context.Context) error {
-	adapter, err := NewChatModelAdapter(sa.logger, sa.cfg, sa.sessions)
+	llm, err := NewChatModelAdapter(sa.logger, sa.cfg, sa.sessions)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrChatModelAdapter, err)
 	}
 	if sa.context != nil {
-		adapter.SetSkillLoader(sa.context.GetSkillsLoader().LoadSkill)
+		llm.SetSkillLoader(sa.context.GetSkillsLoader().LoadSkill)
 	}
 	if len(sa.registeredTools) > 0 {
-		adapter.SetRegisteredTools(sa.registeredTools)
+		llm.SetRegisteredTools(sa.registeredTools)
 	}
 
 	var toolsConfig adk.ToolsConfig
@@ -199,7 +197,7 @@ func (sa *SupervisorAgent) initSupervisor(ctx context.Context) error {
 		Name:        "supervisor",
 		Description: "统一入口 Agent，负责路由用户请求到合适的子 Agent",
 		Instruction: sa.buildSupervisorInstruction(),
-		Model:       adapter,
+		Model:       llm,
 		ToolsConfig: toolsConfig,
 		Exit:        &adk.ExitTool{},
 	})
@@ -300,69 +298,6 @@ func (sa *SupervisorAgent) Process(ctx context.Context, msg *bus.InboundMessage)
 }
 
 // buildMessages 构建消息列表
-func (sa *SupervisorAgent) handleInterrupt(msg *bus.InboundMessage, checkpointID string, originalCheckpointID string, event *adk.AgentEvent) error {
-	if event.Action == nil || event.Action.Interrupted == nil {
-		return nil
-	}
-
-	interruptCtx := event.Action.Interrupted.InterruptContexts[0]
-	interruptID := interruptCtx.ID
-
-	// 如果没有提供原始 checkpointID，使用当前的
-	if originalCheckpointID == "" {
-		originalCheckpointID = checkpointID
-	}
-
-	// 解析中断信息
-	var question string
-	var options []string
-	isAskUser := false
-
-	if info, ok := interruptCtx.Info.(*askuser.AskUserInfo); ok {
-		question = info.Question
-		options = append(options, info.Options...)
-		isAskUser = true
-	} else if info, ok := interruptCtx.Info.(map[string]any); ok {
-		if q, ok := info["question"].(string); ok {
-			question = q
-		}
-		if opts, ok := info["options"].([]any); ok {
-			for _, opt := range opts {
-				if s, ok := opt.(string); ok {
-					options = append(options, s)
-				}
-			}
-		}
-		if question != "" {
-			isAskUser = true
-		}
-	} else {
-		question = fmt.Sprintf("%v", interruptCtx.Info)
-	}
-
-	// 发送中断请求
-	sa.interruptManager.HandleInterrupt(&InterruptInfo{
-		CheckpointID:         checkpointID,
-		OriginalCheckpointID: originalCheckpointID,
-		InterruptID:          interruptID,
-		Channel:              msg.Channel,
-		ChatID:               msg.ChatID,
-		Question:             question,
-		Options:              options,
-		SessionKey:           msg.SessionKey(),
-		IsAskUser:            isAskUser,
-		IsSupervisor:         true, // 标记来自 Supervisor 模式的中断
-	})
-
-	sa.logger.Info("等待用户输入以恢复执行",
-		zap.String("checkpoint_id", checkpointID),
-		zap.String("question", question),
-	)
-
-	return fmt.Errorf("INTERRUPT:%s:%s", checkpointID, interruptID)
-}
-
-// buildMessages 构建消息列表
 func (sa *SupervisorAgent) buildMessages(history []*schema.Message, userInput, channel, chatID string) []*schema.Message {
 	// 构建系统提示
 	systemPrompt := sa.buildSystemPrompt()
@@ -409,57 +344,6 @@ func (sa *SupervisorAgent) GetSubAgents() map[AgentType]SubAgent {
 // GetADKRunner 获取 ADK Runner
 func (sa *SupervisorAgent) GetADKRunner() *adk.Runner {
 	return sa.adkRunner
-}
-
-// Resume 恢复被中断的执行
-// 用于处理 Supervisor 模式下的中断恢复
-func (sa *SupervisorAgent) Resume(ctx context.Context, checkpointID string, resumeParams *adk.ResumeParams, msg *bus.InboundMessage) (string, error) {
-	if sa.adkRunner == nil {
-		return "", fmt.Errorf("ADK Runner 未初始化")
-	}
-
-	// 将 session key 放入 context，用于记录 token 用量
-	sessionKey := msg.SenderID
-	ctx = context.WithValue(ctx, SessionKeyContextKey, sessionKey)
-
-	// 使用 Supervisor 的 Runner 恢复执行
-	iter, err := sa.adkRunner.ResumeWithParams(ctx, checkpointID, resumeParams)
-	if err != nil {
-		return "", fmt.Errorf("Supervisor 恢复执行失败: %w", err)
-	}
-
-	var response string
-	var lastEvent *adk.AgentEvent
-
-	for {
-		event, ok := iter.Next()
-		if !ok {
-			break
-		}
-
-		if event.Err != nil {
-			return "", fmt.Errorf("Supervisor 恢复后执行失败: %w", event.Err)
-		}
-
-		if event.Output != nil && event.Output.MessageOutput != nil {
-			msgOutput, err := event.Output.MessageOutput.GetMessage()
-			if err != nil {
-				continue
-			}
-			response = msgOutput.Content
-		}
-
-		lastEvent = event
-	}
-
-	// 检查是否再次被中断
-	if lastEvent != nil && lastEvent.Action != nil && lastEvent.Action.Interrupted != nil {
-		// 生成新的 checkpoint ID
-		newCheckpointID := fmt.Sprintf("%s_resume_%d", checkpointID, time.Now().UnixNano())
-		return "", sa.handleInterrupt(msg, newCheckpointID, checkpointID, lastEvent)
-	}
-
-	return response, nil
 }
 
 func buildToolsConfig(tools []tool.BaseTool) adk.ToolsConfig {

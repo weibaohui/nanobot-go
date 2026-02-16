@@ -88,15 +88,15 @@ func NewMasterAgent(ctx context.Context, cfg *MasterAgentConfig) (*MasterAgent, 
 	}
 
 	// 创建 ADK Runner
-	adapter, err := NewChatModelAdapter(sa.logger, sa.cfg, sa.sessions)
+	llm, err := NewChatModelAdapter(sa.logger, sa.cfg, sa.sessions)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrChatModelAdapter, err)
 	}
 	if sa.context != nil {
-		adapter.SetSkillLoader(sa.context.GetSkillsLoader().LoadSkill)
+		llm.SetSkillLoader(sa.context.GetSkillsLoader().LoadSkill)
 	}
 	if len(cfg.RegisteredTools) > 0 {
-		adapter.SetRegisteredTools(cfg.RegisteredTools)
+		llm.SetRegisteredTools(cfg.RegisteredTools)
 	}
 
 	var toolsConfig adk.ToolsConfig
@@ -112,7 +112,7 @@ func NewMasterAgent(ctx context.Context, cfg *MasterAgentConfig) (*MasterAgent, 
 		Name:        "Master",
 		Description: "主智能体",
 		Instruction: sa.context.BuildSystemPrompt(),
-		Model:       adapter,
+		Model:       llm,
 		ToolsConfig: toolsConfig,
 		Exit:        &adk.ExitTool{},
 	})
