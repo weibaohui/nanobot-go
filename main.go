@@ -115,7 +115,6 @@ func runGateway(cmd *cobra.Command, args []string) {
 	}
 
 	callbacks := agent.NewEinoCallbacks(true, logger)
-	callbacks.SetSessionManager(sessionManager)
 	agent.RegisterGlobalCallbacks(callbacks)
 
 	loop := agent.NewLoop(&agent.LoopConfig{

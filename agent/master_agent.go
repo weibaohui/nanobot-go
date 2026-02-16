@@ -141,10 +141,8 @@ func (sa *MasterAgent) Process(ctx context.Context, msg *bus.InboundMessage) (st
 	sessionKey := msg.SessionKey()
 	sess := sa.sessions.GetOrCreate(sessionKey)
 
-	// 设置当前会话 key 到全局回调，以便记录 token 用量
-	if globalCallbacks := GetGlobalEinoCallbacks(); globalCallbacks != nil {
-		globalCallbacks.SetSessionKey(sessionKey)
-	}
+	// 将 session key 放入 context，用于记录 token 用量
+	ctx = context.WithValue(ctx, SessionKeyContextKey, sessionKey)
 
 	// 构建消息
 	history := sa.convertHistory(sess.GetHistory(10))
@@ -163,9 +161,8 @@ func (sa *MasterAgent) Process(ctx context.Context, msg *bus.InboundMessage) (st
 		return "", err
 	}
 
-	// 保存会话
+	// 保存用户消息（assistant 消息在 Generate 中已自动保存）
 	sess.AddMessage("user", msg.Content)
-	sess.AddMessage("assistant", response)
 	sa.sessions.Save(sess)
 
 	return response, nil
