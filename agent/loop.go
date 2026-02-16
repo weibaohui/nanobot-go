@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cloudwego/eino/adk"
-	"github.com/cloudwego/eino/components/tool"
 	"github.com/weibaohui/nanobot-go/agent/tools"
 	"github.com/weibaohui/nanobot-go/agent/tools/askuser"
 	toolcron "github.com/weibaohui/nanobot-go/agent/tools/cron"
@@ -337,41 +335,6 @@ func (l *Loop) updateToolContext(channel, chatID string) {
 	}
 }
 
-// ResumeExecution 恢复被中断的执行
-func (l *Loop) ResumeExecution(ctx context.Context, checkpointID, interruptID string, userAnswer string, channel, chatID string, sessionKey string, isAskUser bool, isPlan bool, isSupervisor bool) (string, error) {
-	// 准备恢复参数
-	var resumePayload any
-	if isAskUser {
-		resumePayload = &askuser.AskUserInfo{
-			UserAnswer: userAnswer,
-		}
-	} else {
-		resumePayload = map[string]any{
-			"user_answer": userAnswer,
-		}
-	}
-	resumeParams := &adk.ResumeParams{
-		Targets: map[string]any{
-			interruptID: resumePayload,
-		},
-	}
-
-	// 构建消息对象（用于 Supervisor 模式的中断恢复）
-	msg := &bus.InboundMessage{
-		Channel:  channel,
-		ChatID:   chatID,
-		SenderID: sessionKey,
-	}
-
-	return l.masterAgent.Resume(ctx, checkpointID, resumeParams, msg)
-
-}
-
-// GetInterruptManager 获取中断管理器
-func (l *Loop) GetInterruptManager() *InterruptManager {
-	return l.interruptManager
-}
-
 // GetSupervisor 获取 Supervisor Agent
 func (l *Loop) GetMasterAgent() *MasterAgent {
 	return l.masterAgent
@@ -380,19 +343,4 @@ func (l *Loop) GetMasterAgent() *MasterAgent {
 // GetSupervisor 获取 Supervisor Agent
 func (l *Loop) GetSupervisor() *SupervisorAgent {
 	return l.supervisor
-}
-
-// IsSupervisorEnabled 检查是否启用 Supervisor 模式
-func (l *Loop) IsSupervisorEnabled() bool {
-	return l.enableSupervisor && l.supervisor != nil
-}
-
-// ShouldUseStream 判断是否应该使用流式处理
-func (l *Loop) ShouldUseStream(channel string) bool {
-	return channel == "websocket"
-}
-
-// GetTools returns all registered tools as a slice
-func (l *Loop) GetTools() []tool.BaseTool {
-	return l.tools.GetTools()
 }
