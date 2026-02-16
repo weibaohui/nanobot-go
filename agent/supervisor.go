@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/cloudwego/eino/adk"
@@ -21,6 +20,8 @@ import (
 // SupervisorAgent 监督者 Agent
 // 作为统一入口，根据用户输入自动路由到合适的子 Agent
 type SupervisorAgent struct {
+	*interruptible
+
 	cfg       *config.Config
 	workspace string
 	tools     []tool.BaseTool
@@ -35,11 +36,6 @@ type SupervisorAgent struct {
 
 	adkSupervisor adk.Agent
 	adkRunner     *adk.Runner
-
-	interruptManager *InterruptManager
-	checkpointStore  compose.CheckPointStore
-	maxIterations    int
-	registeredTools  []string
 }
 
 // SupervisorConfig Supervisor 配置
@@ -69,25 +65,38 @@ func NewSupervisorAgent(ctx context.Context, cfg *SupervisorConfig) (*Supervisor
 		logger = zap.NewNop()
 	}
 
-	maxIter := cfg.MaxIterations
-	if maxIter <= 0 {
-		maxIter = 10
+	// 先创建 interruptible
+	interruptible, err := newInterruptible(ctx, &interruptibleConfig{
+		Cfg:             cfg.Cfg,
+		Workspace:       cfg.Workspace,
+		Tools:           cfg.Tools,
+		Logger:          logger,
+		Sessions:        cfg.Sessions,
+		Bus:             cfg.Bus,
+		Context:         cfg.Context,
+		InterruptMgr:    cfg.InterruptMgr,
+		CheckpointStore: cfg.CheckpointStore,
+		MaxIterations:   cfg.MaxIterations,
+		RegisteredTools: cfg.RegisteredTools,
+		AgentType:       "supervisor",
+	})
+	if err != nil {
+		return nil, err
 	}
 
+	// 初始化 SupervisorAgent
 	sa := &SupervisorAgent{
-		cfg:              cfg.Cfg,
-		workspace:        cfg.Workspace,
-		tools:            cfg.Tools,
-		logger:           logger,
-		sessions:         cfg.Sessions,
-		bus:              cfg.Bus,
-		context:          cfg.Context,
-		interruptManager: cfg.InterruptMgr,
-		checkpointStore:  cfg.CheckpointStore,
-		maxIterations:    maxIter,
-		registeredTools:  cfg.RegisteredTools,
+		interruptible: interruptible,
+		cfg:          cfg.Cfg,
+		workspace:    cfg.Workspace,
+		tools:        cfg.Tools,
+		logger:       logger,
+		sessions:     cfg.Sessions,
+		bus:          cfg.Bus,
+		context:      cfg.Context,
 	}
 
+	// 初始化子 Agent
 	if err := sa.initSubAgents(ctx); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrSubAgentCreate, err)
 	}
@@ -96,9 +105,12 @@ func NewSupervisorAgent(ctx context.Context, cfg *SupervisorConfig) (*Supervisor
 		return nil, fmt.Errorf("%w: %w", ErrSupervisorInit, err)
 	}
 
+	// 设置 ADK Runner 到 interruptible
+	interruptible.adkRunner = sa.adkRunner
+
 	logger.Info("Supervisor Agent 创建成功",
 		zap.String("model", cfg.Context.workspace),
-		zap.Int("max_iterations", maxIter),
+		zap.Int("max_iterations", cfg.MaxIterations),
 	)
 
 	return sa, nil
@@ -284,78 +296,10 @@ func (sa *SupervisorAgent) buildSupervisorInstruction() string {
 
 // Process 处理用户消息
 func (sa *SupervisorAgent) Process(ctx context.Context, msg *bus.InboundMessage) (string, error) {
-	sessionKey := msg.SessionKey()
-	sess := sa.sessions.GetOrCreate(sessionKey)
-
-	// 将 session key 放入 context，用于记录 token 用量
-	ctx = context.WithValue(ctx, SessionKeyContextKey, sessionKey)
-
-	// 构建消息
-	history := sa.convertHistory(sess.GetHistory(0))
-	messages := sa.buildMessages(history, msg.Content, msg.Channel, msg.ChatID)
-
-	// 生成 checkpoint ID
-	checkpointID := fmt.Sprintf("%s_%d", sessionKey, time.Now().UnixNano())
-
-	// 执行
-	var response string
-	var err error
-
-	response, err = sa.processNormal(ctx, messages, checkpointID, msg)
-
-	if err != nil {
-		// 检查是否是中断
-		if strings.HasPrefix(err.Error(), "INTERRUPT:") {
-			return "", err
-		}
-		return "", err
-	}
-
-	// 保存会话
-	sess.AddMessage("user", msg.Content)
-	sess.AddMessage("assistant", response)
-	sa.sessions.Save(sess)
-
-	return response, nil
+	return sa.interruptible.Process(ctx, msg, sa.buildMessages)
 }
 
-// processNormal 普通模式处理
-func (sa *SupervisorAgent) processNormal(ctx context.Context, messages []*schema.Message, checkpointID string, msg *bus.InboundMessage) (string, error) {
-	iter := sa.adkRunner.Run(ctx, messages, adk.WithCheckPointID(checkpointID))
-
-	var response string
-	var lastEvent *adk.AgentEvent
-
-	for {
-		event, ok := iter.Next()
-		if !ok {
-			break
-		}
-
-		if event.Err != nil {
-			return "", fmt.Errorf("Supervisor 执行失败: %w", event.Err)
-		}
-
-		if event.Output != nil && event.Output.MessageOutput != nil {
-			msgOutput, err := event.Output.MessageOutput.GetMessage()
-			if err != nil {
-				continue
-			}
-			response = msgOutput.Content
-		}
-
-		lastEvent = event
-	}
-
-	// 检查中断
-	if lastEvent != nil && lastEvent.Action != nil && lastEvent.Action.Interrupted != nil {
-		return "", sa.handleInterrupt(msg, checkpointID, checkpointID, lastEvent)
-	}
-
-	return response, nil
-}
-
-// handleInterrupt 处理中断
+// buildMessages 构建消息列表
 func (sa *SupervisorAgent) handleInterrupt(msg *bus.InboundMessage, checkpointID string, originalCheckpointID string, event *adk.AgentEvent) error {
 	if event.Action == nil || event.Action.Interrupted == nil {
 		return nil
