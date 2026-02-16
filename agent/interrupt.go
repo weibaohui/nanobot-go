@@ -46,23 +46,24 @@ const (
 
 // InterruptInfo 中断信息（基础结构）
 type InterruptInfo struct {
-	CheckpointID string          `json:"checkpoint_id"`
-	InterruptID  string          `json:"interrupt_id"`
-	Channel      string          `json:"channel"`
-	ChatID       string          `json:"chat_id"`
-	Question     string          `json:"question"`
-	Options      []string        `json:"options,omitempty"`
-	SessionKey   string          `json:"session_key"`
-	IsAskUser    bool            `json:"is_ask_user"`
-	IsPlan       bool            `json:"is_plan"`
-	IsSupervisor bool            `json:"is_supervisor"` // 标记是否来自 Supervisor 模式的中断
-	IsMaster     bool            `json:"is_master"`     // 标记是否来自 Master 模式的中断
-	Type         InterruptType   `json:"type"`
-	Status       InterruptStatus `json:"status"`
-	CreatedAt    time.Time       `json:"created_at"`
-	ExpiresAt    *time.Time      `json:"expires_at,omitempty"`
-	Priority     int             `json:"priority"`
-	Metadata     map[string]any  `json:"metadata,omitempty"`
+	CheckpointID         string          `json:"checkpoint_id"`
+	OriginalCheckpointID string          `json:"original_checkpoint_id"` // 原始 checkpoint ID，用于恢复
+	InterruptID          string          `json:"interrupt_id"`
+	Channel              string          `json:"channel"`
+	ChatID               string          `json:"chat_id"`
+	Question             string          `json:"question"`
+	Options              []string        `json:"options,omitempty"`
+	SessionKey           string          `json:"session_key"`
+	IsAskUser            bool            `json:"is_ask_user"`
+	IsPlan               bool            `json:"is_plan"`
+	IsSupervisor         bool            `json:"is_supervisor"` // 标记是否来自 Supervisor 模式的中断
+	IsMaster             bool            `json:"is_master"`     // 标记是否来自 Master 模式的中断
+	Type                 InterruptType   `json:"type"`
+	Status               InterruptStatus `json:"status"`
+	CreatedAt            time.Time       `json:"created_at"`
+	ExpiresAt            *time.Time      `json:"expires_at,omitempty"`
+	Priority             int             `json:"priority"`
+	Metadata             map[string]any  `json:"metadata,omitempty"`
 }
 
 // AskUserInterrupt 用户提问中断

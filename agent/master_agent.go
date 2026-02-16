@@ -166,14 +166,21 @@ func (sa *MasterAgent) saveSession(sess *session.Session, userMessage string) {
 func (sa *MasterAgent) processInterrupted(ctx context.Context, sess *session.Session, msg *bus.InboundMessage, pendingInterrupt *InterruptInfo) (string, error) {
 	sessionKey := msg.SessionKey()
 
+	// 使用原始 checkpoint ID 进行恢复
+	resumeCheckpointID := pendingInterrupt.OriginalCheckpointID
+	if resumeCheckpointID == "" {
+		resumeCheckpointID = pendingInterrupt.CheckpointID
+	}
+
 	sa.logger.Info("检测到待处理的中断，尝试恢复执行",
-		zap.String("checkpoint_id", pendingInterrupt.CheckpointID),
+		zap.String("checkpoint_id", resumeCheckpointID),
+		zap.String("original_checkpoint_id", pendingInterrupt.OriginalCheckpointID),
 		zap.String("session_key", sessionKey),
 	)
 
-	// 提交用户响应
+	// 提交用户响应时使用原始 checkpoint ID
 	response := &UserResponse{
-		CheckpointID: pendingInterrupt.CheckpointID,
+		CheckpointID: resumeCheckpointID,
 		Answer:       msg.Content,
 	}
 	if err := sa.interruptManager.SubmitUserResponse(response); err != nil {
@@ -195,8 +202,8 @@ func (sa *MasterAgent) processInterrupted(ctx context.Context, sess *session.Ses
 		SenderID: sessionKey,
 	}
 
-	// 恢复执行
-	result, err := sa.Resume(ctx, pendingInterrupt.CheckpointID, resumeParams, resumeMsg)
+	// 恢复执行时使用原始 checkpoint ID
+	result, err := sa.Resume(ctx, resumeCheckpointID, resumeParams, resumeMsg)
 	if err != nil {
 		if isInterruptError(err) {
 			return "", err
@@ -254,20 +261,25 @@ func (sa *MasterAgent) processNormal(ctx context.Context, messages []*schema.Mes
 
 	// 检查中断
 	if lastEvent != nil && lastEvent.Action != nil && lastEvent.Action.Interrupted != nil {
-		return "", sa.handleInterrupt(msg, checkpointID, lastEvent)
+		return "", sa.handleInterrupt(msg, checkpointID, checkpointID, lastEvent)
 	}
 
 	return response, nil
 }
 
 // handleInterrupt 处理中断
-func (sa *MasterAgent) handleInterrupt(msg *bus.InboundMessage, checkpointID string, event *adk.AgentEvent) error {
+func (sa *MasterAgent) handleInterrupt(msg *bus.InboundMessage, checkpointID string, originalCheckpointID string, event *adk.AgentEvent) error {
 	if event.Action == nil || event.Action.Interrupted == nil {
 		return nil
 	}
 
 	interruptCtx := event.Action.Interrupted.InterruptContexts[0]
 	interruptID := interruptCtx.ID
+
+	// 如果没有提供原始 checkpointID，使用当前的
+	if originalCheckpointID == "" {
+		originalCheckpointID = checkpointID
+	}
 
 	// 解析中断信息
 	var question string
@@ -298,15 +310,16 @@ func (sa *MasterAgent) handleInterrupt(msg *bus.InboundMessage, checkpointID str
 
 	// 发送中断请求
 	sa.interruptManager.HandleInterrupt(&InterruptInfo{
-		CheckpointID: checkpointID,
-		InterruptID:  interruptID,
-		Channel:      msg.Channel,
-		ChatID:       msg.ChatID,
-		Question:     question,
-		Options:      options,
-		SessionKey:   msg.SessionKey(),
-		IsAskUser:    isAskUser,
-		IsMaster:     true, // 标记来自 Master 模式的中断
+		CheckpointID:         checkpointID,
+		OriginalCheckpointID: originalCheckpointID,
+		InterruptID:          interruptID,
+		Channel:              msg.Channel,
+		ChatID:               msg.ChatID,
+		Question:             question,
+		Options:              options,
+		SessionKey:           msg.SessionKey(),
+		IsAskUser:            isAskUser,
+		IsMaster:             true, // 标记来自 Master 模式的中断
 	})
 
 	sa.logger.Info("等待用户输入以恢复执行",
@@ -391,7 +404,7 @@ func (sa *MasterAgent) Resume(ctx context.Context, checkpointID string, resumePa
 	if lastEvent != nil && lastEvent.Action != nil && lastEvent.Action.Interrupted != nil {
 		// 生成新的 checkpoint ID
 		newCheckpointID := fmt.Sprintf("%s_resume_%d", checkpointID, time.Now().UnixNano())
-		return "", sa.handleInterrupt(msg, newCheckpointID, lastEvent)
+		return "", sa.handleInterrupt(msg, newCheckpointID, checkpointID, lastEvent)
 	}
 
 	return response, nil
