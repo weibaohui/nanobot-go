@@ -468,6 +468,10 @@ func (sa *SupervisorAgent) Resume(ctx context.Context, checkpointID string, resu
 		return "", fmt.Errorf("ADK Runner 未初始化")
 	}
 
+	// 将 session key 放入 context，用于记录 token 用量
+	sessionKey := msg.SenderID
+	ctx = context.WithValue(ctx, SessionKeyContextKey, sessionKey)
+
 	// 使用 Supervisor 的 Runner 恢复执行
 	iter, err := sa.adkRunner.ResumeWithParams(ctx, checkpointID, resumeParams)
 	if err != nil {
