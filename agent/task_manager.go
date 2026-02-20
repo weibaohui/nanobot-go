@@ -414,9 +414,11 @@ func (m *AgentTaskManager) executeTask(ctx context.Context, work, channel, chatI
 		CheckPointStore: m.checkpointStore,
 	})
 
+	// 使用轻量模式加载引导文件，只加载 AGENTS.md 和 TOOLS.md
+	// 不加载 SOUL.md、USER.md 等个性化配置，保持后台任务的独立性
 	systemPrompt := ""
 	if m.context != nil {
-		systemPrompt = m.context.BuildSystemPrompt()
+		systemPrompt = m.context.BuildSystemPromptWithMode(BootstrapLight)
 	}
 	messages := BuildMessageList(systemPrompt, nil, work, channel, chatID)
 

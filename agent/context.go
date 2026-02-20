@@ -13,20 +13,37 @@ import (
 	"github.com/cloudwego/eino/schema"
 )
 
+// BootstrapMode 引导文件加载模式
+type BootstrapMode string
+
+const (
+	// BootstrapFull 完整模式：加载所有引导文件（用于 MasterAgent）
+	BootstrapFull BootstrapMode = "full"
+	// BootstrapLight 轻量模式：只加载 AGENTS.md 和 TOOLS.md（用于后台任务）
+	BootstrapLight BootstrapMode = "light"
+)
+
 // ContextBuilder 上下文构建器
 type ContextBuilder struct {
-	workspace string
-	memory    *MemoryStore
-	skills    *SkillsLoader
+	workspace       string
+	memory          *MemoryStore
+	skills          *SkillsLoader
+	bootstrapMode   BootstrapMode // 引导文件加载模式
 }
 
 // NewContextBuilder 创建上下文构建器
 func NewContextBuilder(workspace string) *ContextBuilder {
 	return &ContextBuilder{
-		workspace: workspace,
-		memory:    NewMemoryStore(workspace),
-		skills:    NewSkillsLoader(workspace),
+		workspace:     workspace,
+		memory:        NewMemoryStore(workspace),
+		skills:        NewSkillsLoader(workspace),
+		bootstrapMode: BootstrapFull, // 默认完整模式
 	}
+}
+
+// SetBootstrapMode 设置引导文件加载模式
+func (c *ContextBuilder) SetBootstrapMode(mode BootstrapMode) {
+	c.bootstrapMode = mode
 }
 
 // GetSkillsLoader 获取技能加载器
@@ -36,13 +53,18 @@ func (c *ContextBuilder) GetSkillsLoader() *SkillsLoader {
 
 // BuildSystemPrompt 构建系统提示
 func (c *ContextBuilder) BuildSystemPrompt() string {
+	return c.BuildSystemPromptWithMode(c.bootstrapMode)
+}
+
+// BuildSystemPromptWithMode 使用指定模式构建系统提示
+func (c *ContextBuilder) BuildSystemPromptWithMode(mode BootstrapMode) string {
 	var parts []string
 
 	// 核心身份
 	parts = append(parts, c.getIdentity())
 
-	// 引导文件
-	bootstrap := c.loadBootstrapFiles()
+	// 引导文件（使用指定模式）
+	bootstrap := c.loadBootstrapFilesWithMode(mode)
 	if bootstrap != "" {
 		parts = append(parts, bootstrap)
 	}
@@ -118,8 +140,29 @@ func (c *ContextBuilder) getIdentity() string {
 }
 
 // loadBootstrapFiles 加载引导文件
+// 根据 bootstrapMode 决定加载哪些文件：
+// - BootstrapFull: 加载所有引导文件（用于 MasterAgent）
+// - BootstrapLight: 只加载 AGENTS.md 和 TOOLS.md（用于后台任务）
 func (c *ContextBuilder) loadBootstrapFiles() string {
-	bootstrapFiles := []string{"AGENTS.md", "SOUL.md", "USER.md", "TOOLS.md", "IDENTITY.md"}
+	return c.loadBootstrapFilesWithMode(c.bootstrapMode)
+}
+
+// loadBootstrapFilesWithMode 使用指定模式加载引导文件
+func (c *ContextBuilder) loadBootstrapFilesWithMode(mode BootstrapMode) string {
+	var bootstrapFiles []string
+
+	switch mode {
+	case BootstrapLight:
+		// 轻量模式：只加载代理定义和工具定义
+		bootstrapFiles = []string{"AGENTS.md", "TOOLS.md"}
+	case BootstrapFull:
+		// 完整模式：加载所有引导文件
+		bootstrapFiles = []string{"AGENTS.md", "SOUL.md", "USER.md", "TOOLS.md", "IDENTITY.md"}
+	default:
+		// 默认完整模式
+		bootstrapFiles = []string{"AGENTS.md", "SOUL.md", "USER.md", "TOOLS.md", "IDENTITY.md"}
+	}
+
 	var parts []string
 
 	for _, filename := range bootstrapFiles {
