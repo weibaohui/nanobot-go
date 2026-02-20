@@ -7,6 +7,15 @@ import (
 	"github.com/weibaohui/nanobot-go/utils"
 )
 
+// CompressConfig 对话压缩配置
+type CompressConfig struct {
+	Enabled    bool   `json:"enabled"`     // 是否启用压缩功能
+	MinMessages int   `json:"minMessages"` // 最小消息数量阈值（默认20）
+	MinTokens  int    `json:"minTokens"`   // 最小 Token 用量阈值（默认50000）
+	Model      string `json:"model"`       // 压缩使用的模型（默认使用默认模型）
+	MaxHistory int    `json:"maxHistory"`  // 压缩后保留的最大历史消息数（默认5）
+}
+
 // Config 根配置结构
 type Config struct {
 	Agents    AgentsConfig    `json:"agents"`
@@ -15,6 +24,7 @@ type Config struct {
 	Gateway   GatewayConfig   `json:"gateway"`
 	Tools     ToolsConfig     `json:"tools"`
 	Heartbeat HeartbeatConfig `json:"heartbeat"`
+	Compress  CompressConfig  `json:"compress"`
 }
 
 // HeartbeatConfig 心跳配置
@@ -187,6 +197,13 @@ func DefaultConfig() *Config {
 		Heartbeat: HeartbeatConfig{
 			Every:       "30m",
 			ActiveHours: ActiveHours{Start: "09:00", End: "18:00"},
+		},
+		Compress: CompressConfig{
+			Enabled:    false,
+			MinMessages: 20,
+			MinTokens:  50000,
+			Model:      "",
+			MaxHistory: 5,
 		},
 	}
 }

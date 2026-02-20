@@ -38,6 +38,7 @@ type Loop struct {
 	tools               *tools.Registry
 	running             bool
 	logger              *zap.Logger
+	hookManager         *HookManager
 
 	interruptManager *InterruptManager
 	supervisor       *SupervisorAgent
@@ -57,6 +58,7 @@ type LoopConfig struct {
 	CronService         *cron.Service
 	SessionManager      *session.Manager
 	Logger              *zap.Logger
+	HookManager         *HookManager
 }
 
 // NewLoop 创建代理循环
@@ -82,6 +84,7 @@ func NewLoop(cfg *LoopConfig) *Loop {
 		sessions:            cfg.SessionManager,
 		tools:               tools.NewRegistry(),
 		logger:              logger,
+		hookManager:         cfg.HookManager,
 	}
 
 	loop.interruptManager = NewInterruptManager(cfg.MessageBus, logger)
@@ -128,6 +131,7 @@ func NewLoop(cfg *LoopConfig) *Loop {
 		CheckpointStore: loop.interruptManager.GetCheckpointStore(),
 		MaxIterations:   cfg.MaxIterations,
 		RegisteredTools: toolNames,
+		HookManager:     loop.hookManager,
 	})
 	if err != nil {
 		logger.Error("创建 Supervisor Agent 失败，将使用传统模式", zap.Error(err))
@@ -149,6 +153,7 @@ func NewLoop(cfg *LoopConfig) *Loop {
 		CheckpointStore: loop.interruptManager.GetCheckpointStore(),
 		MaxIterations:   cfg.MaxIterations,
 		RegisteredTools: toolNames,
+		HookManager:     loop.hookManager,
 	})
 	if err != nil {
 		logger.Error("创建 Master Agent 失败，将使用传统模式", zap.Error(err))

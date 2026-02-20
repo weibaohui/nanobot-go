@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/weibaohui/nanobot-go/agent"
+	"github.com/weibaohui/nanobot-go/agent/hooks"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/channels"
 	"github.com/weibaohui/nanobot-go/config"
@@ -102,6 +103,25 @@ func runGateway(cmd *cobra.Command, args []string) {
 	dataDir := filepath.Join(workspacePath, ".nanobot")
 	sessionManager := session.NewManager(cfg, dataDir)
 
+	// 创建 Hook Manager
+	hookManager := agent.NewHookManager()
+	hookManager.SetLogger(logger)
+	if cfg.Compress.Enabled {
+		memory := agent.NewMemoryStore(workspacePath)
+		compressLLM, err := hooks.CreateCompressLLM(cfg)
+		if err != nil {
+			logger.Error("创建压缩 LLM 失败", zap.Error(err))
+		} else {
+			compressHook := hooks.NewCompressHook(cfg, logger, memory, compressLLM)
+			hookManager.Register(compressHook)
+			logger.Info("对话压缩 Hook 已启用",
+				zap.Int("minMessages", cfg.Compress.MinMessages),
+				zap.Int("minTokens", cfg.Compress.MinTokens),
+				zap.Int("maxHistory", cfg.Compress.MaxHistory),
+			)
+		}
+	}
+
 	cronStorePath := filepath.Join(dataDir, "cron_jobs.json")
 	cronService := cron.NewService(cronStorePath, logger)
 
@@ -127,6 +147,7 @@ func runGateway(cmd *cobra.Command, args []string) {
 		CronService:         cronService,
 		SessionManager:      sessionManager,
 		Logger:              logger,
+		HookManager:         hookManager,
 	})
 
 	ctx := context.Background()

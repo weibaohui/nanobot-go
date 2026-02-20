@@ -73,6 +73,21 @@ func (m *MemoryStore) WriteLongTerm(content string) error {
 	return os.WriteFile(m.memoryFile, []byte(content), 0644)
 }
 
+// AppendToLongTerm 追加内容到长期内存
+func (m *MemoryStore) AppendToLongTerm(content string) error {
+	var existing string
+	data, err := os.ReadFile(m.memoryFile)
+	if err == nil {
+		existing = string(data)
+	} else {
+		// 新文件添加头部
+		existing = "# 长期内存\n\n"
+	}
+
+	newContent := existing + "\n" + content
+	return os.WriteFile(m.memoryFile, []byte(newContent), 0644)
+}
+
 // GetRecentMemories 获取最近 N 天的内存
 func (m *MemoryStore) GetRecentMemories(days int) string {
 	var memories []string

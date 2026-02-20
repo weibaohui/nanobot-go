@@ -50,6 +50,7 @@ type SupervisorConfig struct {
 	MaxIterations   int
 	// 已注册的工具名称列表
 	RegisteredTools []string
+	HookManager     *HookManager
 }
 
 // NewSupervisorAgent 创建 Supervisor Agent

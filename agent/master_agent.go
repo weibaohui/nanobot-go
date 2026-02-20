@@ -44,6 +44,7 @@ type MasterAgentConfig struct {
 	MaxIterations   int
 	// 已注册的工具名称列表
 	RegisteredTools []string
+	HookManager     *HookManager
 }
 
 // NewMasterAgent 创建 Master Agent
