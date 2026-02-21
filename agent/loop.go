@@ -258,18 +258,14 @@ func (l *Loop) Run(ctx context.Context) error {
 	l.logger.Info("消息监听循环处理功能已启动")
 
 	for l.running {
-		select {
-		case <-ctx.Done():
-			l.running = false
-			return ctx.Err()
-		default:
-		}
-
 		// 等待消息
 		msg, err := l.bus.ConsumeInbound(ctx)
 		if err != nil {
 			if err == context.DeadlineExceeded {
 				continue
+			}
+			if err == context.Canceled {
+				return nil
 			}
 			return err
 		}

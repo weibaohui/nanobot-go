@@ -65,7 +65,6 @@ func (c *CLIChannel) inputLoop(ctx context.Context) {
 			return
 		case <-c.stopChan:
 			return
-		default:
 		}
 
 		line, err := reader.ReadString('\n')

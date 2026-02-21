@@ -3,3 +3,4 @@ nanobot-go
 .nanobot/
 tmp/
 bin/
+.worktrees/

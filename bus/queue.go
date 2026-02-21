@@ -3,7 +3,6 @@ package bus
 import (
 	"context"
 	"sync"
-	"time"
 
 	"go.uber.org/zap"
 )
@@ -113,8 +112,6 @@ func (b *MessageBus) dispatchLoop(ctx context.Context) {
 		case <-ctx.Done():
 			b.running = false
 			return
-		case <-time.After(1 * time.Second):
-			// 继续循环
 		}
 	}
 }
@@ -128,8 +125,6 @@ func (b *MessageBus) streamDispatchLoop(ctx context.Context) {
 		case <-ctx.Done():
 			b.running = false
 			return
-		case <-time.After(100 * time.Millisecond):
-			// 继续循环
 		}
 	}
 }
