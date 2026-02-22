@@ -162,8 +162,9 @@ func (i *interruptible) Process(ctx context.Context, msg *bus.InboundMessage, bu
 		if isInterruptError(err) {
 			return "", err
 		}
-		// 非中断错误：返回错误信息作为响应，让上层处理
-		return fmt.Sprintf("处理失败: %v", err), err
+		// 非中断错误：返回错误信息作为响应和错误，让上层处理
+		errorMsg := fmt.Sprintf("处理失败: %v", err)
+		return errorMsg, fmt.Errorf("%s", errorMsg)
 	}
 
 	i.saveSession(sess, msg.Content)
@@ -224,8 +225,9 @@ func (i *interruptible) processInterrupted(ctx context.Context, sess *session.Se
 		if isInterruptError(err) {
 			return "", err
 		}
-		// 返回错误信息作为响应，让上层处理
-		return fmt.Sprintf("恢复执行失败: %v", err), err
+		// 返回错误信息作为响应和错误，让上层处理
+		errorMsg := fmt.Sprintf("恢复执行失败: %v", err)
+		return errorMsg, fmt.Errorf("%s", errorMsg)
 	}
 
 	// 清理已完成的中断
