@@ -412,11 +412,52 @@ func (i *interruptible) convertHistory(history []map[string]any) []*schema.Messa
 			role = schema.Assistant
 		}
 
-		content, _ := h["content"].(string)
-		result = append(result, &schema.Message{
-			Role:    role,
-			Content: content,
-		})
+		msg := &schema.Message{
+			Role: role,
+		}
+
+		// 处理 content：可能是字符串或多部分内容
+		content := h["content"]
+		if contentStr, ok := content.(string); ok {
+			// 纯文本内容
+			msg.Content = contentStr
+		} else if contentSlice, ok := content.([]map[string]any); ok {
+			// 多部分内容（例如包含图片）
+			msg.UserInputMultiContent = make([]schema.MessageInputPart, 0, len(contentSlice))
+			for _, part := range contentSlice {
+				partType, _ := part["type"].(string)
+				switch partType {
+				case "text":
+					if text, ok := part["text"].(string); ok {
+						msg.UserInputMultiContent = append(msg.UserInputMultiContent, schema.MessageInputPart{
+							Type: schema.ChatMessagePartTypeText,
+							Text: text,
+						})
+					}
+				case "image_url":
+					if imageObj, ok := part["image_url"].(map[string]any); ok {
+						if url, ok := imageObj["url"].(string); ok {
+							msg.UserInputMultiContent = append(msg.UserInputMultiContent, schema.MessageInputPart{
+								Type: schema.ChatMessagePartTypeImageURL,
+								Image: &schema.MessageInputImage{
+									MessagePartCommon: schema.MessagePartCommon{
+										URL: &url,
+									},
+									Detail: schema.ImageURLDetailAuto,
+								},
+							})
+						}
+					}
+				}
+			}
+		} else {
+			// 其他类型，尝试转为字符串作为后备
+			if content != nil {
+				msg.Content = fmt.Sprintf("%v", content)
+			}
+		}
+
+		result = append(result, msg)
 	}
 	return result
 }

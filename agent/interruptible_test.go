@@ -157,6 +157,73 @@ func TestInterruptible_ConvertHistory(t *testing.T) {
 	}
 }
 
+// TestInterruptible_ConvertHistory_MultiPartContent 测试多模态内容转换
+func TestInterruptible_ConvertHistory_MultiPartContent(t *testing.T) {
+	i := &interruptible{
+		logger: zap.NewNop(),
+	}
+
+	// 模拟包含图片的历史消息
+	imageURL := "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+	history := []map[string]any{
+		{
+			"role":    "user",
+			"content": []map[string]any{
+				{"type": "image_url", "image_url": map[string]any{"url": imageURL}},
+				{"type": "text", "text": "这是什么图片？"},
+			},
+		},
+		{"role": "assistant", "content": "这是一张简单的图片。"},
+		{"role": "user", "content": "接下来请分析一下"},
+	}
+
+	messages := i.convertHistory(history)
+
+	if len(messages) != 3 {
+		t.Fatalf("convertHistory() 返回 %d 条消息, 期望 3", len(messages))
+	}
+
+	// 验证第一条带图片的消息
+	if messages[0].Role != schema.User {
+		t.Errorf("messages[0].Role = %v, 期望 User", messages[0].Role)
+	}
+
+	// 多模态内容应该在 UserInputMultiContent 中
+	if len(messages[0].UserInputMultiContent) != 2 {
+		t.Errorf("messages[0].UserInputMultiContent 长度 = %d, 期望 2", len(messages[0].UserInputMultiContent))
+	}
+
+	if messages[0].UserInputMultiContent[0].Type != schema.ChatMessagePartTypeImageURL {
+		t.Errorf("第一部分类型 = %v, 期望 ImageURL", messages[0].UserInputMultiContent[0].Type)
+	}
+
+	if messages[0].UserInputMultiContent[1].Type != schema.ChatMessagePartTypeText {
+		t.Errorf("第二部分类型 = %v, 期望 Text", messages[0].UserInputMultiContent[1].Type)
+	}
+
+	if messages[0].UserInputMultiContent[1].Text != "这是什么图片？" {
+		t.Errorf("第二部分文本 = %q, 期望 这是什么图片？", messages[0].UserInputMultiContent[1].Text)
+	}
+
+	// 验证第二条纯文本消息
+	if messages[1].Role != schema.Assistant {
+		t.Errorf("messages[1].Role = %v, 期望 Assistant", messages[1].Role)
+	}
+
+	if messages[1].Content != "这是一张简单的图片。" {
+		t.Errorf("messages[1].Content = %q, 期望 这是一张简单的图片。", messages[1].Content)
+	}
+
+	// 验证第三条纯文本消息
+	if messages[2].Role != schema.User {
+		t.Errorf("messages[2].Role = %v, 期望 User", messages[2].Role)
+	}
+
+	if messages[2].Content != "接下来请分析一下" {
+		t.Errorf("messages[2].Content = %q, 期望 接下来请分析一下", messages[2].Content)
+	}
+}
+
 // TestInterruptible_BuildResumePayload 测试构建恢复参数
 func TestInterruptible_BuildResumePayload(t *testing.T) {
 	i := &interruptible{
