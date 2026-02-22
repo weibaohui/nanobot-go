@@ -158,8 +158,12 @@ func (i *interruptible) Process(ctx context.Context, msg *bus.InboundMessage, bu
 	checkpointID := fmt.Sprintf("%s_%d", sessionKey, time.Now().UnixNano())
 
 	response, err := i.processNormal(ctx, messages, checkpointID, msg)
-	if err != nil && isInterruptError(err) {
-		return "", err
+	if err != nil {
+		if isInterruptError(err) {
+			return "", err
+		}
+		// 非中断错误：返回错误信息作为响应，让上层处理
+		return fmt.Sprintf("处理失败: %v", err), err
 	}
 
 	i.saveSession(sess, msg.Content)
@@ -220,7 +224,8 @@ func (i *interruptible) processInterrupted(ctx context.Context, sess *session.Se
 		if isInterruptError(err) {
 			return "", err
 		}
-		return "", fmt.Errorf("恢复执行失败: %w", err)
+		// 返回错误信息作为响应，让上层处理
+		return fmt.Sprintf("恢复执行失败: %v", err), err
 	}
 
 	// 清理已完成的中断

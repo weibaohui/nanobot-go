@@ -411,12 +411,34 @@ func (c *MatrixChannel) Send(msg *bus.OutboundMessage) error {
 	if c.client == nil {
 		return fmt.Errorf("Matrix 客户端未初始化")
 	}
+	if msg.Content == "" {
+		return fmt.Errorf("消息内容为空")
+	}
 
 	roomID := id.RoomID(msg.ChatID)
 	defer c.stopTypingIndicator(roomID)
 
+	// 记录发送前的原始消息（便于调试 "Unable to render message" 问题）
+	preview := msg.Content
+	if len(preview) > 200 {
+		preview = preview[:200] + "..."
+	}
+	c.logger.Info("[Matrix] 准备发送消息",
+		zap.String("room_id", string(roomID)),
+		zap.String("channel", msg.Channel),
+		zap.String("content_preview", preview),
+		zap.Int("content_length", len(msg.Content)),
+	)
+
 	// 将 Markdown 转换为 HTML
 	htmlContent := markdownToHTML(msg.Content)
+
+	// 如果 Markdown 转换失败，记录警告
+	if htmlContent == "" {
+		c.logger.Warn("[Matrix] Markdown 转换为 HTML 失败，使用纯文本",
+			zap.String("room_id", string(roomID)),
+		)
+	}
 
 	content := &event.MessageEventContent{
 		MsgType:       event.MsgText,
@@ -425,13 +447,19 @@ func (c *MatrixChannel) Send(msg *bus.OutboundMessage) error {
 		FormattedBody: htmlContent,
 	}
 
-	_, err := c.client.SendMessageEvent(c.ctx, roomID, event.EventMessage, content)
+	resp, err := c.client.SendMessageEvent(c.ctx, roomID, event.EventMessage, content)
 	if err != nil {
+		c.logger.Error("[Matrix] 发送消息失败",
+			zap.String("room_id", string(roomID)),
+			zap.Error(err),
+			zap.String("original_content_preview", preview),
+		)
 		return fmt.Errorf("发送消息失败: %w", err)
 	}
 
-	c.logger.Debug("Matrix 消息已发送",
+	c.logger.Info("[Matrix] 消息已发送",
 		zap.String("room_id", string(roomID)),
+		zap.String("event_id", string(resp.EventID)),
 	)
 	return nil
 }
@@ -440,9 +468,25 @@ func (c *MatrixChannel) Send(msg *bus.OutboundMessage) error {
 func markdownToHTML(md string) string {
 	var buf bytes.Buffer
 	if err := goldmark.Convert([]byte(md), &buf); err != nil {
+		// Markdown 转换失败，记录原始内容的前 100 字符便于调试
+		preview := md
+		if len(preview) > 100 {
+			preview = preview[:100] + "..."
+		}
+		zap.L().Warn("[Matrix] Markdown 转换失败",
+			zap.Error(err),
+			zap.String("content_preview", preview),
+			zap.Int("content_length", len(md)),
+		)
 		return md
 	}
-	return buf.String()
+	result := buf.String()
+	if result == "" && md != "" {
+		zap.L().Warn("[Matrix] Markdown 转换返回空结果",
+			zap.String("content_preview", md),
+		)
+	}
+	return result
 }
 
 // SendNotice 发送通知消息（不会产生通知提醒）

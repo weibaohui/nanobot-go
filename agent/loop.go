@@ -310,7 +310,16 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 		if isInterruptError(err) {
 			return nil
 		}
-		return fmt.Errorf("Master Agent 处理失败: %w", err)
+		// 非中断错误：如果 response 包含错误信息（由 interruptible 构造），直接发送
+		// 否则构造默认错误消息
+		if response != "" {
+			l.logger.Error("Master Agent 处理失败", zap.Error(err), zap.String("response", response))
+			l.bus.PublishOutbound(bus.NewOutboundMessage(msg.Channel, msg.ChatID, response))
+		} else {
+			l.logger.Error("Master Agent 处理失败", zap.Error(err))
+			l.bus.PublishOutbound(bus.NewOutboundMessage(msg.Channel, msg.ChatID, fmt.Sprintf("抱歉，处理消息时遇到错误: %v", err)))
+		}
+		return nil
 	}
 
 	// 发布响应

@@ -4,3 +4,5 @@ nanobot-go
 tmp/
 bin/
 .worktrees/
+main
+nanobot-fixed
