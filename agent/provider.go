@@ -119,6 +119,23 @@ func (a *ChatModelAdapter) isKnownSkill(name string) bool {
 
 // Generate produces a complete model response
 func (a *ChatModelAdapter) Generate(ctx context.Context, input []*schema.Message, opts ...model.Option) (*schema.Message, error) {
+	// 调试：记录输入消息
+	if a.logger != nil && len(input) > 0 {
+		for i, msg := range input {
+			a.logger.Debug("[LLM] 发送消息",
+				zap.Int("index", i),
+				zap.String("role", string(msg.Role)),
+				zap.String("content_preview", func() string {
+					preview := msg.Content
+					if len(preview) > 200 {
+						preview = preview[:200] + "..."
+					}
+					return preview
+				}()),
+			)
+		}
+	}
+
 	// 调用底层 ChatModel
 	response, err := a.chatModel.Generate(ctx, input, opts...)
 	if err != nil {

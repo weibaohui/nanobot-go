@@ -181,6 +181,10 @@ func runGateway(cmd *cobra.Command, args []string) {
 		workspacePath,
 		func(ctx context.Context, cfg *config.Config, prompt string, model string, session string) (string, error) {
 			agent := loop.GetMasterAgent()
+			if agent == nil {
+				logger.Error("MasterAgent 未初始化，跳过心跳处理")
+				return "", fmt.Errorf("MasterAgent not initialized")
+			}
 			resp, err := agent.Process(ctx, &bus.InboundMessage{
 				Channel: "heartbeat",
 				Content: prompt,

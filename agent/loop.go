@@ -157,9 +157,11 @@ func NewLoop(cfg *LoopConfig) *Loop {
 	})
 	if err != nil {
 		logger.Error("创建 Master Agent 失败，将使用传统模式", zap.Error(err))
+		loop.masterAgent = nil
 	} else {
 		loop.masterAgent = masterAgent
 	}
+	logger.Info("Loop 初始化完成", zap.Bool("has_master_agent", loop.masterAgent != nil))
 
 	return loop
 }
@@ -347,6 +349,9 @@ func (l *Loop) updateToolContext(channel, chatID string) {
 
 // GetSupervisor 获取 Supervisor Agent
 func (l *Loop) GetMasterAgent() *MasterAgent {
+	if l.masterAgent == nil {
+		l.logger.Warn("GetMasterAgent() 被调用但 MasterAgent 未初始化")
+	}
 	return l.masterAgent
 }
 
