@@ -96,6 +96,8 @@ func runGateway(cmd *cobra.Command, args []string) {
 	logger.Info("nanobot gateway 启动中",
 		zap.Int("端口", gatewayPort),
 		zap.String("工作区", workspacePath),
+		zap.String("版本", version),
+		zap.String("构建时间", buildDate),
 	)
 
 	messageBus := bus.NewMessageBus(logger)

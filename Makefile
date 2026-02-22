@@ -14,8 +14,12 @@ PLATFORMS := \
 # 编译输出目录
 OUT_DIR := bin
 
+# 构建信息
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+BUILD_TIME := $(shell date -u '+%Y-%m-%d_%H:%M:%S')
+
 # Go 编译参数
-GO_BUILD_FLAGS := -trimpath -ldflags="-s -w"
+GO_BUILD_FLAGS := -trimpath -ldflags="-s -w -X main.version=$(VERSION) -X main.buildDate=$(BUILD_TIME)"
 
 help:
 	@echo "可用的 Make 目标:"
