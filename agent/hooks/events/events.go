@@ -29,32 +29,29 @@ type EventType string
 
 const (
 	// 消息相关事件
-	EventMessageReceived    EventType = "message_received"     // 收到消息
-	EventMessageSent        EventType = "message_sent"         // 发送消息
-	EventPromptSubmitted    EventType = "prompt_submitted"     // 提交用户 prompt
-	EventSystemPromptBuilt  EventType = "system_prompt_built"  // 生成系统 prompt
+	EventMessageReceived   EventType = "message_received"    // 收到消息
+	EventMessageSent       EventType = "message_sent"        // 发送消息
+	EventPromptSubmitted   EventType = "prompt_submitted"    // 提交用户 prompt
+	EventSystemPromptBuilt EventType = "system_prompt_built" // 生成系统 prompt
 
 	// 工具相关事件
-	EventToolCall           EventType = "tool_call"            // 工具调用
-	EventToolIntercepted    EventType = "tool_intercepted"     // 工具调用被拦截
-	EventToolUsed           EventType = "tool_used"            // 使用工具
-	EventToolCompleted      EventType = "tool_completed"       // 工具执行完成
-	EventToolError          EventType = "tool_error"           // 工具执行错误
+	EventToolUsed      EventType = "tool_used"      // 使用工具
+	EventToolCompleted EventType = "tool_completed" // 工具执行完成
+	EventToolError     EventType = "tool_error"     // 工具执行错误
 
 	// 技能相关事件
-	EventSkillCall          EventType = "skill_call"           // 技能调用
-	EventSkillLookup        EventType = "skill_lookup"        // 查找技能
-	EventSkillUsed          EventType = "skill_used"          // 使用技能
+	EventSkillLookup EventType = "skill_lookup" // 查找技能
+	EventSkillUsed   EventType = "skill_used"   // 使用技能
 
 	// LLM 相关事件 (来自 Eino callbacks)
-	EventLLMCallStart       EventType = "llm_call_start"       // LLM 调用开始
-	EventLLMCallEnd         EventType = "llm_call_end"         // LLM 调用结束
-	EventLLMCallError       EventType = "llm_call_error"       // LLM 调用错误
+	EventLLMCallStart EventType = "llm_call_start" // LLM 调用开始
+	EventLLMCallEnd   EventType = "llm_call_end"   // LLM 调用结束
+	EventLLMCallError EventType = "llm_call_error" // LLM 调用错误
 
 	// 通用事件
-	EventComponentStart     EventType = "component_start"      // 组件开始执行
-	EventComponentEnd       EventType = "component_end"        // 组件执行完成
-	EventComponentError     EventType = "component_error"      // 组件执行错误
+	EventComponentStart EventType = "component_start" // 组件开始执行
+	EventComponentEnd   EventType = "component_end"   // 组件执行完成
+	EventComponentError EventType = "component_error" // 组件执行错误
 )
 
 // BaseEvent 事件基类
@@ -62,7 +59,6 @@ type BaseEvent struct {
 	TraceID   string    `json:"trace_id"`   // 追踪 ID
 	EventType EventType `json:"event_type"` // 事件类型
 	Timestamp time.Time `json:"timestamp"`  // 时间戳
-	Data      map[string]interface{} `json:"data,omitempty"` // 事件数据
 }
 
 // ToBaseEvent 实现 Event 接口
@@ -91,7 +87,6 @@ func NewBaseEvent(traceID string, eventType EventType) *BaseEvent {
 		TraceID:   traceID,
 		EventType: eventType,
 		Timestamp: time.Now(),
-		Data:      make(map[string]interface{}),
 	}
 }
 
@@ -99,11 +94,11 @@ func NewBaseEvent(traceID string, eventType EventType) *BaseEvent {
 type MessageReceivedEvent struct {
 	*BaseEvent
 	Message    *bus.InboundMessage `json:"message"`     // 原始消息
-	Preview    string             `json:"preview"`     // 内容预览
-	SenderID   string             `json:"sender_id"`   // 发送者 ID
-	ChatID     string             `json:"chat_id"`     // 聊天 ID
-	Channel    string             `json:"channel"`     // 渠道名称
-	SessionKey string             `json:"session_key"` // 会话键
+	Preview    string              `json:"preview"`     // 内容预览
+	SenderID   string              `json:"sender_id"`   // 发送者 ID
+	ChatID     string              `json:"chat_id"`     // 聊天 ID
+	Channel    string              `json:"channel"`     // 渠道名称
+	SessionKey string              `json:"session_key"` // 会话键
 }
 
 // NewMessageReceivedEvent 创建收到消息事件
@@ -156,10 +151,10 @@ func NewMessageSentEvent(traceID string, msg *bus.OutboundMessage, sessionKey st
 // PromptSubmittedEvent 提交 Prompt 事件
 type PromptSubmittedEvent struct {
 	*BaseEvent
-	UserInput  string               `json:"user_input"`  // 用户输入
-	Messages   []*schema.Message    `json:"messages"`    // 完整消息列表
-	Count      int                  `json:"count"`       // 消息数量
-	SessionKey string               `json:"session_key"` // 会话键
+	UserInput  string            `json:"user_input"`  // 用户输入
+	Messages   []*schema.Message `json:"messages"`    // 完整消息列表
+	Count      int               `json:"count"`       // 消息数量
+	SessionKey string            `json:"session_key"` // 会话键
 }
 
 // NewPromptSubmittedEvent 创建提交 Prompt 事件
@@ -183,27 +178,27 @@ type SystemPromptBuiltEvent struct {
 // NewSystemPromptBuiltEvent 创建生成系统 Prompt 事件
 func NewSystemPromptBuiltEvent(traceID string, systemPrompt string) *SystemPromptBuiltEvent {
 	return &SystemPromptBuiltEvent{
-		BaseEvent:   NewBaseEvent(traceID, EventSystemPromptBuilt),
+		BaseEvent:    NewBaseEvent(traceID, EventSystemPromptBuilt),
 		SystemPrompt: systemPrompt,
-		Length:      len(systemPrompt),
+		Length:       len(systemPrompt),
 	}
 }
 
 // ToolUsedEvent 使用工具事件
 type ToolUsedEvent struct {
 	*BaseEvent
-	ToolName        string `json:"tool_name"`         // 工具名称
-	ToolArguments   string `json:"tool_arguments"`    // 工具参数 (JSON)
-	ArgumentsRaw    string `json:"arguments_raw"`     // 原始参数
+	ToolName      string `json:"tool_name"`      // 工具名称
+	ToolArguments string `json:"tool_arguments"` // 工具参数 (JSON)
+	ArgumentsRaw  string `json:"arguments_raw"`  // 原始参数
 }
 
 // NewToolUsedEvent 创建使用工具事件
 func NewToolUsedEvent(traceID string, toolName, toolArguments string) *ToolUsedEvent {
 	return &ToolUsedEvent{
-		BaseEvent:      NewBaseEvent(traceID, EventToolUsed),
-		ToolName:       toolName,
-		ToolArguments:  toolArguments,
-		ArgumentsRaw:   toolArguments,
+		BaseEvent:     NewBaseEvent(traceID, EventToolUsed),
+		ToolName:      toolName,
+		ToolArguments: toolArguments,
+		ArgumentsRaw:  toolArguments,
 	}
 }
 
@@ -273,8 +268,8 @@ type SkillUsedEvent struct {
 // NewSkillUsedEvent 创建使用技能事件
 func NewSkillUsedEvent(traceID, skillName string, skillLength int) *SkillUsedEvent {
 	return &SkillUsedEvent{
-		BaseEvent:  NewBaseEvent(traceID, EventSkillUsed),
-		SkillName:  skillName,
+		BaseEvent:   NewBaseEvent(traceID, EventSkillUsed),
+		SkillName:   skillName,
 		SkillLength: skillLength,
 	}
 }
@@ -282,11 +277,11 @@ func NewSkillUsedEvent(traceID, skillName string, skillLength int) *SkillUsedEve
 // LLMCallStartEvent LLM 调用开始事件 (来自 Eino callbacks)
 type LLMCallStartEvent struct {
 	*BaseEvent
-	Component  string                 `json:"component"`  // 组件名称
-	Model      string                 `json:"model"`      // 模型名称
-	Messages   []*schema.Message      `json:"messages"`   // 消息列表
-	ToolNames  []string               `json:"tool_names"` // 工具名称列表
-	Config     map[string]interface{} `json:"config"`     // 配置
+	Component string                 `json:"component"`  // 组件名称
+	Model     string                 `json:"model"`      // 模型名称
+	Messages  []*schema.Message      `json:"messages"`   // 消息列表
+	ToolNames []string               `json:"tool_names"` // 工具名称列表
+	Config    map[string]interface{} `json:"config"`     // 配置
 }
 
 // NewLLMCallStartEvent 创建 LLM 调用开始事件
@@ -319,12 +314,12 @@ func NewLLMCallStartEvent(traceID string, info *callbacks.RunInfo, input *model.
 // LLMCallEndEvent LLM 调用结束事件 (来自 Eino callbacks)
 type LLMCallEndEvent struct {
 	*BaseEvent
-	Component       string             `json:"component"`        // 组件名称
-	Model           string             `json:"model"`            // 模型名称
-	ResponseContent string             `json:"response_content"` // 响应内容
-	ToolCalls       []schema.ToolCall  `json:"tool_calls"`       // 工具调用列表
-	TokenUsage      *model.TokenUsage  `json:"token_usage"`      // Token 使用情况
-	DurationMs      int64              `json:"duration_ms"`      // 持续时间 (毫秒)
+	Component       string            `json:"component"`        // 组件名称
+	Model           string            `json:"model"`            // 模型名称
+	ResponseContent string            `json:"response_content"` // 响应内容
+	ToolCalls       []schema.ToolCall `json:"tool_calls"`       // 工具调用列表
+	TokenUsage      *model.TokenUsage `json:"token_usage"`      // Token 使用情况
+	DurationMs      int64             `json:"duration_ms"`      // 持续时间 (毫秒)
 }
 
 // NewLLMCallEndEvent 创建 LLM 调用结束事件
@@ -348,9 +343,9 @@ func NewLLMCallEndEvent(traceID string, info *callbacks.RunInfo, output *model.C
 // LLMCallErrorEvent LLM 调用错误事件 (来自 Eino callbacks)
 type LLMCallErrorEvent struct {
 	*BaseEvent
-	Component  string `json:"component"` // 组件名称
-	Model      string `json:"model"`     // 模型名称
-	Error      string `json:"error"`     // 错误信息
+	Component  string `json:"component"`   // 组件名称
+	Model      string `json:"model"`       // 模型名称
+	Error      string `json:"error"`       // 错误信息
 	DurationMs int64  `json:"duration_ms"` // 持续时间 (毫秒)
 }
 
@@ -386,9 +381,9 @@ func NewComponentStartEvent(traceID string, info *callbacks.RunInfo) *ComponentS
 // ComponentEndEvent 组件执行完成事件 (来自 Eino callbacks)
 type ComponentEndEvent struct {
 	*BaseEvent
-	Component  string `json:"component"`  // 组件类型
-	Type       string `json:"type"`       // 组件类型
-	Name       string `json:"name"`       // 组件名称
+	Component  string `json:"component"`   // 组件类型
+	Type       string `json:"type"`        // 组件类型
+	Name       string `json:"name"`        // 组件名称
 	DurationMs int64  `json:"duration_ms"` // 持续时间 (毫秒)
 }
 
@@ -406,10 +401,10 @@ func NewComponentEndEvent(traceID string, info *callbacks.RunInfo, durationMs in
 // ComponentErrorEvent 组件执行错误事件 (来自 Eino callbacks)
 type ComponentErrorEvent struct {
 	*BaseEvent
-	Component  string `json:"component"`  // 组件类型
-	Type       string `json:"type"`       // 组件类型
-	Name       string `json:"name"`       // 组件名称
-	Error      string `json:"error"`      // 错误信息
+	Component  string `json:"component"`   // 组件类型
+	Type       string `json:"type"`        // 组件类型
+	Name       string `json:"name"`        // 组件名称
+	Error      string `json:"error"`       // 错误信息
 	DurationMs int64  `json:"duration_ms"` // 持续时间 (毫秒)
 }
 
