@@ -35,11 +35,14 @@ const (
 	EventSystemPromptBuilt  EventType = "system_prompt_built"  // 生成系统 prompt
 
 	// 工具相关事件
+	EventToolCall           EventType = "tool_call"            // 工具调用
+	EventToolIntercepted    EventType = "tool_intercepted"     // 工具调用被拦截
 	EventToolUsed           EventType = "tool_used"            // 使用工具
 	EventToolCompleted      EventType = "tool_completed"       // 工具执行完成
 	EventToolError          EventType = "tool_error"           // 工具执行错误
 
 	// 技能相关事件
+	EventSkillCall          EventType = "skill_call"           // 技能调用
 	EventSkillLookup        EventType = "skill_lookup"        // 查找技能
 	EventSkillUsed          EventType = "skill_used"          // 使用技能
 
@@ -59,6 +62,7 @@ type BaseEvent struct {
 	TraceID   string    `json:"trace_id"`   // 追踪 ID
 	EventType EventType `json:"event_type"` // 事件类型
 	Timestamp time.Time `json:"timestamp"`  // 时间戳
+	Data      map[string]interface{} `json:"data,omitempty"` // 事件数据
 }
 
 // ToBaseEvent 实现 Event 接口
@@ -87,6 +91,7 @@ func NewBaseEvent(traceID string, eventType EventType) *BaseEvent {
 		TraceID:   traceID,
 		EventType: eventType,
 		Timestamp: time.Now(),
+		Data:      make(map[string]interface{}),
 	}
 }
 

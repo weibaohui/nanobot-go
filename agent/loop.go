@@ -39,6 +39,7 @@ type Loop struct {
 	running             bool
 	logger              *zap.Logger
 	hookManager         *HookManager
+	hookCallback        func(eventType string, data map[string]interface{}) // Hook 回调
 
 	interruptManager *InterruptManager
 	supervisor       *SupervisorAgent
@@ -59,6 +60,7 @@ type LoopConfig struct {
 	SessionManager      *session.Manager
 	Logger              *zap.Logger
 	HookManager         *HookManager
+	HookCallback        func(eventType string, data map[string]interface{}) // Hook 回调
 }
 
 // NewLoop 创建代理循环
@@ -85,6 +87,7 @@ func NewLoop(cfg *LoopConfig) *Loop {
 		tools:               tools.NewRegistry(),
 		logger:              logger,
 		hookManager:         cfg.HookManager,
+		hookCallback:        cfg.HookCallback,
 	}
 
 	loop.interruptManager = NewInterruptManager(cfg.MessageBus, logger)
@@ -116,6 +119,7 @@ func NewLoop(cfg *LoopConfig) *Loop {
 
 	adapter.SetSkillLoader(loop.context.GetSkillsLoader().LoadSkill)
 	adapter.SetRegisteredTools(toolNames)
+	adapter.SetHookCallback(loop.hookCallback)
 
 	adkTools := loop.tools.GetToolsByNames(toolNames)
 

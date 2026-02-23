@@ -283,7 +283,7 @@ func TestBuildChatModelAdapter(t *testing.T) {
 	sessionMgr := session.NewManager(cfg, "/tmp")
 
 	t.Run("无技能加载器", func(t *testing.T) {
-		adapter, err := buildChatModelAdapter(logger, cfg, sessionMgr, nil, []string{"read_file"})
+		adapter, err := buildChatModelAdapter(logger, cfg, sessionMgr, nil, []string{"read_file"}, nil)
 		if err == nil {
 			if adapter == nil {
 				t.Error("buildChatModelAdapter() 不应该返回 nil adapter")
@@ -296,7 +296,7 @@ func TestBuildChatModelAdapter(t *testing.T) {
 			return "skill: " + name
 		}
 
-		adapter, err := buildChatModelAdapter(logger, cfg, sessionMgr, skillLoader, []string{"read_file"})
+		adapter, err := buildChatModelAdapter(logger, cfg, sessionMgr, skillLoader, []string{"read_file"}, nil)
 		if err == nil {
 			if adapter == nil {
 				t.Error("buildChatModelAdapter() 不应该返回 nil adapter")

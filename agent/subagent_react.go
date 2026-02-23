@@ -57,7 +57,7 @@ func NewReActSubAgent(ctx context.Context, cfg *ReActConfig) (*ReActSubAgent, er
 	}
 
 	// 使用统一的 LLM 初始化方法
-	llm, err := buildChatModelAdapter(logger, cfg.Cfg, cfg.Sessions, cfg.SkillsLoader, cfg.RegisteredTools)
+	llm, err := buildChatModelAdapter(logger, cfg.Cfg, cfg.Sessions, cfg.SkillsLoader, cfg.RegisteredTools, nil)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrChatModelAdapter, err)
 	}

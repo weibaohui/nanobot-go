@@ -18,7 +18,7 @@ import (
 
 // buildChatModelAdapter 创建并配置 ChatModelAdapter
 // 将 LLM 初始化逻辑集中在此，避免遗漏必要配置
-func buildChatModelAdapter(logger *zap.Logger, cfg *config.Config, sessions *session.Manager, skillsLoader func(string) string, registeredTools []string) (*ChatModelAdapter, error) {
+func buildChatModelAdapter(logger *zap.Logger, cfg *config.Config, sessions *session.Manager, skillsLoader func(string) string, registeredTools []string, hookCallback func(eventType string, data map[string]interface{})) (*ChatModelAdapter, error) {
 	llm, err := NewChatModelAdapter(logger, cfg, sessions)
 	if err != nil {
 		return nil, err
@@ -32,6 +32,11 @@ func buildChatModelAdapter(logger *zap.Logger, cfg *config.Config, sessions *ses
 	// 设置 RegisteredTools
 	if len(registeredTools) > 0 {
 		llm.SetRegisteredTools(registeredTools)
+	}
+
+	// 设置 Hook Callback
+	if hookCallback != nil {
+		llm.SetHookCallback(hookCallback)
 	}
 
 	return llm, nil

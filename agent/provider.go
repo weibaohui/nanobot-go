@@ -22,6 +22,10 @@ const SessionKeyContextKey ContextKey = "session_key"
 // SkillLoader 技能加载函数类型
 type SkillLoader func(name string) string
 
+// HookCallback Hook 回调函数类型
+// 避免循环导入，使用函数回调而不是直接依赖 Hook 系统
+type HookCallback func(eventType string, data map[string]interface{})
+
 // ChatModelAdapter 包装 eino 的 ChatModel，添加工具调用拦截功能
 // 主要功能：
 //   - 实现 model.ToolCallingChatModel 接口
@@ -32,6 +36,7 @@ type ChatModelAdapter struct {
 	registeredMap map[string]bool  // 已注册的工具名称
 	skillLoader   SkillLoader      // 技能加载器
 	sessions      *session.Manager // 会话管理器，用于记录 token 用量
+	hookCallback  HookCallback     // Hook 回调函数
 }
 
 // Sentinel errors 定义包级别的错误常量
@@ -90,6 +95,11 @@ func NewChatModelAdapter(logger *zap.Logger, cfg *config.Config, sessions *sessi
 // SetSkillLoader 设置技能加载器
 func (a *ChatModelAdapter) SetSkillLoader(loader SkillLoader) {
 	a.skillLoader = loader
+}
+
+// SetHookCallback 设置 Hook 回调函数
+func (a *ChatModelAdapter) SetHookCallback(callback HookCallback) {
+	a.hookCallback = callback
 }
 
 // SetRegisteredTools 设置已注册的工具名称列表
@@ -260,6 +270,12 @@ func (a *ChatModelAdapter) interceptToolCalls(msg *schema.Message) {
 	}
 
 	for i, tc := range msg.ToolCalls {
+		// 触发工具调用 Hook
+		a.triggerHook("tool_call", map[string]any{
+			"tool_name": tc.Function.Name,
+			"arguments": tc.Function.Arguments,
+		})
+
 		if a.logger != nil {
 			a.logger.Info("工具调用",
 				zap.String("名称", tc.Function.Name),
@@ -272,6 +288,13 @@ func (a *ChatModelAdapter) interceptToolCalls(msg *schema.Message) {
 			continue
 		}
 		if newName != tc.Function.Name {
+			// 触发工具调用被拦截 Hook
+			a.triggerHook("tool_intercepted", map[string]any{
+				"original_name": tc.Function.Name,
+				"new_name":      newName,
+				"new_args":      newArgs,
+			})
+
 			if a.logger != nil {
 				a.logger.Info("工具调用被拦截",
 					zap.String("原始名称", tc.Function.Name),
@@ -282,8 +305,35 @@ func (a *ChatModelAdapter) interceptToolCalls(msg *schema.Message) {
 			// 工具名被修改了，说明需要转换为技能调用
 			msg.ToolCalls[i].Function.Name = newName
 			msg.ToolCalls[i].Function.Arguments = newArgs
+
+			// 触发技能调用 Hook
+			if newName == "use_skill" {
+				// 解析新参数获取技能名称
+				var args map[string]any
+				if err := json.Unmarshal([]byte(newArgs), &args); err == nil {
+					if skillName, ok := args["skill_name"].(string); ok {
+						skillContent := ""
+						if a.skillLoader != nil {
+							skillContent = a.skillLoader(skillName)
+						}
+						a.triggerHook("skill_call", map[string]any{
+							"skill_name":     skillName,
+							"skill_length":   len(skillContent),
+							"original_name": tc.Function.Name,
+						})
+					}
+				}
+			}
 		}
 	}
+}
+
+// triggerHook 触发 Hook 事件
+func (a *ChatModelAdapter) triggerHook(eventType string, data map[string]any) {
+	if a.hookCallback == nil {
+		return
+	}
+	a.hookCallback(eventType, data)
 }
 
 // Stream produces a response as a stream
