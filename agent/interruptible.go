@@ -59,7 +59,6 @@ type interruptible struct {
 	maxIterations    int
 	agentType        string // "master" 或 "supervisor"
 	adkAgent         adk.Agent
-	hookManager      *HookManager
 }
 
 // interruptibleConfig 中断处理能力的配置
@@ -78,7 +77,6 @@ type interruptibleConfig struct {
 	AgentType       string
 	ADKAgent        adk.Agent
 	ADKRunner       *adk.Runner
-	HookManager     *HookManager
 }
 
 // newInterruptible 创建中断处理能力
@@ -112,7 +110,6 @@ func newInterruptible(ctx context.Context, cfg *interruptibleConfig) (*interrupt
 		maxIterations:    maxIter,
 		agentType:        cfg.AgentType,
 		adkAgent:         cfg.ADKAgent,
-		hookManager:      cfg.HookManager,
 	}
 
 	logger.Info(fmt.Sprintf("%s Agent 能力初始化成功", cfg.AgentType),
@@ -173,13 +170,6 @@ func (i *interruptible) Process(ctx context.Context, msg *bus.InboundMessage, bu
 	}
 
 	i.saveSession(sess, msg.Content)
-
-	// 执行消息后处理 Hook
-	if i.hookManager != nil {
-		if err := i.hookManager.ExecuteAfterMessageProcess(ctx, msg, sess, response); err != nil {
-			i.logger.Error("Hook 执行失败", zap.Error(err))
-		}
-	}
 
 	return response, nil
 }

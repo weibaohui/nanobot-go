@@ -216,6 +216,25 @@ func (a *ChatModelAdapter) recordTokenUsage(ctx context.Context, response *schem
 // interceptToolCall 拦截工具调用，如果工具不存在则转换为技能调用
 func (a *ChatModelAdapter) interceptToolCall(toolName string, argumentsJSON string) (string, string, error) {
 
+	// 如果工具是 use_skill，解析参数触发 skill_call Hook
+	if toolName == "use_skill" {
+		var args map[string]any
+		if err := json.Unmarshal([]byte(argumentsJSON), &args); err == nil {
+			if skillName, ok := args["skill_name"].(string); ok {
+				skillContent := ""
+				if a.skillLoader != nil {
+					skillContent = a.skillLoader(skillName)
+				}
+				// 触发技能调用 Hook
+				a.triggerHook("skill_call", map[string]any{
+					"skill_name":   skillName,
+					"skill_length": len(skillContent),
+				})
+			}
+		}
+		return toolName, argumentsJSON, nil
+	}
+
 	// 如果工具已注册，不拦截
 	if a.isRegisteredTool(toolName) {
 		a.logger.Info("工具已注册，不拦截", zap.String("名称", toolName))
@@ -302,28 +321,9 @@ func (a *ChatModelAdapter) interceptToolCalls(msg *schema.Message) {
 					zap.String("新参数", newArgs),
 				)
 			}
-			// 工具名被修改了，说明需要转换为技能调用
+			// 工具名被修改了，更新工具调用
 			msg.ToolCalls[i].Function.Name = newName
 			msg.ToolCalls[i].Function.Arguments = newArgs
-
-			// 触发技能调用 Hook
-			if newName == "use_skill" {
-				// 解析新参数获取技能名称
-				var args map[string]any
-				if err := json.Unmarshal([]byte(newArgs), &args); err == nil {
-					if skillName, ok := args["skill_name"].(string); ok {
-						skillContent := ""
-						if a.skillLoader != nil {
-							skillContent = a.skillLoader(skillName)
-						}
-						a.triggerHook("skill_call", map[string]any{
-							"skill_name":     skillName,
-							"skill_length":   len(skillContent),
-							"original_name": tc.Function.Name,
-						})
-					}
-				}
-			}
 		}
 	}
 }

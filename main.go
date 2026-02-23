@@ -15,7 +15,7 @@ import (
 	"github.com/weibaohui/nanobot-go/agent"
 	"github.com/weibaohui/nanobot-go/agent/hooks"
 	hookevents "github.com/weibaohui/nanobot-go/agent/hooks/events"
-	logging "github.com/weibaohui/nanobot-go/agent/hooks/observers"
+	"github.com/weibaohui/nanobot-go/agent/hooks/observers"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/channels"
 	"github.com/weibaohui/nanobot-go/config"
@@ -109,36 +109,33 @@ func runGateway(cmd *cobra.Command, args []string) {
 	dataDir := filepath.Join(workspacePath, ".nanobot")
 	sessionManager := session.NewManager(cfg, dataDir)
 
-	// 创建旧的 Hook Manager (用于 CompressHook 等旧式 Hook)
-	legacyHookManager := agent.NewHookManager()
-	legacyHookManager.SetLogger(logger)
-
-	// 创建新的 Hook 系统 (用于观察型 Hook)
+	// 创建统一的 Hook 系统
 	hookSystem := hooks.NewHookManager(logger, true)
 
 	// 注册 LoggingObserver
-	loggingObserver := logging.NewLoggingObserver(logger, nil)
+	loggingObserver := observers.NewLoggingObserver(logger, nil)
 	hookSystem.Register(loggingObserver)
 	logger.Info("日志观察器已注册到 Hook 系统")
 
-	// 注册 Eino Callback Handler
-	callbacks.AppendGlobalHandlers(hookSystem.EinoHandler())
-
+	// 如果启用了压缩，注册 CompressObserver
 	if cfg.Compress.Enabled {
 		memory := agent.NewMemoryStore(workspacePath)
-		compressLLM, err := hooks.CreateCompressLLM(cfg)
+		compressLLM, err := observers.CreateCompressLLM(cfg)
 		if err != nil {
 			logger.Error("创建压缩 LLM 失败", zap.Error(err))
 		} else {
-			compressHook := hooks.NewCompressHook(cfg, logger, memory, compressLLM)
-			legacyHookManager.Register(compressHook)
-			logger.Info("对话压缩 Hook 已启用",
+			compressObserver := observers.NewCompressObserver(cfg, logger, memory, compressLLM, sessionManager, nil)
+			hookSystem.Register(compressObserver)
+			logger.Info("对话压缩观察器已启用",
 				zap.Int("minMessages", cfg.Compress.MinMessages),
 				zap.Int("minTokens", cfg.Compress.MinTokens),
 				zap.Int("maxHistory", cfg.Compress.MaxHistory),
 			)
 		}
 	}
+
+	// 注册 Eino Callback Handler
+	callbacks.AppendGlobalHandlers(hookSystem.EinoHandler())
 
 	cronStorePath := filepath.Join(dataDir, "cron_jobs.json")
 	cronService := cron.NewService(cronStorePath, logger)
@@ -151,11 +148,6 @@ func runGateway(cmd *cobra.Command, args []string) {
 	if execTimeout <= 0 {
 		execTimeout = 120
 	}
-
-	// 使用新的 Hook 系统的 Eino Handler (已通过 AppendGlobalHandlers 注册)
-	// 旧版 Eino Callbacks 不再需要，因为新的 Hook 系统已经处理了
-	// callbacks := agent.NewEinoCallbacks(true, logger)
-	// agent.RegisterGlobalCallbacks(callbacks)
 
 	// 设置 Hook 回调，将 Loop 中的事件转发到 Hook 系统
 	setHookCallback := func(eventType string, data map[string]interface{}) {
@@ -181,7 +173,6 @@ func runGateway(cmd *cobra.Command, args []string) {
 		CronService:         cronService,
 		SessionManager:      sessionManager,
 		Logger:              logger,
-		HookManager:         legacyHookManager,
 		HookCallback:        setHookCallback,
 	})
 
