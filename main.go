@@ -10,8 +10,10 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
+	"github.com/cloudwego/eino/callbacks"
 	"github.com/weibaohui/nanobot-go/agent"
 	"github.com/weibaohui/nanobot-go/agent/hooks"
+	"github.com/weibaohui/nanobot-go/agent/hooks/observers"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/channels"
 	"github.com/weibaohui/nanobot-go/config"
@@ -105,9 +107,21 @@ func runGateway(cmd *cobra.Command, args []string) {
 	dataDir := filepath.Join(workspacePath, ".nanobot")
 	sessionManager := session.NewManager(cfg, dataDir)
 
-	// 创建 Hook Manager
-	hookManager := agent.NewHookManager()
-	hookManager.SetLogger(logger)
+	// 创建旧的 Hook Manager (用于 CompressHook 等旧式 Hook)
+	legacyHookManager := agent.NewHookManager()
+	legacyHookManager.SetLogger(logger)
+
+	// 创建新的 Hook 系统 (用于观察型 Hook)
+	hookSystem := hooks.NewHookManager(logger, true)
+
+	// 注册 LoggingObserver
+	loggingObserver := logging.NewLoggingObserver(logger, nil)
+	hookSystem.Register(loggingObserver)
+	logger.Info("日志观察器已注册到 Hook 系统")
+
+	// 注册 Eino Callback Handler
+	callbacks.AppendGlobalHandlers(hookSystem.EinoHandler())
+
 	if cfg.Compress.Enabled {
 		memory := agent.NewMemoryStore(workspacePath)
 		compressLLM, err := hooks.CreateCompressLLM(cfg)
@@ -115,7 +129,7 @@ func runGateway(cmd *cobra.Command, args []string) {
 			logger.Error("创建压缩 LLM 失败", zap.Error(err))
 		} else {
 			compressHook := hooks.NewCompressHook(cfg, logger, memory, compressLLM)
-			hookManager.Register(compressHook)
+			legacyHookManager.Register(compressHook)
 			logger.Info("对话压缩 Hook 已启用",
 				zap.Int("minMessages", cfg.Compress.MinMessages),
 				zap.Int("minTokens", cfg.Compress.MinTokens),
@@ -136,8 +150,10 @@ func runGateway(cmd *cobra.Command, args []string) {
 		execTimeout = 120
 	}
 
-	callbacks := agent.NewEinoCallbacks(true, logger)
-	agent.RegisterGlobalCallbacks(callbacks)
+	// 使用新的 Hook 系统的 Eino Handler (已通过 AppendGlobalHandlers 注册)
+	// 旧版 Eino Callbacks 不再需要，因为新的 Hook 系统已经处理了
+	// callbacks := agent.NewEinoCallbacks(true, logger)
+	// agent.RegisterGlobalCallbacks(callbacks)
 
 	loop := agent.NewLoop(&agent.LoopConfig{
 		Config:              cfg,
@@ -149,7 +165,7 @@ func runGateway(cmd *cobra.Command, args []string) {
 		CronService:         cronService,
 		SessionManager:      sessionManager,
 		Logger:              logger,
-		HookManager:         hookManager,
+		HookManager:         legacyHookManager,
 	})
 
 	ctx := context.Background()
