@@ -9,6 +9,7 @@ import (
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
+	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
@@ -24,7 +25,7 @@ type SkillLoader func(name string) string
 
 // HookCallback Hook 回调函数类型
 // 避免循环导入，使用函数回调而不是直接依赖 Hook 系统
-type HookCallback func(eventType string, data map[string]interface{})
+type HookCallback func(eventType events.EventType, data map[string]interface{})
 
 // ChatModelAdapter 包装 eino 的 ChatModel，添加工具调用拦截功能
 // 主要功能：
@@ -226,7 +227,7 @@ func (a *ChatModelAdapter) interceptToolCall(toolName string, argumentsJSON stri
 					skillContent = a.skillLoader(skillName)
 				}
 				// 触发技能调用 Hook
-				a.triggerHook("skill_call", map[string]any{
+				a.triggerHook(events.EventSkillCall, map[string]any{
 					"skill_name":   skillName,
 					"skill_length": len(skillContent),
 				})
@@ -290,7 +291,7 @@ func (a *ChatModelAdapter) interceptToolCalls(msg *schema.Message) {
 
 	for i, tc := range msg.ToolCalls {
 		// 触发工具调用 Hook
-		a.triggerHook("tool_call", map[string]any{
+		a.triggerHook(events.EventToolCall, map[string]any{
 			"tool_name": tc.Function.Name,
 			"arguments": tc.Function.Arguments,
 		})
@@ -308,7 +309,7 @@ func (a *ChatModelAdapter) interceptToolCalls(msg *schema.Message) {
 		}
 		if newName != tc.Function.Name {
 			// 触发工具调用被拦截 Hook
-			a.triggerHook("tool_intercepted", map[string]any{
+			a.triggerHook(events.EventToolIntercepted, map[string]any{
 				"original_name": tc.Function.Name,
 				"new_name":      newName,
 				"new_args":      newArgs,
@@ -329,11 +330,16 @@ func (a *ChatModelAdapter) interceptToolCalls(msg *schema.Message) {
 }
 
 // triggerHook 触发 Hook 事件
-func (a *ChatModelAdapter) triggerHook(eventType string, data map[string]any) {
+func (a *ChatModelAdapter) triggerHook(eventType events.EventType, data map[string]any) {
 	if a.hookCallback == nil {
 		return
 	}
-	a.hookCallback(eventType, data)
+	// 转换 data 从 map[string]any 到 map[string]interface{}
+	dataInterface := make(map[string]interface{})
+	for k, v := range data {
+		dataInterface[k] = v
+	}
+	a.hookCallback(eventType, dataInterface)
 }
 
 // Stream produces a response as a stream

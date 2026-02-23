@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/tools"
 	"github.com/weibaohui/nanobot-go/agent/tools/askuser"
 	toolcron "github.com/weibaohui/nanobot-go/agent/tools/cron"
@@ -38,7 +39,7 @@ type Loop struct {
 	tools               *tools.Registry
 	running             bool
 	logger              *zap.Logger
-	hookCallback        func(eventType string, data map[string]interface{}) // Hook 回调
+	hookCallback        func(eventType events.EventType, data map[string]interface{}) // Hook 回调
 
 	interruptManager *InterruptManager
 	supervisor       *SupervisorAgent
@@ -58,7 +59,7 @@ type LoopConfig struct {
 	CronService         *cron.Service
 	SessionManager      *session.Manager
 	Logger              *zap.Logger
-	HookCallback        func(eventType string, data map[string]interface{}) // Hook 回调
+	HookCallback        func(eventType events.EventType, data map[string]interface{}) // Hook 回调
 }
 
 // NewLoop 创建代理循环

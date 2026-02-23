@@ -150,13 +150,13 @@ func runGateway(cmd *cobra.Command, args []string) {
 	}
 
 	// 设置 Hook 回调，将 Loop 中的事件转发到 Hook 系统
-	setHookCallback := func(eventType string, data map[string]interface{}) {
+	setHookCallback := func(eventType hookevents.EventType, data map[string]interface{}) {
 		if hookSystem.Enabled() {
 			traceID := hooks.GetTraceID(context.Background())
 			// 创建 BaseEvent 并分发
 			baseEvent := &hookevents.BaseEvent{
 				TraceID:   traceID,
-				EventType: hookevents.EventType(eventType),
+				EventType: eventType,
 				Timestamp: time.Now(),
 			}
 			hookSystem.Dispatch(context.Background(), baseEvent, "", "")

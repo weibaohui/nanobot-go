@@ -9,6 +9,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
+	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/tools/askuser"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/config"
@@ -18,7 +19,7 @@ import (
 
 // buildChatModelAdapter 创建并配置 ChatModelAdapter
 // 将 LLM 初始化逻辑集中在此，避免遗漏必要配置
-func buildChatModelAdapter(logger *zap.Logger, cfg *config.Config, sessions *session.Manager, skillsLoader func(string) string, registeredTools []string, hookCallback func(eventType string, data map[string]interface{})) (*ChatModelAdapter, error) {
+func buildChatModelAdapter(logger *zap.Logger, cfg *config.Config, sessions *session.Manager, skillsLoader func(string) string, registeredTools []string, hookCallback func(eventType events.EventType, data map[string]interface{})) (*ChatModelAdapter, error) {
 	llm, err := NewChatModelAdapter(logger, cfg, sessions)
 	if err != nil {
 		return nil, err
