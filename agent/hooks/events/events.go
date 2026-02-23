@@ -35,18 +35,21 @@ const (
 	EventSystemPromptBuilt EventType = "system_prompt_built" // 生成系统 prompt
 
 	// 工具相关事件
-	EventToolUsed      EventType = "tool_used"      // 使用工具
-	EventToolCompleted EventType = "tool_completed" // 工具执行完成
-	EventToolError     EventType = "tool_error"     // 工具执行错误
+	EventToolCall        EventType = "tool_call"         // 工具调用
+	EventToolIntercepted  EventType = "tool_intercepted"  // 工具调用被拦截
+	EventToolUsed        EventType = "tool_used"        // 使用工具
+	EventToolCompleted   EventType = "tool_completed"   // 工具执行完成
+	EventToolError       EventType = "tool_error"       // 工具执行错误
 
 	// 技能相关事件
-	EventSkillLookup EventType = "skill_lookup" // 查找技能
-	EventSkillUsed   EventType = "skill_used"   // 使用技能
+	EventSkillCall       EventType = "skill_call"        // 技能调用
+	EventSkillLookup     EventType = "skill_lookup"      // 查找技能
+	EventSkillUsed       EventType = "skill_used"        // 使用技能
 
 	// LLM 相关事件 (来自 Eino callbacks)
-	EventLLMCallStart EventType = "llm_call_start" // LLM 调用开始
-	EventLLMCallEnd   EventType = "llm_call_end"   // LLM 调用结束
-	EventLLMCallError EventType = "llm_call_error" // LLM 调用错误
+	EventLLMCallStart    EventType = "llm_call_start"    // LLM 调用开始
+	EventLLMCallEnd      EventType = "llm_call_end"      // LLM 调用结束
+	EventLLMCallError    EventType = "llm_call_error"    // LLM 调用错误
 
 	// 通用事件
 	EventComponentStart EventType = "component_start" // 组件开始执行

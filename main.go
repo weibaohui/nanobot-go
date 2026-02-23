@@ -8,11 +8,13 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/cloudwego/eino/callbacks"
 	"github.com/spf13/cobra"
 	"github.com/weibaohui/nanobot-go/agent"
 	"github.com/weibaohui/nanobot-go/agent/hooks"
+	hookevents "github.com/weibaohui/nanobot-go/agent/hooks/events"
 	logging "github.com/weibaohui/nanobot-go/agent/hooks/observers"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/channels"
@@ -155,6 +157,20 @@ func runGateway(cmd *cobra.Command, args []string) {
 	// callbacks := agent.NewEinoCallbacks(true, logger)
 	// agent.RegisterGlobalCallbacks(callbacks)
 
+	// 设置 Hook 回调，将 Loop 中的事件转发到 Hook 系统
+	setHookCallback := func(eventType string, data map[string]interface{}) {
+		if hookSystem.Enabled() {
+			traceID := hooks.GetTraceID(context.Background())
+			// 创建 BaseEvent 并分发
+			baseEvent := &hookevents.BaseEvent{
+				TraceID:   traceID,
+				EventType: hookevents.EventType(eventType),
+				Timestamp: time.Now(),
+			}
+			hookSystem.Dispatch(context.Background(), baseEvent, "", "")
+		}
+	}
+
 	loop := agent.NewLoop(&agent.LoopConfig{
 		Config:              cfg,
 		MessageBus:          messageBus,
@@ -166,6 +182,7 @@ func runGateway(cmd *cobra.Command, args []string) {
 		SessionManager:      sessionManager,
 		Logger:              logger,
 		HookManager:         legacyHookManager,
+		HookCallback:        setHookCallback,
 	})
 
 	ctx := context.Background()
