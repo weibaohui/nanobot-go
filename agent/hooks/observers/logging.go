@@ -3,11 +3,19 @@ package observers
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observer"
 	"go.uber.org/zap"
 )
+
+// isInterruptError 检查错误是否为中断信号
+// 中断是正常流程，不应该记录为错误
+func isInterruptError(errorMsg string) bool {
+	return strings.HasPrefix(strings.ToLower(errorMsg), "interrupt signal") ||
+		strings.HasPrefix(strings.ToLower(errorMsg), "interrupt:")
+}
 
 // LoggingObserver 日志观察器
 // 将所有 Hook 事件记录到日志
@@ -73,10 +81,19 @@ func (lo *LoggingObserver) OnEvent(ctx context.Context, event events.Event) erro
 			zap.Any("event", event),
 		)
 	case events.EventToolError:
-		lo.logger.Error("[Hook] 工具执行错误",
-			zap.String("trace_id", base.TraceID),
-			zap.Any("event", event),
-		)
+		// 检查是否为中断信号（正常流程）
+		if toolErr, ok := event.(*events.ToolErrorEvent); ok && isInterruptError(toolErr.Error) {
+			lo.logger.Info("[Hook] 工具执行中断",
+				zap.String("trace_id", base.TraceID),
+				zap.String("tool_name", toolErr.ToolName),
+				zap.String("reason", "用户中断/等待输入"),
+			)
+		} else {
+			lo.logger.Error("[Hook] 工具执行错误",
+				zap.String("trace_id", base.TraceID),
+				zap.Any("event", event),
+			)
+		}
 	case events.EventSkillCall:
 		lo.logger.Info("[Hook] 技能调用",
 			zap.String("trace_id", base.TraceID),
@@ -113,10 +130,19 @@ func (lo *LoggingObserver) OnEvent(ctx context.Context, event events.Event) erro
 			zap.String("token_usage", tokenUsage),
 		)
 	case events.EventLLMCallError:
-		lo.logger.Error("[Hook] LLM 调用错误",
-			zap.String("trace_id", base.TraceID),
-			zap.Any("event", event),
-		)
+		// 检查是否为中断信号（正常流程）
+		if llmErr, ok := event.(*events.LLMCallErrorEvent); ok && isInterruptError(llmErr.Error) {
+			lo.logger.Info("[Hook] LLM 调用中断",
+				zap.String("trace_id", base.TraceID),
+				zap.String("model", llmErr.Model),
+				zap.String("reason", "用户中断/等待输入"),
+			)
+		} else {
+			lo.logger.Error("[Hook] LLM 调用错误",
+				zap.String("trace_id", base.TraceID),
+				zap.Any("event", event),
+			)
+		}
 	case events.EventComponentStart:
 		lo.logger.Debug("[Hook] 组件开始执行",
 			zap.String("trace_id", base.TraceID),
@@ -128,10 +154,19 @@ func (lo *LoggingObserver) OnEvent(ctx context.Context, event events.Event) erro
 			zap.Any("event", event),
 		)
 	case events.EventComponentError:
-		lo.logger.Error("[Hook] 组件执行错误",
-			zap.String("trace_id", base.TraceID),
-			zap.Any("event", event),
-		)
+		// 检查是否为中断信号（正常流程）
+		if compErr, ok := event.(*events.ComponentErrorEvent); ok && isInterruptError(compErr.Error) {
+			lo.logger.Info("[Hook] 组件执行中断",
+				zap.String("trace_id", base.TraceID),
+				zap.String("component", compErr.Component),
+				zap.String("reason", "用户中断/等待输入"),
+			)
+		} else {
+			lo.logger.Error("[Hook] 组件执行错误",
+				zap.String("trace_id", base.TraceID),
+				zap.Any("event", event),
+			)
+		}
 	default:
 		lo.logger.Debug("未知事件类型",
 			zap.String("event_type", string(event.GetEventType())),
