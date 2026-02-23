@@ -38,7 +38,6 @@ type Loop struct {
 	tools               *tools.Registry
 	running             bool
 	logger              *zap.Logger
-	hookManager         *HookManager
 	hookCallback        func(eventType string, data map[string]interface{}) // Hook 回调
 
 	interruptManager *InterruptManager
@@ -85,7 +84,6 @@ func NewLoop(cfg *LoopConfig) *Loop {
 		sessions:            cfg.SessionManager,
 		tools:               tools.NewRegistry(),
 		logger:              logger,
-		hookManager:         nil,
 		hookCallback:        cfg.HookCallback,
 	}
 
