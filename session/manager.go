@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/weibaohui/nanobot-go/config"
+	"go.uber.org/zap"
 )
 
 // TokenUsage Token 用量统计
@@ -252,13 +253,29 @@ func (m *Manager) getSessionPath(key string) string {
 	// 历史文件命名：safeKey_YYYYMMDD.json
 	now := time.Now().UTC()
 	date := now.Format("20060102")
-	safeKey := safeFilename(strings.ReplaceAll(key, ":", "_"))
-	return filepath.Join(m.sessionsDir, safeKey+"_"+date+".json")
+
+	// 先替换 : 为 _
+	keyWithUnderscore := strings.ReplaceAll(key, ":", "_")
+
+	// 再处理其他不安全字符（包括单引号和双引号）
+	safeKey := safeFilename(keyWithUnderscore)
+
+	result := filepath.Join(m.sessionsDir, safeKey+"_"+date+".json")
+
+	// 调试：记录生成的文件名
+	zap.L().Info("生成 session 文件路径",
+		zap.String("original_key", key),
+		zap.String("key_with_underscore", keyWithUnderscore),
+		zap.String("safe_key", safeKey),
+		zap.String("file_path", result),
+	)
+
+	return result
 }
 
 // safeFilename 转换为安全文件名
 func safeFilename(name string) string {
-	unsafe := "<>:\"/\\|?*"
+	unsafe := "<>!:'\"/\\|?*"
 	for _, char := range unsafe {
 		name = strings.ReplaceAll(name, string(char), "_")
 	}
