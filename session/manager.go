@@ -52,9 +52,9 @@ func (s *Session) AddMessage(role, content string) {
 	s.Messages = append(s.Messages, Message{
 		Role:      role,
 		Content:   content,
-		Timestamp: time.Now(),
+		Timestamp: time.Now().UTC(),
 	})
-	s.UpdatedAt = time.Now()
+	s.UpdatedAt = time.Now().UTC()
 }
 
 // AddMessageWithTokenUsage 添加消息到会话并记录 token 用量
@@ -62,20 +62,20 @@ func (s *Session) AddMessageWithTokenUsage(role, content string, usage TokenUsag
 	msg := Message{
 		Role:       role,
 		Content:    content,
-		Timestamp:  time.Now(),
+		Timestamp:  time.Now().UTC(),
 		TokenUsage: &usage,
 	}
 	s.Messages = append(s.Messages, msg)
 
 	// 累加到 Session 级别的 TokenUsage
 	s.TokenUsage.Add(usage)
-	s.UpdatedAt = time.Now()
+	s.UpdatedAt = time.Now().UTC()
 }
 
 // UpdateTokenUsage 更新 Session 级别的累加 token 用量
 func (s *Session) UpdateTokenUsage(usage TokenUsage) {
 	s.TokenUsage.Add(usage)
-	s.UpdatedAt = time.Now()
+	s.UpdatedAt = time.Now().UTC()
 }
 
 // GetHistory 获取消息历史
@@ -110,7 +110,7 @@ func (s *Session) GetHistory(maxMessages int) []map[string]any {
 // Clear 清空会话消息
 func (s *Session) Clear() {
 	s.Messages = nil
-	s.UpdatedAt = time.Now()
+	s.UpdatedAt = time.Now().UTC()
 }
 
 // Manager 会话管理器
@@ -146,8 +146,8 @@ func (m *Manager) GetOrCreate(key string) *Session {
 	if session == nil {
 		session = &Session{
 			Key:       key,
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
+			CreatedAt: time.Now().UTC(),
+			UpdatedAt: time.Now().UTC(),
 		}
 	}
 
@@ -185,9 +185,10 @@ func (m *Manager) Save(session *Session) error {
 
 	m.mu.Lock()
 	m.cache[session.Key] = session
+	err = os.WriteFile(path, data, 0644)
 	m.mu.Unlock()
 
-	return os.WriteFile(path, data, 0644)
+	return err
 }
 
 // Delete 删除会话
@@ -247,15 +248,9 @@ func (m *Manager) ListSessions() []map[string]any {
 
 // getSessionPath 获取会话文件路径
 func (m *Manager) getSessionPath(key string) string {
-
-	//TODO 做成一个配置项
-	// 以每天 6 点为界，6 点前的会话归档到历史文件
+	// 使用 UTC 时间避免跨时区问题
 	// 历史文件命名：safeKey_YYYYMMDD.json
-	now := time.Now()
-	// 如果当前时间在 0~6 点之间，则归档到前一天
-	if now.Hour() < 6 {
-		now = now.AddDate(0, 0, -1)
-	}
+	now := time.Now().UTC()
 	date := now.Format("20060102")
 	safeKey := safeFilename(strings.ReplaceAll(key, ":", "_"))
 	return filepath.Join(m.sessionsDir, safeKey+"_"+date+".json")

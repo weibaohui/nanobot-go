@@ -112,6 +112,11 @@ func runGateway(cmd *cobra.Command, args []string) {
 	// 创建统一的 Hook 系统
 	hookSystem := hooks.NewHookManager(logger, true)
 
+	// 注册 SessionObserver - 负责保存消息到会话
+	sessionObserver := observers.NewSessionObserver(sessionManager, logger, nil)
+	hookSystem.Register(sessionObserver)
+	logger.Info("会话观察器已注册到 Hook 系统")
+
 	// 注册 LoggingObserver
 	loggingObserver := observers.NewLoggingObserver(logger, nil)
 	hookSystem.Register(loggingObserver)
@@ -173,6 +178,7 @@ func runGateway(cmd *cobra.Command, args []string) {
 		CronService:         cronService,
 		SessionManager:      sessionManager,
 		Logger:              logger,
+		HookManager:         hookSystem,
 		HookCallback:        setHookCallback,
 	})
 

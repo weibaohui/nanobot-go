@@ -17,6 +17,12 @@ type Event interface {
 	// GetTraceID 获取追踪 ID
 	GetTraceID() string
 
+	// GetSpanID 获取 Span ID
+	GetSpanID() string
+
+	// GetParentSpanID 获取父 Span ID
+	GetParentSpanID() string
+
 	// GetEventType 获取事件类型
 	GetEventType() EventType
 
@@ -59,9 +65,11 @@ const (
 
 // BaseEvent 事件基类
 type BaseEvent struct {
-	TraceID   string    `json:"trace_id"`   // 追踪 ID
-	EventType EventType `json:"event_type"` // 事件类型
-	Timestamp time.Time `json:"timestamp"`  // 时间戳
+	TraceID      string    `json:"trace_id"`       // 追踪 ID
+	SpanID       string    `json:"span_id"`        // Span ID
+	ParentSpanID string    `json:"parent_span_id"` // 父 Span ID
+	EventType    EventType `json:"event_type"`     // 事件类型
+	Timestamp    time.Time `json:"timestamp"`      // 时间戳
 }
 
 // ToBaseEvent 实现 Event 接口
@@ -72,6 +80,16 @@ func (e *BaseEvent) ToBaseEvent() *BaseEvent {
 // GetTraceID 实现 Event 接口
 func (e *BaseEvent) GetTraceID() string {
 	return e.TraceID
+}
+
+// GetSpanID 实现 Event 接口
+func (e *BaseEvent) GetSpanID() string {
+	return e.SpanID
+}
+
+// GetParentSpanID 实现 Event 接口
+func (e *BaseEvent) GetParentSpanID() string {
+	return e.ParentSpanID
 }
 
 // GetEventType 实现 Event 接口
@@ -85,11 +103,13 @@ func (e *BaseEvent) GetTimestamp() time.Time {
 }
 
 // NewBaseEvent 创建基础事件
-func NewBaseEvent(traceID string, eventType EventType) *BaseEvent {
+func NewBaseEvent(traceID, spanID, parentSpanID string, eventType EventType) *BaseEvent {
 	return &BaseEvent{
-		TraceID:   traceID,
-		EventType: eventType,
-		Timestamp: time.Now(),
+		TraceID:      traceID,
+		SpanID:       spanID,
+		ParentSpanID: parentSpanID,
+		EventType:    eventType,
+		Timestamp:    time.Now(),
 	}
 }
 
@@ -105,14 +125,14 @@ type MessageReceivedEvent struct {
 }
 
 // NewMessageReceivedEvent 创建收到消息事件
-func NewMessageReceivedEvent(traceID string, msg *bus.InboundMessage) *MessageReceivedEvent {
+func NewMessageReceivedEvent(traceID, spanID, parentSpanID string, msg *bus.InboundMessage) *MessageReceivedEvent {
 	preview := msg.Content
 	if len(preview) > 100 {
 		preview = preview[:100] + "..."
 	}
 
 	return &MessageReceivedEvent{
-		BaseEvent:  NewBaseEvent(traceID, EventMessageReceived),
+		BaseEvent:  NewBaseEvent(traceID, spanID, parentSpanID, EventMessageReceived),
 		Message:    msg,
 		Preview:    preview,
 		SenderID:   msg.SenderID,
@@ -134,14 +154,14 @@ type MessageSentEvent struct {
 }
 
 // NewMessageSentEvent 创建发送消息事件
-func NewMessageSentEvent(traceID string, msg *bus.OutboundMessage, sessionKey string) *MessageSentEvent {
+func NewMessageSentEvent(traceID, spanID, parentSpanID string, msg *bus.OutboundMessage, sessionKey string) *MessageSentEvent {
 	preview := msg.Content
 	if len(preview) > 100 {
 		preview = preview[:100] + "..."
 	}
 
 	return &MessageSentEvent{
-		BaseEvent:  NewBaseEvent(traceID, EventMessageSent),
+		BaseEvent:  NewBaseEvent(traceID, spanID, parentSpanID, EventMessageSent),
 		Message:    msg,
 		Content:    msg.Content,
 		Preview:    preview,
@@ -161,9 +181,9 @@ type PromptSubmittedEvent struct {
 }
 
 // NewPromptSubmittedEvent 创建提交 Prompt 事件
-func NewPromptSubmittedEvent(traceID string, userInput string, messages []*schema.Message, sessionKey string) *PromptSubmittedEvent {
+func NewPromptSubmittedEvent(traceID, spanID, parentSpanID string, userInput string, messages []*schema.Message, sessionKey string) *PromptSubmittedEvent {
 	return &PromptSubmittedEvent{
-		BaseEvent:  NewBaseEvent(traceID, EventPromptSubmitted),
+		BaseEvent:  NewBaseEvent(traceID, spanID, parentSpanID, EventPromptSubmitted),
 		UserInput:  userInput,
 		Messages:   messages,
 		Count:      len(messages),
@@ -179,9 +199,9 @@ type SystemPromptBuiltEvent struct {
 }
 
 // NewSystemPromptBuiltEvent 创建生成系统 Prompt 事件
-func NewSystemPromptBuiltEvent(traceID string, systemPrompt string) *SystemPromptBuiltEvent {
+func NewSystemPromptBuiltEvent(traceID, spanID, parentSpanID string, systemPrompt string) *SystemPromptBuiltEvent {
 	return &SystemPromptBuiltEvent{
-		BaseEvent:    NewBaseEvent(traceID, EventSystemPromptBuilt),
+		BaseEvent:    NewBaseEvent(traceID, spanID, parentSpanID, EventSystemPromptBuilt),
 		SystemPrompt: systemPrompt,
 		Length:       len(systemPrompt),
 	}
@@ -196,9 +216,9 @@ type ToolUsedEvent struct {
 }
 
 // NewToolUsedEvent 创建使用工具事件
-func NewToolUsedEvent(traceID string, toolName, toolArguments string) *ToolUsedEvent {
+func NewToolUsedEvent(traceID, spanID, parentSpanID string, toolName, toolArguments string) *ToolUsedEvent {
 	return &ToolUsedEvent{
-		BaseEvent:     NewBaseEvent(traceID, EventToolUsed),
+		BaseEvent:     NewBaseEvent(traceID, spanID, parentSpanID, EventToolUsed),
 		ToolName:      toolName,
 		ToolArguments: toolArguments,
 		ArgumentsRaw:  toolArguments,
@@ -215,9 +235,9 @@ type ToolCompletedEvent struct {
 }
 
 // NewToolCompletedEvent 创建工具执行完成事件
-func NewToolCompletedEvent(traceID string, toolName, response string, success bool) *ToolCompletedEvent {
+func NewToolCompletedEvent(traceID, spanID, parentSpanID string, toolName, response string, success bool) *ToolCompletedEvent {
 	return &ToolCompletedEvent{
-		BaseEvent:      NewBaseEvent(traceID, EventToolCompleted),
+		BaseEvent:      NewBaseEvent(traceID, spanID, parentSpanID, EventToolCompleted),
 		ToolName:       toolName,
 		Response:       response,
 		ResponseLength: len(response),
@@ -233,9 +253,9 @@ type ToolErrorEvent struct {
 }
 
 // NewToolErrorEvent 创建工具执行错误事件
-func NewToolErrorEvent(traceID, toolName, error string) *ToolErrorEvent {
+func NewToolErrorEvent(traceID, spanID, parentSpanID, toolName, error string) *ToolErrorEvent {
 	return &ToolErrorEvent{
-		BaseEvent: NewBaseEvent(traceID, EventToolError),
+		BaseEvent: NewBaseEvent(traceID, spanID, parentSpanID, EventToolError),
 		ToolName:  toolName,
 		Error:     error,
 	}
@@ -251,9 +271,9 @@ type SkillLookupEvent struct {
 }
 
 // NewSkillLookupEvent 创建查找技能事件
-func NewSkillLookupEvent(traceID, skillName string, found bool, source, path string) *SkillLookupEvent {
+func NewSkillLookupEvent(traceID, spanID, parentSpanID string, skillName string, found bool, source, path string) *SkillLookupEvent {
 	return &SkillLookupEvent{
-		BaseEvent: NewBaseEvent(traceID, EventSkillLookup),
+		BaseEvent: NewBaseEvent(traceID, spanID, parentSpanID, EventSkillLookup),
 		SkillName: skillName,
 		Found:     found,
 		Source:    source,
@@ -269,9 +289,9 @@ type SkillUsedEvent struct {
 }
 
 // NewSkillUsedEvent 创建使用技能事件
-func NewSkillUsedEvent(traceID, skillName string, skillLength int) *SkillUsedEvent {
+func NewSkillUsedEvent(traceID, spanID, parentSpanID string, skillName string, skillLength int) *SkillUsedEvent {
 	return &SkillUsedEvent{
-		BaseEvent:   NewBaseEvent(traceID, EventSkillUsed),
+		BaseEvent:   NewBaseEvent(traceID, spanID, parentSpanID, EventSkillUsed),
 		SkillName:   skillName,
 		SkillLength: skillLength,
 	}
@@ -288,7 +308,7 @@ type LLMCallStartEvent struct {
 }
 
 // NewLLMCallStartEvent 创建 LLM 调用开始事件
-func NewLLMCallStartEvent(traceID string, info *callbacks.RunInfo, input *model.CallbackInput) *LLMCallStartEvent {
+func NewLLMCallStartEvent(traceID, spanID, parentSpanID string, info *callbacks.RunInfo, input *model.CallbackInput) *LLMCallStartEvent {
 	toolNames := make([]string, 0, len(input.Tools))
 	for _, t := range input.Tools {
 		if t != nil {
@@ -305,7 +325,7 @@ func NewLLMCallStartEvent(traceID string, info *callbacks.RunInfo, input *model.
 	}
 
 	return &LLMCallStartEvent{
-		BaseEvent: NewBaseEvent(traceID, EventLLMCallStart),
+		BaseEvent: NewBaseEvent(traceID, spanID, parentSpanID, EventLLMCallStart),
 		Component: string(info.Component),
 		Model:     info.Name,
 		Messages:  input.Messages,
@@ -326,18 +346,20 @@ type LLMCallEndEvent struct {
 }
 
 // NewLLMCallEndEvent 创建 LLM 调用结束事件
-func NewLLMCallEndEvent(traceID string, info *callbacks.RunInfo, output *model.CallbackOutput, durationMs int64) *LLMCallEndEvent {
+func NewLLMCallEndEvent(traceID, spanID, parentSpanID string, info *callbacks.RunInfo, output *model.CallbackOutput, durationMs int64) *LLMCallEndEvent {
 	responseContent := ""
+	toolCalls := []schema.ToolCall{}
 	if output.Message != nil {
 		responseContent = output.Message.Content
+		toolCalls = output.Message.ToolCalls
 	}
 
 	return &LLMCallEndEvent{
-		BaseEvent:       NewBaseEvent(traceID, EventLLMCallEnd),
+		BaseEvent:       NewBaseEvent(traceID, spanID, parentSpanID, EventLLMCallEnd),
 		Component:       string(info.Component),
 		Model:           info.Name,
 		ResponseContent: responseContent,
-		ToolCalls:       nil, // 可选：从 output.Message.ToolCalls 填充
+		ToolCalls:       toolCalls,
 		TokenUsage:      output.TokenUsage,
 		DurationMs:      durationMs,
 	}
@@ -353,9 +375,9 @@ type LLMCallErrorEvent struct {
 }
 
 // NewLLMCallErrorEvent 创建 LLM 调用错误事件
-func NewLLMCallErrorEvent(traceID string, info *callbacks.RunInfo, err error, durationMs int64) *LLMCallErrorEvent {
+func NewLLMCallErrorEvent(traceID, spanID, parentSpanID string, info *callbacks.RunInfo, err error, durationMs int64) *LLMCallErrorEvent {
 	return &LLMCallErrorEvent{
-		BaseEvent:  NewBaseEvent(traceID, EventLLMCallError),
+		BaseEvent:  NewBaseEvent(traceID, spanID, parentSpanID, EventLLMCallError),
 		Component:  string(info.Component),
 		Model:      info.Name,
 		Error:      err.Error(),
@@ -372,9 +394,9 @@ type ComponentStartEvent struct {
 }
 
 // NewComponentStartEvent 创建组件开始执行事件
-func NewComponentStartEvent(traceID string, info *callbacks.RunInfo) *ComponentStartEvent {
+func NewComponentStartEvent(traceID, spanID, parentSpanID string, info *callbacks.RunInfo) *ComponentStartEvent {
 	return &ComponentStartEvent{
-		BaseEvent: NewBaseEvent(traceID, EventComponentStart),
+		BaseEvent: NewBaseEvent(traceID, spanID, parentSpanID, EventComponentStart),
 		Component: string(info.Component),
 		Type:      info.Type,
 		Name:      info.Name,
@@ -391,9 +413,9 @@ type ComponentEndEvent struct {
 }
 
 // NewComponentEndEvent 创建组件执行完成事件
-func NewComponentEndEvent(traceID string, info *callbacks.RunInfo, durationMs int64) *ComponentEndEvent {
+func NewComponentEndEvent(traceID, spanID, parentSpanID string, info *callbacks.RunInfo, durationMs int64) *ComponentEndEvent {
 	return &ComponentEndEvent{
-		BaseEvent:  NewBaseEvent(traceID, EventComponentEnd),
+		BaseEvent:  NewBaseEvent(traceID, spanID, parentSpanID, EventComponentEnd),
 		Component:  string(info.Component),
 		Type:       info.Type,
 		Name:       info.Name,
@@ -412,9 +434,9 @@ type ComponentErrorEvent struct {
 }
 
 // NewComponentErrorEvent 创建组件执行错误事件
-func NewComponentErrorEvent(traceID string, info *callbacks.RunInfo, err error, durationMs int64) *ComponentErrorEvent {
+func NewComponentErrorEvent(traceID, spanID, parentSpanID string, info *callbacks.RunInfo, err error, durationMs int64) *ComponentErrorEvent {
 	return &ComponentErrorEvent{
-		BaseEvent:  NewBaseEvent(traceID, EventComponentError),
+		BaseEvent:  NewBaseEvent(traceID, spanID, parentSpanID, EventComponentError),
 		Component:  string(info.Component),
 		Type:       info.Type,
 		Name:       info.Name,

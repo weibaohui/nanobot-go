@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/weibaohui/nanobot-go/agent/hooks"
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/tools"
 	"github.com/weibaohui/nanobot-go/agent/tools/askuser"
@@ -39,6 +40,7 @@ type Loop struct {
 	tools               *tools.Registry
 	running             bool
 	logger              *zap.Logger
+	hookManager         *hooks.HookManager
 	hookCallback        func(eventType events.EventType, data map[string]interface{}) // Hook 回调
 
 	interruptManager *InterruptManager
@@ -59,6 +61,7 @@ type LoopConfig struct {
 	CronService         *cron.Service
 	SessionManager      *session.Manager
 	Logger              *zap.Logger
+	HookManager         *hooks.HookManager // Hook 系统管理器
 	HookCallback        func(eventType events.EventType, data map[string]interface{}) // Hook 回调
 }
 
@@ -85,6 +88,7 @@ func NewLoop(cfg *LoopConfig) *Loop {
 		sessions:            cfg.SessionManager,
 		tools:               tools.NewRegistry(),
 		logger:              logger,
+		hookManager:         cfg.HookManager,
 		hookCallback:        cfg.HookCallback,
 	}
 
@@ -133,6 +137,7 @@ func NewLoop(cfg *LoopConfig) *Loop {
 		CheckpointStore: loop.interruptManager.GetCheckpointStore(),
 		MaxIterations:   cfg.MaxIterations,
 		RegisteredTools: toolNames,
+		HookManager:     loop.hookManager,
 	})
 	if err != nil {
 		logger.Error("创建 Supervisor Agent 失败，将使用传统模式", zap.Error(err))
@@ -154,6 +159,7 @@ func NewLoop(cfg *LoopConfig) *Loop {
 		CheckpointStore: loop.interruptManager.GetCheckpointStore(),
 		MaxIterations:   cfg.MaxIterations,
 		RegisteredTools: toolNames,
+		HookManager:     loop.hookManager,
 	})
 	if err != nil {
 		logger.Error("创建 Master Agent 失败，将使用传统模式", zap.Error(err))

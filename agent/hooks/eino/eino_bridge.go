@@ -27,7 +27,7 @@ func NewEinoCallbackBridge(dispatcher *dispatcher.Dispatcher, logger *zap.Logger
 		logger = zap.NewNop()
 	}
 	return &EinoCallbackBridge{
-		dispatcher: dispatcher,
+		dispatcher:  dispatcher,
 		logger:     logger,
 		startTimes: make(map[string]time.Time),
 	}
@@ -53,17 +53,20 @@ func (cb *EinoCallbackBridge) onStart(ctx context.Context, info *callbacks.RunIn
 	cb.startTimes[nodeKey] = time.Now()
 
 	traceID := trace.GetTraceID(ctx)
+	spanID := trace.GetSpanID(ctx)
+	parentSpanID := trace.MustGetSpanID(ctx) // 使用 MustGetSpanID 获取父 SpanID（如果存在）
 
 	// 分发组件开始事件
-	componentEvent := events.NewComponentStartEvent(traceID, info)
+	componentEvent := events.NewComponentStartEvent(traceID, spanID, parentSpanID, info)
 	cb.dispatcher.Dispatch(ctx, componentEvent, "", "")
 
 	// 根据组件类型分发具体事件
+	// 只处理 ChatModel，避免与 Model 重复处理
 	switch info.Component {
-	case "ChatModel", "Model":
-		cb.handleModelStart(ctx, traceID, info, input)
+	case "ChatModel":
+		cb.handleModelStart(ctx, traceID, spanID, parentSpanID, info, input)
 	case "Tool":
-		cb.handleToolStart(ctx, traceID, info, input)
+		cb.handleToolStart(ctx, traceID, spanID, parentSpanID, info, input)
 	default:
 		// 其他组件类型，只记录通用事件
 	}
@@ -79,17 +82,20 @@ func (cb *EinoCallbackBridge) onEnd(ctx context.Context, info *callbacks.RunInfo
 
 	durationMs := time.Since(startTime).Milliseconds()
 	traceID := trace.GetTraceID(ctx)
+	spanID := trace.GetSpanID(ctx)
+	parentSpanID := trace.MustGetSpanID(ctx)
 
 	// 分发组件结束事件
-	componentEvent := events.NewComponentEndEvent(traceID, info, durationMs)
+	componentEvent := events.NewComponentEndEvent(traceID, spanID, parentSpanID, info, durationMs)
 	cb.dispatcher.Dispatch(ctx, componentEvent, "", "")
 
 	// 根据组件类型分发具体事件
+	// 只处理 ChatModel，避免与 Model 重复处理
 	switch info.Component {
-	case "ChatModel", "Model":
-		cb.handleModelEnd(ctx, traceID, info, output, durationMs)
+	case "ChatModel":
+		cb.handleModelEnd(ctx, traceID, spanID, parentSpanID, info, output, durationMs)
 	case "Tool":
-		cb.handleToolEnd(ctx, traceID, info, output, durationMs)
+		cb.handleToolEnd(ctx, traceID, spanID, parentSpanID, info, output, durationMs)
 	default:
 		// 其他组件类型，只记录通用事件
 	}
@@ -109,18 +115,21 @@ func (cb *EinoCallbackBridge) onError(ctx context.Context, info *callbacks.RunIn
 	}
 
 	traceID := trace.GetTraceID(ctx)
+	spanID := trace.GetSpanID(ctx)
+	parentSpanID := trace.MustGetSpanID(ctx)
 
 	// 分发组件错误事件
-	componentEvent := events.NewComponentErrorEvent(traceID, info, err, durationMs)
+	componentEvent := events.NewComponentErrorEvent(traceID, spanID, parentSpanID, info, err, durationMs)
 	cb.dispatcher.Dispatch(ctx, componentEvent, "", "")
 
 	// 根据组件类型分发具体错误事件
+	// 只处理 ChatModel，避免与 Model 重复处理
 	switch info.Component {
-	case "ChatModel", "Model":
-		llmErrorEvent := events.NewLLMCallErrorEvent(traceID, info, err, durationMs)
+	case "ChatModel":
+		llmErrorEvent := events.NewLLMCallErrorEvent(traceID, spanID, parentSpanID, info, err, durationMs)
 		cb.dispatcher.Dispatch(ctx, llmErrorEvent, "", "")
 	case "Tool":
-		cb.handleToolError(ctx, traceID, info, err)
+		cb.handleToolError(ctx, traceID, spanID, parentSpanID, info, err)
 	default:
 		// 其他组件类型，只记录通用事件
 	}
@@ -129,52 +138,60 @@ func (cb *EinoCallbackBridge) onError(ctx context.Context, info *callbacks.RunIn
 }
 
 // handleModelStart 处理模型调用开始
-func (cb *EinoCallbackBridge) handleModelStart(ctx context.Context, traceID string, info *callbacks.RunInfo, input callbacks.CallbackInput) {
+func (cb *EinoCallbackBridge) handleModelStart(ctx context.Context, traceID, spanID, parentSpanID string, info *callbacks.RunInfo, input callbacks.CallbackInput) {
 	modelInput := model.ConvCallbackInput(input)
 	if modelInput == nil {
 		return
 	}
 
-	event := events.NewLLMCallStartEvent(traceID, info, modelInput)
+	event := events.NewLLMCallStartEvent(traceID, spanID, parentSpanID, info, modelInput)
 	cb.dispatcher.Dispatch(ctx, event, "", "")
 }
 
 // handleModelEnd 处理模型调用结束
-func (cb *EinoCallbackBridge) handleModelEnd(ctx context.Context, traceID string, info *callbacks.RunInfo, output callbacks.CallbackOutput, durationMs int64) {
+func (cb *EinoCallbackBridge) handleModelEnd(ctx context.Context, traceID, spanID, parentSpanID string, info *callbacks.RunInfo, output callbacks.CallbackOutput, durationMs int64) {
+	// 只处理有 model 名称的回调，忽略链式调用导致的重复触发
+	if info.Name == "" {
+		cb.logger.Debug("跳过没有 model 名称的回调",
+			zap.String("component", string(info.Component)),
+		)
+		return
+	}
+
 	modelOutput := model.ConvCallbackOutput(output)
 	if modelOutput == nil {
 		return
 	}
 
-	event := events.NewLLMCallEndEvent(traceID, info, modelOutput, durationMs)
+	event := events.NewLLMCallEndEvent(traceID, spanID, parentSpanID, info, modelOutput, durationMs)
 	cb.dispatcher.Dispatch(ctx, event, "", "")
 }
 
 // handleToolStart 处理工具调用开始
-func (cb *EinoCallbackBridge) handleToolStart(ctx context.Context, traceID string, info *callbacks.RunInfo, input callbacks.CallbackInput) {
+func (cb *EinoCallbackBridge) handleToolStart(ctx context.Context, traceID, spanID, parentSpanID string, info *callbacks.RunInfo, input callbacks.CallbackInput) {
 	toolInput := tool.ConvCallbackInput(input)
 	if toolInput == nil {
 		return
 	}
 
 	// 从 info.Name 获取工具名称
-	event := events.NewToolUsedEvent(traceID, info.Name, toolInput.ArgumentsInJSON)
+	event := events.NewToolUsedEvent(traceID, spanID, parentSpanID, info.Name, toolInput.ArgumentsInJSON)
 	cb.dispatcher.Dispatch(ctx, event, "", "")
 }
 
 // handleToolEnd 处理工具调用结束
-func (cb *EinoCallbackBridge) handleToolEnd(ctx context.Context, traceID string, info *callbacks.RunInfo, output callbacks.CallbackOutput, durationMs int64) {
+func (cb *EinoCallbackBridge) handleToolEnd(ctx context.Context, traceID, spanID, parentSpanID string, info *callbacks.RunInfo, output callbacks.CallbackOutput, durationMs int64) {
 	toolOutput := tool.ConvCallbackOutput(output)
 	if toolOutput == nil {
 		return
 	}
 
-	event := events.NewToolCompletedEvent(traceID, info.Name, toolOutput.Response, true)
+	event := events.NewToolCompletedEvent(traceID, spanID, parentSpanID, info.Name, toolOutput.Response, true)
 	cb.dispatcher.Dispatch(ctx, event, "", "")
 }
 
 // handleToolError 处理工具调用错误
-func (cb *EinoCallbackBridge) handleToolError(ctx context.Context, traceID string, info *callbacks.RunInfo, err error) {
-	event := events.NewToolErrorEvent(traceID, info.Name, err.Error())
+func (cb *EinoCallbackBridge) handleToolError(ctx context.Context, traceID, spanID, parentSpanID string, info *callbacks.RunInfo, err error) {
+	event := events.NewToolErrorEvent(traceID, spanID, parentSpanID, info.Name, err.Error())
 	cb.dispatcher.Dispatch(ctx, event, "", "")
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
+	"github.com/weibaohui/nanobot-go/agent/hooks"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/session"
@@ -50,6 +51,7 @@ type SupervisorConfig struct {
 	MaxIterations   int
 	// 已注册的工具名称列表
 	RegisteredTools []string
+	HookManager     *hooks.HookManager
 }
 
 // NewSupervisorAgent 创建 Supervisor Agent
@@ -77,6 +79,7 @@ func NewSupervisorAgent(ctx context.Context, cfg *SupervisorConfig) (*Supervisor
 		MaxIterations:   cfg.MaxIterations,
 		RegisteredTools: cfg.RegisteredTools,
 		AgentType:       "supervisor",
+		HookManager:     cfg.HookManager,
 	})
 	if err != nil {
 		return nil, err

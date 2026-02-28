@@ -9,6 +9,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
+	hooks "github.com/weibaohui/nanobot-go/agent/hooks"
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/tools/askuser"
 	"github.com/weibaohui/nanobot-go/bus"
@@ -60,6 +61,7 @@ type interruptible struct {
 	maxIterations    int
 	agentType        string // "master" 或 "supervisor"
 	adkAgent         adk.Agent
+	hookManager      *hooks.HookManager
 }
 
 // interruptibleConfig 中断处理能力的配置
@@ -78,6 +80,7 @@ type interruptibleConfig struct {
 	AgentType       string
 	ADKAgent        adk.Agent
 	ADKRunner       *adk.Runner
+	HookManager     *hooks.HookManager
 }
 
 // newInterruptible 创建中断处理能力
@@ -111,6 +114,7 @@ func newInterruptible(ctx context.Context, cfg *interruptibleConfig) (*interrupt
 		maxIterations:    maxIter,
 		agentType:        cfg.AgentType,
 		adkAgent:         cfg.ADKAgent,
+		hookManager:      cfg.HookManager,
 	}
 
 	logger.Info(fmt.Sprintf("%s Agent 能力初始化成功", cfg.AgentType),
@@ -149,16 +153,23 @@ func (i *interruptible) Process(ctx context.Context, msg *bus.InboundMessage, bu
 	sess := i.sessions.GetOrCreate(sessionKey)
 
 	ctx = context.WithValue(ctx, SessionKeyContextKey, sessionKey)
+	// 同时存储为 "session_key" 供 SessionObserver 使用
+	ctx = context.WithValue(ctx, "session_key", sessionKey)
 
 	// 检查是否有待处理的中断需要响应
 	if pendingInterrupt := i.interruptManager.GetPendingInterrupt(sessionKey); pendingInterrupt != nil {
 		return i.processInterrupted(ctx, sess, msg, pendingInterrupt, buildMessagesFunc)
 	}
 
-	// 正常处理流程
+	// Normal processing flow
 	history := i.convertHistory(sess.GetHistory(10))
 	messages := buildMessagesFunc(history, msg.Content, msg.Channel, msg.ChatID)
 	checkpointID := fmt.Sprintf("%s_%d", sessionKey, time.Now().UnixNano())
+
+	// 触发 PromptSubmitted 事件，让 SessionObserver 保存用户消息
+	if i.hookManager != nil {
+		i.hookManager.OnPromptSubmitted(ctx, msg.Content, messages, sessionKey)
+	}
 
 	response, err := i.processNormal(ctx, messages, checkpointID, msg)
 	if err != nil {
@@ -169,8 +180,6 @@ func (i *interruptible) Process(ctx context.Context, msg *bus.InboundMessage, bu
 		errorMsg := fmt.Sprintf("处理失败: %v", err)
 		return errorMsg, fmt.Errorf("%s", errorMsg)
 	}
-
-	i.saveSession(sess, msg.Content)
 
 	return response, nil
 }
@@ -228,7 +237,6 @@ func (i *interruptible) processInterrupted(ctx context.Context, sess *session.Se
 
 	// 清理已完成的中断
 	i.interruptManager.ClearInterrupt(pendingInterrupt.CheckpointID)
-	i.saveSession(sess, msg.Content)
 
 	return result, nil
 }
@@ -243,12 +251,6 @@ func (i *interruptible) buildResumePayload(isAskUser bool, userAnswer string) an
 	return map[string]any{
 		"user_answer": userAnswer,
 	}
-}
-
-// saveSession 保存用户消息到会话
-func (i *interruptible) saveSession(sess *session.Session, userMessage string) {
-	sess.AddMessage("user", userMessage)
-	i.sessions.Save(sess)
 }
 
 // processNormal 普通模式处理

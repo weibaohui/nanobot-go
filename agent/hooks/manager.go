@@ -102,7 +102,9 @@ func (hm *HookManager) OnMessageReceived(ctx context.Context, msg *bus.InboundMe
 		return
 	}
 	traceID := trace.GetTraceID(ctx)
-	event := hookevents.NewMessageReceivedEvent(traceID, msg)
+	spanID := trace.GetSpanID(ctx) // 使用 GetSpanID 确保总是有 ID
+	parentSpanID := trace.MustGetSpanID(ctx) // 使用 MustGetSpanID 获取父 SpanID（如果存在）
+	event := hookevents.NewMessageReceivedEvent(traceID, spanID, parentSpanID, msg)
 	hm.Dispatch(ctx, event, msg.Channel, msg.SessionKey())
 }
 
@@ -112,7 +114,9 @@ func (hm *HookManager) OnMessageSent(ctx context.Context, msg *bus.OutboundMessa
 		return
 	}
 	traceID := trace.GetTraceID(ctx)
-	event := hookevents.NewMessageSentEvent(traceID, msg, sessionKey)
+	spanID := trace.GetSpanID(ctx)
+	parentSpanID := trace.MustGetSpanID(ctx)
+	event := hookevents.NewMessageSentEvent(traceID, spanID, parentSpanID, msg, sessionKey)
 	hm.Dispatch(ctx, event, msg.Channel, sessionKey)
 }
 
@@ -122,7 +126,9 @@ func (hm *HookManager) OnPromptSubmitted(ctx context.Context, userInput string, 
 		return
 	}
 	traceID := trace.GetTraceID(ctx)
-	event := hookevents.NewPromptSubmittedEvent(traceID, userInput, messages, sessionKey)
+	spanID := trace.GetSpanID(ctx)
+	parentSpanID := trace.MustGetSpanID(ctx)
+	event := hookevents.NewPromptSubmittedEvent(traceID, spanID, parentSpanID, userInput, messages, sessionKey)
 	hm.Dispatch(ctx, event, "", sessionKey)
 }
 
@@ -132,7 +138,9 @@ func (hm *HookManager) OnSystemPromptBuilt(ctx context.Context, systemPrompt str
 		return
 	}
 	traceID := trace.GetTraceID(ctx)
-	event := hookevents.NewSystemPromptBuiltEvent(traceID, systemPrompt)
+	spanID := trace.GetSpanID(ctx)
+	parentSpanID := trace.MustGetSpanID(ctx)
+	event := hookevents.NewSystemPromptBuiltEvent(traceID, spanID, parentSpanID, systemPrompt)
 	hm.Dispatch(ctx, event, "", "")
 }
 
@@ -142,7 +150,9 @@ func (hm *HookManager) OnToolUsed(ctx context.Context, toolName, toolArguments s
 		return
 	}
 	traceID := trace.GetTraceID(ctx)
-	event := hookevents.NewToolUsedEvent(traceID, toolName, toolArguments)
+	spanID := trace.GetSpanID(ctx)
+	parentSpanID := trace.MustGetSpanID(ctx)
+	event := hookevents.NewToolUsedEvent(traceID, spanID, parentSpanID, toolName, toolArguments)
 	hm.Dispatch(ctx, event, "", "")
 }
 
@@ -152,7 +162,9 @@ func (hm *HookManager) OnToolCompleted(ctx context.Context, toolName, response s
 		return
 	}
 	traceID := trace.GetTraceID(ctx)
-	event := hookevents.NewToolCompletedEvent(traceID, toolName, response, success)
+	spanID := trace.GetSpanID(ctx)
+	parentSpanID := trace.MustGetSpanID(ctx)
+	event := hookevents.NewToolCompletedEvent(traceID, spanID, parentSpanID, toolName, response, success)
 	hm.Dispatch(ctx, event, "", "")
 }
 
@@ -162,7 +174,9 @@ func (hm *HookManager) OnToolError(ctx context.Context, toolName, error string) 
 		return
 	}
 	traceID := trace.GetTraceID(ctx)
-	event := hookevents.NewToolErrorEvent(traceID, toolName, error)
+	spanID := trace.GetSpanID(ctx)
+	parentSpanID := trace.MustGetSpanID(ctx)
+	event := hookevents.NewToolErrorEvent(traceID, spanID, parentSpanID, toolName, error)
 	hm.Dispatch(ctx, event, "", "")
 }
 
@@ -172,7 +186,9 @@ func (hm *HookManager) OnSkillLookup(ctx context.Context, skillName string, foun
 		return
 	}
 	traceID := trace.GetTraceID(ctx)
-	event := hookevents.NewSkillLookupEvent(traceID, skillName, found, source, path)
+	spanID := trace.GetSpanID(ctx)
+	parentSpanID := trace.MustGetSpanID(ctx)
+	event := hookevents.NewSkillLookupEvent(traceID, spanID, parentSpanID, skillName, found, source, path)
 	hm.Dispatch(ctx, event, "", "")
 }
 
@@ -182,7 +198,9 @@ func (hm *HookManager) OnSkillUsed(ctx context.Context, skillName string, skillL
 		return
 	}
 	traceID := trace.GetTraceID(ctx)
-	event := hookevents.NewSkillUsedEvent(traceID, skillName, skillLength)
+	spanID := trace.GetSpanID(ctx)
+	parentSpanID := trace.MustGetSpanID(ctx)
+	event := hookevents.NewSkillUsedEvent(traceID, spanID, parentSpanID, skillName, skillLength)
 	hm.Dispatch(ctx, event, "", "")
 }
 

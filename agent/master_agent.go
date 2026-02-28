@@ -8,6 +8,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
+	"github.com/weibaohui/nanobot-go/agent/hooks"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/session"
@@ -44,6 +45,7 @@ type MasterAgentConfig struct {
 	MaxIterations   int
 	// 已注册的工具名称列表
 	RegisteredTools []string
+	HookManager     *hooks.HookManager
 }
 
 // NewMasterAgent 创建 Master Agent
@@ -71,6 +73,7 @@ func NewMasterAgent(ctx context.Context, cfg *MasterAgentConfig) (*MasterAgent, 
 		MaxIterations:   cfg.MaxIterations,
 		RegisteredTools: cfg.RegisteredTools,
 		AgentType:       "master",
+		HookManager:     cfg.HookManager,
 	})
 	if err != nil {
 		return nil, err

@@ -158,8 +158,6 @@ func (a *ChatModelAdapter) Generate(ctx context.Context, input []*schema.Message
 
 	// 拦截并转换工具调用
 	a.interceptToolCalls(response)
-	// 记录 token 用量到 session
-	a.recordTokenUsage(ctx, response)
 
 	return response, nil
 }
