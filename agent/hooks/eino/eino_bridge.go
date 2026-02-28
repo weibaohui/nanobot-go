@@ -19,9 +19,6 @@ type EinoCallbackBridge struct {
 	dispatcher *dispatcher.Dispatcher
 	logger     *zap.Logger
 	startTimes map[string]time.Time
-
-	// 去重：记录最近分发的响应内容哈希，避免重复
-	recentResponses map[string]time.Time
 }
 
 // NewEinoCallbackBridge 创建 Eino Callback 桥接器
