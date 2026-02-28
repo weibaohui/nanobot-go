@@ -19,6 +19,9 @@ type EinoCallbackBridge struct {
 	dispatcher *dispatcher.Dispatcher
 	logger     *zap.Logger
 	startTimes map[string]time.Time
+
+	// 去重：记录最近分发的响应内容哈希，避免重复
+	recentResponses map[string]time.Time
 }
 
 // NewEinoCallbackBridge 创建 Eino Callback 桥接器
@@ -150,14 +153,6 @@ func (cb *EinoCallbackBridge) handleModelStart(ctx context.Context, traceID, spa
 
 // handleModelEnd 处理模型调用结束
 func (cb *EinoCallbackBridge) handleModelEnd(ctx context.Context, traceID, spanID, parentSpanID string, info *callbacks.RunInfo, output callbacks.CallbackOutput, durationMs int64) {
-	// 只处理有 model 名称的回调，忽略链式调用导致的重复触发
-	if info.Name == "" {
-		cb.logger.Debug("跳过没有 model 名称的回调",
-			zap.String("component", string(info.Component)),
-		)
-		return
-	}
-
 	modelOutput := model.ConvCallbackOutput(output)
 	if modelOutput == nil {
 		return

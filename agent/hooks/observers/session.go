@@ -171,7 +171,7 @@ func (so *SessionObserver) handleLLMCallEnd(ctx context.Context, event events.Ev
 		return
 	}
 
-	// 去重检查
+	// 去重检查（基于原始内容）
 	if so.isDuplicate(sessionKey, content) {
 		so.logger.Debug("跳过重复消息",
 			zap.String("session_key", sessionKey),
@@ -187,18 +187,20 @@ func (so *SessionObserver) handleLLMCallEnd(ctx context.Context, event events.Ev
 	}
 
 	sess := so.sessions.GetOrCreate(sessionKey)
-	sess.AddMessage(role, content)
 
-	// 如果有 TokenUsage，更新到 session
+	// 如果有 TokenUsage，使用 AddMessageWithTokenUsage（记录到消息级别并累加到 session 级别）
 	if e.TokenUsage != nil {
 		tokenUsage := session.TokenUsage{
 			PromptTokens:     e.TokenUsage.PromptTokens,
 			CompletionTokens: e.TokenUsage.CompletionTokens,
 			TotalTokens:      e.TokenUsage.TotalTokens,
-			ReasoningTokens:  0, // model.TokenUsage 没有此字段
-			CachedTokens:     0, // model.TokenUsage 没有此字段
+			ReasoningTokens:  0,
+			CachedTokens:     0,
 		}
-		sess.UpdateTokenUsage(tokenUsage)
+		sess.AddMessageWithTokenUsage(role, content, tokenUsage)
+	} else {
+		// 没有 TokenUsage，使用普通 AddMessage
+		sess.AddMessage(role, content)
 	}
 
 	if err := so.sessions.Save(sess); err != nil {
@@ -209,7 +211,7 @@ func (so *SessionObserver) handleLLMCallEnd(ctx context.Context, event events.Ev
 		return
 	}
 
-	// 记录用于去重
+	// 记录用于去重（基于原始内容）
 	so.recordMessage(sessionKey, content)
 }
 
