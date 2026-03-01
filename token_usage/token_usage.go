@@ -132,7 +132,7 @@ func (m *TokenUsageManager) GetSummary(sessionKey string) TokenUsage {
 
 // getUsagePath 获取记录文件路径
 func (m *TokenUsageManager) getUsagePath(sessionKey string) string {
-	now := time.Now().UTC()
+	now := time.Now()
 	date := now.Format("20060102")
 
 	// 替换不安全字符

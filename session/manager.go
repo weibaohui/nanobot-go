@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/weibaohui/nanobot-go/config"
-	"go.uber.org/zap"
 )
 
 // Message 会话消息
@@ -36,9 +35,9 @@ func (s *Session) AddMessage(role, content string) {
 	s.Messages = append(s.Messages, Message{
 		Role:      role,
 		Content:   content,
-		Timestamp: time.Now().UTC(),
+		Timestamp: time.Now(),
 	})
-	s.UpdatedAt = time.Now().UTC()
+	s.UpdatedAt = time.Now()
 }
 
 // AddMessageWithTrace 添加消息到会话（带链路追踪信息）
@@ -46,12 +45,12 @@ func (s *Session) AddMessageWithTrace(role, content, traceID, spanID, parentSpan
 	s.Messages = append(s.Messages, Message{
 		Role:         role,
 		Content:      content,
-		Timestamp:    time.Now().UTC(),
+		Timestamp:    time.Now(),
 		TraceID:      traceID,
 		SpanID:       spanID,
 		ParentSpanID: parentSpanID,
 	})
-	s.UpdatedAt = time.Now().UTC()
+	s.UpdatedAt = time.Now()
 }
 
 // GetHistory 获取消息历史
@@ -86,7 +85,7 @@ func (s *Session) GetHistory(maxMessages int) []map[string]any {
 // Clear 清空会话消息
 func (s *Session) Clear() {
 	s.Messages = nil
-	s.UpdatedAt = time.Now().UTC()
+	s.UpdatedAt = time.Now()
 }
 
 // Manager 会话管理器
@@ -122,8 +121,8 @@ func (m *Manager) GetOrCreate(key string) *Session {
 	if session == nil {
 		session = &Session{
 			Key:       key,
-			CreatedAt: time.Now().UTC(),
-			UpdatedAt: time.Now().UTC(),
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		}
 	}
 
@@ -223,27 +222,15 @@ func (m *Manager) ListSessions() []map[string]any {
 }
 
 // getSessionPath 获取会话文件路径
+// 使用固定文件名，不再按日期分割，历史消息持久保存
 func (m *Manager) getSessionPath(key string) string {
-	// 使用 UTC 时间避免跨时区问题
-	// 历史文件命名：safeKey_YYYYMMDD.json
-	now := time.Now().UTC()
-	date := now.Format("20060102")
-
 	// 先替换 : 为 _
 	keyWithUnderscore := strings.ReplaceAll(key, ":", "_")
 
 	// 再处理其他不安全字符（包括单引号和双引号）
 	safeKey := safeFilename(keyWithUnderscore)
 
-	result := filepath.Join(m.sessionsDir, safeKey+"_"+date+".json")
-
-	// 调试：记录生成的文件名
-	zap.L().Info("生成 session 文件路径",
-		zap.String("original_key", key),
-		zap.String("key_with_underscore", keyWithUnderscore),
-		zap.String("safe_key", safeKey),
-		zap.String("file_path", result),
-	)
+	result := filepath.Join(m.sessionsDir, safeKey+".json")
 
 	return result
 }
