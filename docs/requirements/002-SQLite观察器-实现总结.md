@@ -8,12 +8,13 @@
 | 2026-03-01 | v1.1 | 简化事件类型，添加 role/content 列 | AI     |
 | 2026-03-01 | v1.2 | 添加 Token Usage 字段              | AI     |
 | 2026-03-01 | v1.3 | 添加 ToolCompleted 事件监听        | AI     |
+| 2026-03-01 | v1.4 | 添加去重逻辑，移除 Data 字段       | AI     |
 
 ---
 
 ## 1. 实现概述
 
-成功实现了一个 SQLite 观察器，将消息事件存储到 SQLite 数据库中，支持用户消息、AI 回复和工具执行结果的存储。
+成功实现了一个 SQLite 观察器，将消息事件存储到 SQLite 数据库中，支持用户消息、AI 回复和工具执行结果的存储，并实现了数据去重。
 
 ## 2. 实现内容
 
@@ -42,12 +43,11 @@ CREATE TABLE events (
     session_key TEXT,
     role TEXT,               -- user / assistant / tool / tool_result
     content TEXT,            -- 消息内容
-    prompt_tokens INTEGER DEFAULT 0,      -- 输入 token 数量
-    completion_tokens INTEGER DEFAULT 0,  -- 输出 token 数量
-    total_tokens INTEGER DEFAULT 0,       -- 总 token 数量
-    reasoning_tokens INTEGER DEFAULT 0,   -- 推理 token 数量
-    cached_tokens INTEGER DEFAULT 0,      -- 缓存 token 数量
-    data TEXT,               -- JSON 格式完整数据
+    prompt_tokens INTEGER DEFAULT 0,
+    completion_tokens INTEGER DEFAULT 0,
+    total_tokens INTEGER DEFAULT 0,
+    reasoning_tokens INTEGER DEFAULT 0,
+    cached_tokens INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 ```
@@ -61,25 +61,13 @@ CREATE TABLE events (
 - `LLMCallEnd` - AI 回复，role=assistant 或 tool
 - `ToolCompleted` - 工具执行结果，role=tool_result
 
-### 3.2 Role 和 Content 提取
+### 3.2 去重逻辑
 
-| 事件类型 | role | content |
-|---------|------|---------|
-| PromptSubmitted | user | e.UserInput |
-| LLMCallEnd (无工具调用) | assistant | e.ResponseContent |
-| LLMCallEnd (有工具调用) | tool | 拼接工具调用信息 |
-| ToolCompleted | tool_result | 工具名: 响应内容 |
+对于相同 traceID、role、content 的记录：
+1. 优先保留有 TokenUsage 信息（total_tokens > 0）的记录
+2. 如果都没有 TokenUsage 信息，保留 ID 最小的（最早插入的）
 
-### 3.3 Token Usage 提取
-
-参考 TokenUsageObserver 实现，从 LLMCallEnd 事件中提取：
-- `prompt_tokens`: 输入 token 数量
-- `completion_tokens`: 输出 token 数量
-- `total_tokens`: 总 token 数量
-- `reasoning_tokens`: 推理 token 数量（如 o1 模型）
-- `cached_tokens`: 缓存命中的 token 数量
-
-### 3.4 并发控制
+### 3.3 并发控制
 
 - 使用 `sync.RWMutex` 保护数据库写入
 - SQLite 连接池设置为单连接（推荐配置）
@@ -88,21 +76,19 @@ CREATE TABLE events (
 
 ```
 === RUN   TestSQLiteObserver_OnEvent_PromptSubmitted
---- PASS: TestSQLiteObserver_OnEvent_PromptSubmitted (0.01s)
+--- PASS
 === RUN   TestSQLiteObserver_OnEvent_LLMCallEnd
---- PASS: TestSQLiteObserver_OnEvent_LLMCallEnd (0.01s)
+--- PASS
 === RUN   TestSQLiteObserver_OnEvent_LLMCallEnd_WithToolCalls
---- PASS: TestSQLiteObserver_OnEvent_LLMCallEnd_WithToolCalls (0.01s)
+--- PASS
 === RUN   TestSQLiteObserver_OnEvent_LLMCallEnd_WithTokenUsage
---- PASS: TestSQLiteObserver_OnEvent_LLMCallEnd_WithTokenUsage (0.01s)
+--- PASS
 === RUN   TestSQLiteObserver_OnEvent_ToolCompleted
---- PASS: TestSQLiteObserver_OnEvent_ToolCompleted (0.01s)
-=== RUN   TestSQLiteObserver_OnEvent_IgnoredEvents
---- PASS: TestSQLiteObserver_OnEvent_IgnoredEvents (0.00s)
-=== RUN   TestSQLiteObserver_Filter
---- PASS: TestSQLiteObserver_Filter (0.00s)
+--- PASS
+=== RUN   TestSQLiteObserver_Deduplication
+--- PASS
 === RUN   TestSQLiteObserver_ConcurrentWrites
---- PASS: TestSQLiteObserver_ConcurrentWrites (0.01s)
+--- PASS
 PASS
 ```
 
@@ -110,9 +96,3 @@ PASS
 
 1. 数据库文件会随时间增长，暂未实现清理机制
 2. 未实现查询 API，可根据需求后续添加
-
-## 6. 后续改进建议
-
-1. 实现数据清理机制（TTL 或定期清理）
-2. 实现查询 API 供其他模块使用
-3. 实现 Token Usage 统计查询
