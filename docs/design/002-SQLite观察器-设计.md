@@ -8,6 +8,7 @@
 | 2026-03-01 | v1.1 | 简化事件类型，与 SessionObserver 一致 | AI     |
 | 2026-03-01 | v1.2 | 添加 Token Usage 字段              | AI     |
 | 2026-03-01 | v1.3 | 添加 ToolCompleted 事件监听        | AI     |
+| 2026-03-01 | v1.4 | 添加去重逻辑，移除 Data 字段       | AI     |
 
 ---
 
@@ -25,6 +26,7 @@
 - 提取 role 和 content 字段作为独立列存储
 - 记录 Token Usage 信息，便于统计分析
 - 记录工具执行结果，便于追踪和调试
+- 实现数据去重，避免重复记录
 
 ### 1.3 边界
 
@@ -61,7 +63,6 @@ CREATE TABLE IF NOT EXISTS events (
     total_tokens INTEGER DEFAULT 0,       -- 总 token 数量
     reasoning_tokens INTEGER DEFAULT 0,   -- 推理 token 数量 (o1 等模型)
     cached_tokens INTEGER DEFAULT 0,      -- 缓存 token 数量 (缓存命中)
-    data TEXT,               -- JSON 格式存储完整事件数据
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -81,24 +82,15 @@ CREATE INDEX IF NOT EXISTS idx_events_role ON events(role);
 | LLMCallEnd (有工具调用) | tool | 拼接工具调用信息 | 有 |
 | ToolCompleted | tool_result | 工具名: 响应内容 | 无 |
 
-### 2.3 Token Usage 字段
+### 2.3 去重逻辑
 
-参考 TokenUsageObserver 的实现，提取以下字段：
-- `prompt_tokens`: 输入 token 数量
-- `completion_tokens`: 输出 token 数量
-- `total_tokens`: 总 token 数量
-- `reasoning_tokens`: 推理 token 数量（如 o1 模型）
-- `cached_tokens`: 缓存命中的 token 数量
+对于相同 traceID、role、content 的记录：
+1. 优先保留有 TokenUsage 信息（total_tokens > 0）的记录
+2. 如果都没有 TokenUsage 信息，保留 ID 最小的（最早插入的）
 
 ---
 
-## 3. 依赖
-
-- `modernc.org/sqlite` - 纯 Go 实现的 SQLite 驱动
-
----
-
-## 4. 已知限制
+## 3. 已知限制
 
 1. 数据库文件大小会随时间增长，需要后续实现清理机制
 2. 未实现查询接口，可根据需求后续添加
