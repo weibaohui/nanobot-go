@@ -304,3 +304,68 @@ func TestBuildChatModelAdapter(t *testing.T) {
 		}
 	})
 }
+
+// TestInterruptible_ConvertHistory_SkipToolMessages 测试跳过工具消息
+func TestInterruptible_ConvertHistory_SkipToolMessages(t *testing.T) {
+	i := &interruptible{
+		logger: zap.NewNop(),
+	}
+
+	// 模拟包含工具调用和工具结果的历史消息
+	history := []map[string]any{
+		{"role": "user", "content": "帮我检查日志"},
+		{"role": "assistant", "content": "我来帮你检查"},
+		{"role": "tool", "content": "read_file(\n  \"path\": \"/var/log/secure\"\n)"},
+		{"role": "tool_result", "content": "read_file: (无输出)"},
+		{"role": "assistant", "content": "根据日志分析，没有发现异常"},
+	}
+
+	messages := i.convertHistory(history)
+
+	// 工具消息应该被跳过，只剩下 3 条消息
+	if len(messages) != 3 {
+		t.Fatalf("convertHistory() 返回 %d 条消息, 期望 3 (跳过 tool 和 tool_result)", len(messages))
+	}
+
+	// 验证消息顺序
+	if messages[0].Role != schema.User {
+		t.Errorf("messages[0].Role = %v, 期望 User", messages[0].Role)
+	}
+	if messages[0].Content != "帮我检查日志" {
+		t.Errorf("messages[0].Content = %q, 期望 帮我检查日志", messages[0].Content)
+	}
+
+	if messages[1].Role != schema.Assistant {
+		t.Errorf("messages[1].Role = %v, 期望 Assistant", messages[1].Role)
+	}
+	if messages[1].Content != "我来帮你检查" {
+		t.Errorf("messages[1].Content = %q, 期望 我来帮你检查", messages[1].Content)
+	}
+
+	if messages[2].Role != schema.Assistant {
+		t.Errorf("messages[2].Role = %v, 期望 Assistant", messages[2].Role)
+	}
+	if messages[2].Content != "根据日志分析，没有发现异常" {
+		t.Errorf("messages[2].Content = %q, 期望 根据日志分析，没有发现异常", messages[2].Content)
+	}
+}
+
+// TestInterruptible_ConvertHistory_SkipOnlyToolMessages 测试只有工具消息的情况
+func TestInterruptible_ConvertHistory_SkipOnlyToolMessages(t *testing.T) {
+	i := &interruptible{
+		logger: zap.NewNop(),
+	}
+
+	// 只有工具消息的历史
+	history := []map[string]any{
+		{"role": "tool", "content": "exec(...)"},
+		{"role": "tool_result", "content": "exec: (无输出)"},
+	}
+
+	messages := i.convertHistory(history)
+
+	// 工具消息应该被跳过，返回空列表
+	if len(messages) != 0 {
+		t.Fatalf("convertHistory() 返回 %d 条消息, 期望 0 (只有工具消息)", len(messages))
+	}
+}

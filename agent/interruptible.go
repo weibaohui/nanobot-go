@@ -429,8 +429,21 @@ func (i *interruptible) handleInterrupt(msg *bus.InboundMessage, checkpointID st
 func (i *interruptible) convertHistory(history []map[string]any) []*schema.Message {
 	result := make([]*schema.Message, 0, len(history))
 	for _, h := range history {
+		// 获取角色
+		roleStr, _ := h["role"].(string)
+
+		// 跳过工具相关消息（tool 和 tool_result）
+		// 工具调用上下文由 Eino 框架内部维护，不需要在 Session 中保存
+		if roleStr == "tool" || roleStr == "tool_result" {
+			i.logger.Debug("跳过工具消息",
+				zap.String("role", roleStr),
+				zap.String("content_preview", fmt.Sprintf("%.50v", h["content"])),
+			)
+			continue
+		}
+
 		role := schema.User
-		if r, ok := h["role"].(string); ok && r == "assistant" {
+		if roleStr == "assistant" {
 			role = schema.Assistant
 		}
 
