@@ -76,22 +76,19 @@ func (s *Session) AddMessageWithTrace(role, content, traceID, spanID, parentSpan
 
 // AddMessageWithTokenUsage 添加消息到会话并记录 token 用量
 func (s *Session) AddMessageWithTokenUsage(role, content string, usage TokenUsage) {
-	msg := Message{
+	s.Messages = append(s.Messages, Message{
 		Role:       role,
 		Content:    content,
 		Timestamp:  time.Now().UTC(),
 		TokenUsage: &usage,
-	}
-	s.Messages = append(s.Messages, msg)
-
-	// 累加到 Session 级别的 TokenUsage
+	})
 	s.TokenUsage.Add(usage)
 	s.UpdatedAt = time.Now().UTC()
 }
 
 // AddMessageWithTokenUsageAndTrace 添加消息到会话并记录 token 用量和链路追踪信息
 func (s *Session) AddMessageWithTokenUsageAndTrace(role, content string, usage TokenUsage, traceID, spanID, parentSpanID string) {
-	msg := Message{
+	s.Messages = append(s.Messages, Message{
 		Role:         role,
 		Content:      content,
 		Timestamp:    time.Now().UTC(),
@@ -99,10 +96,7 @@ func (s *Session) AddMessageWithTokenUsageAndTrace(role, content string, usage T
 		TraceID:      traceID,
 		SpanID:       spanID,
 		ParentSpanID: parentSpanID,
-	}
-	s.Messages = append(s.Messages, msg)
-
-	// 累加到 Session 级别的 TokenUsage
+	})
 	s.TokenUsage.Add(usage)
 	s.UpdatedAt = time.Now().UTC()
 }

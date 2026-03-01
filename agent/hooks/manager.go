@@ -101,9 +101,7 @@ func (hm *HookManager) OnMessageReceived(ctx context.Context, msg *bus.InboundMe
 	if !hm.enabled {
 		return
 	}
-	traceID := trace.GetTraceID(ctx)
-	spanID := trace.GetSpanID(ctx)             // 使用 GetSpanID 确保总是有 ID
-	parentSpanID := trace.GetParentSpanID(ctx) // 使用 GetParentSpanID 获取父 SpanID
+	traceID, spanID, parentSpanID := hm.extractTraceInfo(ctx)
 	event := hookevents.NewMessageReceivedEvent(traceID, spanID, parentSpanID, msg)
 	hm.Dispatch(ctx, event, msg.Channel, msg.SessionKey())
 }
@@ -113,9 +111,7 @@ func (hm *HookManager) OnMessageSent(ctx context.Context, msg *bus.OutboundMessa
 	if !hm.enabled {
 		return
 	}
-	traceID := trace.GetTraceID(ctx)
-	spanID := trace.GetSpanID(ctx)
-	parentSpanID := trace.GetParentSpanID(ctx)
+	traceID, spanID, parentSpanID := hm.extractTraceInfo(ctx)
 	event := hookevents.NewMessageSentEvent(traceID, spanID, parentSpanID, msg, sessionKey)
 	hm.Dispatch(ctx, event, msg.Channel, sessionKey)
 }
@@ -125,9 +121,7 @@ func (hm *HookManager) OnPromptSubmitted(ctx context.Context, userInput string, 
 	if !hm.enabled {
 		return
 	}
-	traceID := trace.GetTraceID(ctx)
-	spanID := trace.GetSpanID(ctx)
-	parentSpanID := trace.GetParentSpanID(ctx)
+	traceID, spanID, parentSpanID := hm.extractTraceInfo(ctx)
 	event := hookevents.NewPromptSubmittedEvent(traceID, spanID, parentSpanID, userInput, messages, sessionKey)
 	hm.Dispatch(ctx, event, "", sessionKey)
 }
@@ -137,9 +131,7 @@ func (hm *HookManager) OnSystemPromptBuilt(ctx context.Context, systemPrompt str
 	if !hm.enabled {
 		return
 	}
-	traceID := trace.GetTraceID(ctx)
-	spanID := trace.GetSpanID(ctx)
-	parentSpanID := trace.GetParentSpanID(ctx)
+	traceID, spanID, parentSpanID := hm.extractTraceInfo(ctx)
 	event := hookevents.NewSystemPromptBuiltEvent(traceID, spanID, parentSpanID, systemPrompt)
 	hm.Dispatch(ctx, event, "", "")
 }
@@ -149,9 +141,7 @@ func (hm *HookManager) OnToolUsed(ctx context.Context, toolName, toolArguments s
 	if !hm.enabled {
 		return
 	}
-	traceID := trace.GetTraceID(ctx)
-	spanID := trace.GetSpanID(ctx)
-	parentSpanID := trace.GetParentSpanID(ctx)
+	traceID, spanID, parentSpanID := hm.extractTraceInfo(ctx)
 	event := hookevents.NewToolUsedEvent(traceID, spanID, parentSpanID, toolName, toolArguments)
 	hm.Dispatch(ctx, event, "", "")
 }
@@ -161,9 +151,7 @@ func (hm *HookManager) OnToolCompleted(ctx context.Context, toolName, response s
 	if !hm.enabled {
 		return
 	}
-	traceID := trace.GetTraceID(ctx)
-	spanID := trace.GetSpanID(ctx)
-	parentSpanID := trace.GetParentSpanID(ctx)
+	traceID, spanID, parentSpanID := hm.extractTraceInfo(ctx)
 	event := hookevents.NewToolCompletedEvent(traceID, spanID, parentSpanID, toolName, response, success)
 	hm.Dispatch(ctx, event, "", "")
 }
@@ -173,9 +161,7 @@ func (hm *HookManager) OnToolError(ctx context.Context, toolName, error string) 
 	if !hm.enabled {
 		return
 	}
-	traceID := trace.GetTraceID(ctx)
-	spanID := trace.GetSpanID(ctx)
-	parentSpanID := trace.GetParentSpanID(ctx)
+	traceID, spanID, parentSpanID := hm.extractTraceInfo(ctx)
 	event := hookevents.NewToolErrorEvent(traceID, spanID, parentSpanID, toolName, error)
 	hm.Dispatch(ctx, event, "", "")
 }
@@ -185,9 +171,7 @@ func (hm *HookManager) OnSkillLookup(ctx context.Context, skillName string, foun
 	if !hm.enabled {
 		return
 	}
-	traceID := trace.GetTraceID(ctx)
-	spanID := trace.GetSpanID(ctx)
-	parentSpanID := trace.GetParentSpanID(ctx)
+	traceID, spanID, parentSpanID := hm.extractTraceInfo(ctx)
 	event := hookevents.NewSkillLookupEvent(traceID, spanID, parentSpanID, skillName, found, source, path)
 	hm.Dispatch(ctx, event, "", "")
 }
@@ -197,9 +181,7 @@ func (hm *HookManager) OnSkillUsed(ctx context.Context, skillName string, skillL
 	if !hm.enabled {
 		return
 	}
-	traceID := trace.GetTraceID(ctx)
-	spanID := trace.GetSpanID(ctx)
-	parentSpanID := trace.GetParentSpanID(ctx)
+	traceID, spanID, parentSpanID := hm.extractTraceInfo(ctx)
 	event := hookevents.NewSkillUsedEvent(traceID, spanID, parentSpanID, skillName, skillLength)
 	hm.Dispatch(ctx, event, "", "")
 }
@@ -225,6 +207,11 @@ func MustGetTraceID(ctx context.Context) string {
 }
 
 // ========== 统计信息 ==========
+
+// extractTraceInfo 从上下文提取链路追踪信息
+func (hm *HookManager) extractTraceInfo(ctx context.Context) (traceID, spanID, parentSpanID string) {
+	return trace.GetTraceID(ctx), trace.GetSpanID(ctx), trace.GetParentSpanID(ctx)
+}
 
 // Stats 统计信息
 type Stats struct {

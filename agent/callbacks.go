@@ -53,6 +53,17 @@ func (ec *EinoCallbacks) traceFields(ctx context.Context) []zap.Field {
 	return fields
 }
 
+// withTraceFields 将 trace fields 与其他字段合并
+func (ec *EinoCallbacks) withTraceFields(ctx context.Context, extra ...zap.Field) []zap.Field {
+	return append(ec.traceFields(ctx), extra...)
+}
+
+// marshalJSON 安全地将值转为 JSON 字符串
+func (ec *EinoCallbacks) marshalJSON(v any) string {
+	data, _ := json.Marshal(v)
+	return string(data)
+}
+
 // Handler 获取 Eino 的 Handler 接口实现
 // 返回配置好的 callbacks.Handler，可用于 Chain 或 Graph 的回调配置
 func (ec *EinoCallbacks) Handler() callbacks.Handler {
@@ -75,13 +86,14 @@ func (ec *EinoCallbacks) onStart(ctx context.Context, info *callbacks.RunInfo, i
 	nodeKey := ec.nodeKey(info)
 	ec.startTimes[nodeKey] = time.Now()
 
-	fields := append(ec.traceFields(ctx),
-		zap.Int("sequence", ec.callSequence),
-		zap.String("component", string(info.Component)),
-		zap.String("type", info.Type),
-		zap.String("name", info.Name),
+	ec.logger.Info("[EinoCallback] 节点开始执行",
+		ec.withTraceFields(ctx,
+			zap.Int("sequence", ec.callSequence),
+			zap.String("component", string(info.Component)),
+			zap.String("type", info.Type),
+			zap.String("name", info.Name),
+		)...,
 	)
-	ec.logger.Info("[EinoCallback] 节点开始执行", fields...)
 
 	// 根据组件类型记录详细信息
 	switch info.Component {
@@ -108,13 +120,14 @@ func (ec *EinoCallbacks) onEnd(ctx context.Context, info *callbacks.RunInfo, out
 		duration = time.Since(startTime)
 	}
 
-	fields := append(ec.traceFields(ctx),
-		zap.String("component", string(info.Component)),
-		zap.String("type", info.Type),
-		zap.String("name", info.Name),
-		zap.Int64("duration_ms", duration.Milliseconds()),
+	ec.logger.Info("[EinoCallback] 节点执行完成",
+		ec.withTraceFields(ctx,
+			zap.String("component", string(info.Component)),
+			zap.String("type", info.Type),
+			zap.String("name", info.Name),
+			zap.Int64("duration_ms", duration.Milliseconds()),
+		)...,
 	)
-	ec.logger.Info("[EinoCallback] 节点执行完成", fields...)
 
 	// 根据组件类型记录详细信息
 	switch info.Component {
@@ -144,7 +157,7 @@ func (ec *EinoCallbacks) onError(ctx context.Context, info *callbacks.RunInfo, e
 
 	if isInterruptError(err) {
 		ec.logger.Info("[EinoCallback] 节点触发中断",
-			append(ec.traceFields(ctx),
+			ec.withTraceFields(ctx,
 				zap.Error(err),
 				zap.String("component", string(info.Component)),
 				zap.String("type", info.Type),
@@ -154,7 +167,7 @@ func (ec *EinoCallbacks) onError(ctx context.Context, info *callbacks.RunInfo, e
 		)
 	} else {
 		ec.logger.Error("[EinoCallback] 节点执行出错",
-			append(ec.traceFields(ctx),
+			ec.withTraceFields(ctx,
 				zap.Error(err),
 				zap.String("component", string(info.Component)),
 				zap.String("type", info.Type),
@@ -192,7 +205,7 @@ func (ec *EinoCallbacks) onStartWithStreamInput(ctx context.Context, info *callb
 	}
 
 	ec.logger.Info("[EinoCallback] 流式输入开始",
-		append(ec.traceFields(ctx),
+		ec.withTraceFields(ctx,
 			zap.String("component", string(info.Component)),
 			zap.String("type", info.Type),
 			zap.String("name", info.Name),
@@ -213,11 +226,11 @@ func (ec *EinoCallbacks) onEndWithStreamOutput(ctx context.Context, info *callba
 // ========== Model (LLM) 回调详情 ==========
 
 // logModelInput 记录模型输入详情
-func (ec *EinoCallbacks) logModelInput(ctx context.Context, input callbacks.CallbackInput, info *callbacks.RunInfo) {
+func (ec *EinoCallbacks) logModelInput(ctx context.Context, input callbacks.CallbackInput, _ *callbacks.RunInfo) {
 	modelInput := model.ConvCallbackInput(input)
 	if modelInput == nil {
 		ec.logger.Debug("[EinoCallback] Model 输入转换失败",
-			append(ec.traceFields(ctx), zap.String("input_type", fmt.Sprintf("%T", input)))...,
+			ec.withTraceFields(ctx, zap.String("input_type", fmt.Sprintf("%T", input)))...,
 		)
 		return
 	}
@@ -232,14 +245,9 @@ func (ec *EinoCallbacks) logModelInput(ctx context.Context, input callbacks.Call
 		toolNames = append(toolNames, t.Name)
 	}
 
-	marshalJSON := func(v any) string {
-		data, _ := json.Marshal(v)
-		return string(data)
-	}
-
 	// 在第一条日志中显示关键信息：Messages 和 Tools 摘要
 	ec.logger.Info("[EinoCallback] Model 输入",
-		append(ec.traceFields(ctx),
+		ec.withTraceFields(ctx,
 			zap.Int("message_count", len(modelInput.Messages)),
 			zap.Int("tool_count", toolCount),
 			zap.Strings("tool_names", toolNames),
@@ -255,14 +263,14 @@ func (ec *EinoCallbacks) logModelInput(ctx context.Context, input callbacks.Call
 		// 特别处理 System Message（包含指令），以 Info 级别记录
 		if msg.Role == schema.System {
 			ec.logger.Info("[EinoCallback] System Message (包含注入的指令)",
-				append(ec.traceFields(ctx), zap.String("content", msg.Content))...,
+				ec.withTraceFields(ctx, zap.String("content", msg.Content))...,
 			)
 			continue // System Message 已在 Info 级别记录，跳过 Debug 记录
 		}
 
 		// 其他消息在调试级别下记录完整内容
 		ec.logger.Debug("[EinoCallback]   Message Content",
-			append(ec.traceFields(ctx),
+			ec.withTraceFields(ctx,
 				zap.String("role", string(msg.Role)),
 				zap.String("content", msg.Content),
 			)...,
@@ -272,21 +280,21 @@ func (ec *EinoCallbacks) logModelInput(ctx context.Context, input callbacks.Call
 	// 记录 Tools 详情
 	if len(toolNames) > 0 {
 		ec.logger.Info("[EinoCallback] Model 输入 Tools",
-			append(ec.traceFields(ctx), zap.Strings("tool_names", toolNames))...,
+			ec.withTraceFields(ctx, zap.Strings("tool_names", toolNames))...,
 		)
 	}
 
 	// 记录 ToolChoice
 	if modelInput.ToolChoice != nil {
 		ec.logger.Info("[EinoCallback] Model 输入 ToolChoice",
-			append(ec.traceFields(ctx), zap.String("tool_choice", marshalJSON(modelInput.ToolChoice)))...,
+			ec.withTraceFields(ctx, zap.String("tool_choice", ec.marshalJSON(modelInput.ToolChoice)))...,
 		)
 	}
 
 	// 记录 Config
 	if modelInput.Config != nil {
 		ec.logger.Info("[EinoCallback] Model 输入 Config",
-			append(ec.traceFields(ctx),
+			ec.withTraceFields(ctx,
 				zap.String("model", modelInput.Config.Model),
 				zap.Int("max_tokens", modelInput.Config.MaxTokens),
 				zap.Float32("temperature", modelInput.Config.Temperature),
@@ -298,17 +306,17 @@ func (ec *EinoCallbacks) logModelInput(ctx context.Context, input callbacks.Call
 	// 记录 Extra
 	if len(modelInput.Extra) > 0 {
 		ec.logger.Debug("[EinoCallback] Model 输入 Extra",
-			append(ec.traceFields(ctx), zap.String("extra", marshalJSON(modelInput.Extra)))...,
+			ec.withTraceFields(ctx, zap.String("extra", ec.marshalJSON(modelInput.Extra)))...,
 		)
 	}
 }
 
 // logModelOutput 记录模型输出详情
-func (ec *EinoCallbacks) logModelOutput(ctx context.Context, output callbacks.CallbackOutput, info *callbacks.RunInfo) {
+func (ec *EinoCallbacks) logModelOutput(ctx context.Context, output callbacks.CallbackOutput, _ *callbacks.RunInfo) {
 	modelOutput := model.ConvCallbackOutput(output)
 	if modelOutput == nil {
 		ec.logger.Debug("[EinoCallback] Model 输出转换失败",
-			append(ec.traceFields(ctx), zap.String("output_type", fmt.Sprintf("%T", output)))...,
+			ec.withTraceFields(ctx, zap.String("output_type", fmt.Sprintf("%T", output)))...,
 		)
 		return
 	}
@@ -317,7 +325,7 @@ func (ec *EinoCallbacks) logModelOutput(ctx context.Context, output callbacks.Ca
 	if modelOutput.Message != nil {
 		// 在调试级别下记录完整内容
 		ec.logger.Debug("[EinoCallback] Model 输出 Content",
-			append(ec.traceFields(ctx),
+			ec.withTraceFields(ctx,
 				zap.String("role", string(modelOutput.Message.Role)),
 				zap.String("content", modelOutput.Message.Content),
 			)...,
@@ -326,7 +334,7 @@ func (ec *EinoCallbacks) logModelOutput(ctx context.Context, output callbacks.Ca
 		// 记录工具调用
 		for i, tc := range modelOutput.Message.ToolCalls {
 			ec.logger.Info("[EinoCallback] 调用工具 ToolCall",
-				append(ec.traceFields(ctx),
+				ec.withTraceFields(ctx,
 					zap.Int("index", i),
 					zap.String("type", tc.Type),
 					zap.String("function_name", tc.Function.Name),
@@ -339,7 +347,7 @@ func (ec *EinoCallbacks) logModelOutput(ctx context.Context, output callbacks.Ca
 	// 记录 Token 使用情况 (重点!)
 	if modelOutput.TokenUsage != nil {
 		ec.logger.Info("[EinoCallback] Model Token 使用情况",
-			append(ec.traceFields(ctx),
+			ec.withTraceFields(ctx,
 				zap.Int("prompt_tokens", modelOutput.TokenUsage.PromptTokens),
 				zap.Int("completion_tokens", modelOutput.TokenUsage.CompletionTokens),
 				zap.Int("total_tokens", modelOutput.TokenUsage.TotalTokens),
@@ -349,15 +357,14 @@ func (ec *EinoCallbacks) logModelOutput(ctx context.Context, output callbacks.Ca
 		)
 	} else {
 		ec.logger.Info("[EinoCallback] Model Token 使用情况",
-			append(ec.traceFields(ctx), zap.String("token_usage", "未返回"))...,
+			ec.withTraceFields(ctx, zap.String("token_usage", "未返回"))...,
 		)
 	}
 
 	// 记录 Extra
 	if len(modelOutput.Extra) > 0 {
-		extraJSON, _ := json.Marshal(modelOutput.Extra)
 		ec.logger.Debug("[EinoCallback] Model 输出 Extra",
-			append(ec.traceFields(ctx), zap.String("extra", string(extraJSON)))...,
+			ec.withTraceFields(ctx, zap.String("extra", ec.marshalJSON(modelOutput.Extra)))...,
 		)
 	}
 }
@@ -365,50 +372,48 @@ func (ec *EinoCallbacks) logModelOutput(ctx context.Context, output callbacks.Ca
 // ========== Tool 回调详情 ==========
 
 // logToolInput 记录工具输入详情
-func (ec *EinoCallbacks) logToolInput(ctx context.Context, input callbacks.CallbackInput, info *callbacks.RunInfo) {
+func (ec *EinoCallbacks) logToolInput(ctx context.Context, input callbacks.CallbackInput, _ *callbacks.RunInfo) {
 	toolInput := tool.ConvCallbackInput(input)
 	if toolInput == nil {
 		ec.logger.Debug("[EinoCallback] Tool 输入转换失败",
-			append(ec.traceFields(ctx), zap.String("input_type", fmt.Sprintf("%T", input)))...,
+			ec.withTraceFields(ctx, zap.String("input_type", fmt.Sprintf("%T", input)))...,
 		)
 		return
 	}
 
 	ec.logger.Info("[EinoCallback] Tool 输入参数",
-		append(ec.traceFields(ctx), zap.String("arguments", toolInput.ArgumentsInJSON))...,
+		ec.withTraceFields(ctx, zap.String("arguments", toolInput.ArgumentsInJSON))...,
 	)
 
 	if len(toolInput.Extra) > 0 {
-		extraJSON, _ := json.Marshal(toolInput.Extra)
 		ec.logger.Debug("[EinoCallback] Tool 输入 Extra",
-			append(ec.traceFields(ctx), zap.String("extra", string(extraJSON)))...,
+			ec.withTraceFields(ctx, zap.String("extra", ec.marshalJSON(toolInput.Extra)))...,
 		)
 	}
 }
 
 // logToolOutput 记录工具输出详情
-func (ec *EinoCallbacks) logToolOutput(ctx context.Context, output callbacks.CallbackOutput, info *callbacks.RunInfo) {
+func (ec *EinoCallbacks) logToolOutput(ctx context.Context, output callbacks.CallbackOutput, _ *callbacks.RunInfo) {
 	toolOutput := tool.ConvCallbackOutput(output)
 	if toolOutput == nil {
 		ec.logger.Debug("[EinoCallback] Tool 输出转换失败",
-			append(ec.traceFields(ctx), zap.String("output_type", fmt.Sprintf("%T", output)))...,
+			ec.withTraceFields(ctx, zap.String("output_type", fmt.Sprintf("%T", output)))...,
 		)
 		return
 	}
 
 	ec.logger.Info("[EinoCallback] Tool 输出响应",
-		append(ec.traceFields(ctx), zap.Int("response_length", len(toolOutput.Response)))...,
+		ec.withTraceFields(ctx, zap.Int("response_length", len(toolOutput.Response)))...,
 	)
 
 	// 在调试级别下记录完整响应
 	ec.logger.Debug("[EinoCallback] Tool 输出响应详情",
-		append(ec.traceFields(ctx), zap.String("response", toolOutput.Response))...,
+		ec.withTraceFields(ctx, zap.String("response", toolOutput.Response))...,
 	)
 
 	if len(toolOutput.Extra) > 0 {
-		extraJSON, _ := json.Marshal(toolOutput.Extra)
 		ec.logger.Debug("[EinoCallback] Tool 输出 Extra",
-			append(ec.traceFields(ctx), zap.String("extra", string(extraJSON)))...,
+			ec.withTraceFields(ctx, zap.String("extra", ec.marshalJSON(toolOutput.Extra)))...,
 		)
 	}
 }
@@ -418,7 +423,7 @@ func (ec *EinoCallbacks) logToolOutput(ctx context.Context, output callbacks.Cal
 // logGenericInput 记录通用输入详情
 func (ec *EinoCallbacks) logGenericInput(ctx context.Context, input callbacks.CallbackInput, info *callbacks.RunInfo) {
 	ec.logger.Debug("[EinoCallback] 通用输入",
-		append(ec.traceFields(ctx),
+		ec.withTraceFields(ctx,
 			zap.String("component", string(info.Component)),
 			zap.String("input_type", fmt.Sprintf("%T", input)),
 			zap.String("input", fmt.Sprintf("%+v", input)),
@@ -429,7 +434,7 @@ func (ec *EinoCallbacks) logGenericInput(ctx context.Context, input callbacks.Ca
 // logGenericOutput 记录通用输出详情
 func (ec *EinoCallbacks) logGenericOutput(ctx context.Context, output callbacks.CallbackOutput, info *callbacks.RunInfo) {
 	ec.logger.Debug("[EinoCallback] 通用输出",
-		append(ec.traceFields(ctx),
+		ec.withTraceFields(ctx,
 			zap.String("component", string(info.Component)),
 			zap.String("output_type", fmt.Sprintf("%T", output)),
 			zap.String("output", fmt.Sprintf("%+v", output)),

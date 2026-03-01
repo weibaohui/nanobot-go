@@ -44,11 +44,12 @@ type Loop struct {
 	hookManager         *hooks.HookManager
 	hookCallback        func(eventType events.EventType, data map[string]interface{}) // Hook 回调
 
-	interruptManager *InterruptManager
-	supervisor       *SupervisorAgent
-	masterAgent      *MasterAgent
-	enableSupervisor bool
-	taskManager      *AgentTaskManager
+	interruptManager   *InterruptManager
+	supervisor         *SupervisorAgent
+	masterAgent        *MasterAgent
+	enableSupervisor   bool
+	taskManager        *AgentTaskManager
+	contextSetterTools []string // 需要设置上下文的工具名列表
 }
 
 // LoopConfig Loop 配置
@@ -91,6 +92,7 @@ func NewLoop(cfg *LoopConfig) *Loop {
 		logger:              logger,
 		hookManager:         cfg.HookManager,
 		hookCallback:        cfg.HookCallback,
+		contextSetterTools:  []string{"message", "cron", "ask_user", "start_task"},
 	}
 
 	loop.interruptManager = NewInterruptManager(cfg.MessageBus, logger)
@@ -347,20 +349,12 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 
 }
 
-// updateToolContext 更新工具上下文
+// updateToolContext 更新需要上下文的工具
 func (l *Loop) updateToolContext(channel, chatID string) {
-	if mt, ok := l.tools.Get("message").(tools.ContextSetter); ok {
-		mt.SetContext(channel, chatID)
-	}
-
-	if ct, ok := l.tools.Get("cron").(tools.ContextSetter); ok {
-		ct.SetContext(channel, chatID)
-	}
-	if at, ok := l.tools.Get("ask_user").(tools.ContextSetter); ok {
-		at.SetContext(channel, chatID)
-	}
-	if st, ok := l.tools.Get("start_task").(tools.ContextSetter); ok {
-		st.SetContext(channel, chatID)
+	for _, toolName := range l.contextSetterTools {
+		if tool, ok := l.tools.Get(toolName).(tools.ContextSetter); ok {
+			tool.SetContext(channel, chatID)
+		}
 	}
 }
 
