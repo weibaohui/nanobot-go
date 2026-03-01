@@ -3,6 +3,7 @@ package agent
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/cloudwego/eino/adk"
 )
@@ -47,4 +48,22 @@ func WrapError(err error, format string, args ...any) error {
 		return nil
 	}
 	return fmt.Errorf("%s: %w", fmt.Sprintf(format, args...), err)
+}
+
+// IsInterruptError 检查是否是中断错误
+func IsInterruptError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	if strings.HasPrefix(msg, "INTERRUPT:") {
+		return true
+	}
+	if strings.Contains(msg, "interrupt signal:") {
+		return true
+	}
+	if strings.Contains(msg, "interrupt happened") {
+		return true
+	}
+	return false
 }

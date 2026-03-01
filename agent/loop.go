@@ -328,7 +328,7 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 
 	if err != nil {
 		// 检查是否是中断
-		if isInterruptError(err) {
+		if IsInterruptError(err) {
 			return nil
 		}
 		// 非中断错误：如果 response 包含错误信息（由 interruptible 构造），直接发送

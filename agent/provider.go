@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
+	"github.com/weibaohui/nanobot-go/agent/hooks/trace"
 	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
@@ -130,6 +130,13 @@ func (a *ChatModelAdapter) isKnownSkill(name string) bool {
 
 // Generate produces a complete model response
 func (a *ChatModelAdapter) Generate(ctx context.Context, input []*schema.Message, opts ...model.Option) (*schema.Message, error) {
+	// 创建 LLM 调用 span
+	ctx, llmSpanID := trace.StartSpan(ctx)
+	a.logger.Debug("LLM 调用开始",
+		zap.String("span_id", llmSpanID),
+		zap.Int("message_count", len(input)),
+	)
+
 	// 调试：记录输入消息
 	if a.logger != nil && len(input) > 0 {
 		for i, msg := range input {
@@ -156,60 +163,15 @@ func (a *ChatModelAdapter) Generate(ctx context.Context, input []*schema.Message
 		return nil, err
 	}
 
+	a.logger.Debug("LLM 调用完成",
+		zap.String("span_id", llmSpanID),
+		zap.Int("tool_calls", len(response.ToolCalls)),
+	)
+
 	// 拦截并转换工具调用
 	a.interceptToolCalls(response)
 
 	return response, nil
-}
-
-// recordTokenUsage 记录 token 用量到 session
-func (a *ChatModelAdapter) recordTokenUsage(ctx context.Context, response *schema.Message) {
-	if a.sessions == nil {
-		a.logger.Info("Session 为Nil ，跳过记录TokenUsage")
-		return
-	}
-
-	sessionKey := ctx.Value(SessionKeyContextKey)
-	if sessionKey == nil {
-		return
-	}
-
-	key, ok := sessionKey.(string)
-	if !ok || key == "" {
-		return
-	}
-
-	usage := response.ResponseMeta.Usage
-	if usage == nil {
-		return
-	}
-
-	tokenUsage := session.TokenUsage{
-		PromptTokens:     usage.PromptTokens,
-		CompletionTokens: usage.CompletionTokens,
-		TotalTokens:      usage.TotalTokens,
-	}
-
-	sess := a.sessions.GetOrCreate(key)
-
-	content := response.Content
-	role := "assistant"
-	if len(response.ToolCalls) > 0 {
-		role = "tool"
-		//拼接所有的 Name(Arguments)
-		var toolCallsStr strings.Builder
-		for _, toolCall := range response.ToolCalls {
-			fmt.Fprintf(&toolCallsStr, "%s(%s)", toolCall.Function.Name, toolCall.Function.Arguments)
-		}
-		content = fmt.Sprintf("%s", toolCallsStr.String())
-	}
-
-	sess.AddMessageWithTokenUsage(role, content, tokenUsage)
-	if err := a.sessions.Save(sess); err != nil {
-		if a.logger != nil {
-			a.logger.Error("保存 token 用量失败", zap.Error(err))
-		}
-	}
 }
 
 // interceptToolCall 拦截工具调用，如果工具不存在则转换为技能调用
@@ -294,12 +256,6 @@ func (a *ChatModelAdapter) interceptToolCalls(msg *schema.Message) {
 			"arguments": tc.Function.Arguments,
 		})
 
-		if a.logger != nil {
-			a.logger.Info("工具调用",
-				zap.String("名称", tc.Function.Name),
-				zap.String("参数", tc.Function.Arguments),
-			)
-		}
 		newName, newArgs, err := a.interceptToolCall(tc.Function.Name, tc.Function.Arguments)
 
 		if err != nil {
@@ -312,14 +268,6 @@ func (a *ChatModelAdapter) interceptToolCalls(msg *schema.Message) {
 				"new_name":      newName,
 				"new_args":      newArgs,
 			})
-
-			if a.logger != nil {
-				a.logger.Info("工具调用被拦截",
-					zap.String("原始名称", tc.Function.Name),
-					zap.String("新名称", newName),
-					zap.String("新参数", newArgs),
-				)
-			}
 			// 工具名被修改了，更新工具调用
 			msg.ToolCalls[i].Function.Name = newName
 			msg.ToolCalls[i].Function.Arguments = newArgs

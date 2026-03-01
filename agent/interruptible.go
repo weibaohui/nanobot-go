@@ -11,6 +11,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 	hooks "github.com/weibaohui/nanobot-go/agent/hooks"
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
+	"github.com/weibaohui/nanobot-go/agent/hooks/trace"
 	"github.com/weibaohui/nanobot-go/agent/tools/askuser"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/config"
@@ -156,6 +157,13 @@ func (i *interruptible) Process(ctx context.Context, msg *bus.InboundMessage, bu
 	// 同时存储为 "session_key" 供 SessionObserver 使用
 	ctx = context.WithValue(ctx, "session_key", sessionKey)
 
+	// 创建 Agent 处理 span
+	ctx, agentSpanID := trace.StartSpan(ctx)
+	i.logger.Debug("Agent 处理开始",
+		zap.String("agent_type", i.agentType),
+		zap.String("span_id", agentSpanID),
+	)
+
 	// 检查是否有待处理的中断需要响应
 	if pendingInterrupt := i.interruptManager.GetPendingInterrupt(sessionKey); pendingInterrupt != nil {
 		return i.processInterrupted(ctx, sess, msg, pendingInterrupt, buildMessagesFunc)
@@ -173,7 +181,7 @@ func (i *interruptible) Process(ctx context.Context, msg *bus.InboundMessage, bu
 
 	response, err := i.processNormal(ctx, messages, checkpointID, msg)
 	if err != nil {
-		if isInterruptError(err) {
+		if IsInterruptError(err) {
 			return "", err
 		}
 		// 非中断错误：返回错误信息作为响应和错误，让上层处理
@@ -227,7 +235,7 @@ func (i *interruptible) processInterrupted(ctx context.Context, sess *session.Se
 	// 恢复执行
 	result, err := i.Resume(ctx, resumeCheckpointID, resumeParams, resumeMsg)
 	if err != nil {
-		if isInterruptError(err) {
+		if IsInterruptError(err) {
 			return "", err
 		}
 		// 返回错误信息作为响应和错误，让上层处理
@@ -255,6 +263,14 @@ func (i *interruptible) buildResumePayload(isAskUser bool, userAnswer string) an
 
 // processNormal 普通模式处理
 func (i *interruptible) processNormal(ctx context.Context, messages []*schema.Message, checkpointID string, msg *bus.InboundMessage) (string, error) {
+	// 创建 ADK 执行 span
+	ctx, adkSpanID := trace.StartSpan(ctx)
+	i.logger.Debug("ADK Runner 执行开始",
+		zap.String("agent_type", i.agentType),
+		zap.String("span_id", adkSpanID),
+		zap.String("checkpoint_id", checkpointID),
+	)
+
 	iter := i.adkRunner.Run(ctx, messages, adk.WithCheckPointID(checkpointID))
 
 	var response string
@@ -297,6 +313,14 @@ func (i *interruptible) Resume(ctx context.Context, checkpointID string, resumeP
 
 	sessionKey := msg.SenderID
 	ctx = context.WithValue(ctx, SessionKeyContextKey, sessionKey)
+
+	// 创建恢复执行 span
+	ctx, resumeSpanID := trace.StartSpan(ctx)
+	i.logger.Debug("恢复执行开始",
+		zap.String("agent_type", i.agentType),
+		zap.String("span_id", resumeSpanID),
+		zap.String("checkpoint_id", checkpointID),
+	)
 
 	iter, err := i.adkRunner.ResumeWithParams(ctx, checkpointID, resumeParams)
 	if err != nil {

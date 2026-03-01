@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"context"
 	"encoding/json"
 	"testing"
 
@@ -295,37 +294,6 @@ func TestChatModelAdapter_InterceptToolCalls(t *testing.T) {
 		if msg.ToolCalls[1].Function.Name != "use_skill" {
 			t.Errorf("技能应被转换为 use_skill")
 		}
-	})
-}
-
-// TestChatModelAdapter_RecordTokenUsage 测试记录 Token 用量
-func TestChatModelAdapter_RecordTokenUsage(t *testing.T) {
-	t.Run("无 session manager", func(t *testing.T) {
-		adapter := &ChatModelAdapter{
-			logger: zap.NewNop(),
-		}
-
-		msg := &schema.Message{
-			Role:    schema.Assistant,
-			Content: "Hello",
-		}
-
-		adapter.recordTokenUsage(context.Background(), msg)
-	})
-
-	t.Run("无 session key", func(t *testing.T) {
-		adapter := &ChatModelAdapter{
-			logger:   zap.NewNop(),
-			sessions: nil,
-		}
-
-		ctx := context.Background()
-		msg := &schema.Message{
-			Role:    schema.Assistant,
-			Content: "Hello",
-		}
-
-		adapter.recordTokenUsage(ctx, msg)
 	})
 }
 
