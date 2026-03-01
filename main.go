@@ -22,6 +22,7 @@ import (
 	"github.com/weibaohui/nanobot-go/cron"
 	"github.com/weibaohui/nanobot-go/heartbeat"
 	"github.com/weibaohui/nanobot-go/session"
+	"github.com/weibaohui/nanobot-go/token_usage"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -108,6 +109,7 @@ func runGateway(cmd *cobra.Command, args []string) {
 
 	dataDir := filepath.Join(workspacePath, ".nanobot")
 	sessionManager := session.NewManager(cfg, dataDir)
+	tokenUsageManager := token_usage.NewTokenUsageManager(dataDir)
 
 	// 创建统一的 Hook 系统
 	hookSystem := hooks.NewHookManager(logger, true)
@@ -116,6 +118,11 @@ func runGateway(cmd *cobra.Command, args []string) {
 	sessionObserver := observers.NewSessionObserver(sessionManager, logger, nil)
 	hookSystem.Register(sessionObserver)
 	logger.Info("会话观察器已注册到 Hook 系统")
+
+	// 注册 TokenUsageObserver - 负责记录 Token 使用量
+	tokenUsageObserver := observers.NewTokenUsageObserver(tokenUsageManager, logger, nil)
+	hookSystem.Register(tokenUsageObserver)
+	logger.Info("Token 使用量观察器已注册到 Hook 系统")
 
 	// 注册 LoggingObserver
 	loggingObserver := observers.NewLoggingObserver(logger, nil)

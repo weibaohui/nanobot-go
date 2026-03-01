@@ -9,61 +9,6 @@ import (
 	"github.com/weibaohui/nanobot-go/config"
 )
 
-// TestTokenUsage_Add 测试 Token 用量累加
-func TestTokenUsage_Add(t *testing.T) {
-	tests := []struct {
-		name     string
-		initial  TokenUsage
-		add      TokenUsage
-		expected TokenUsage
-	}{
-		{
-			name:     "基本累加",
-			initial:  TokenUsage{PromptTokens: 100, CompletionTokens: 50, TotalTokens: 150},
-			add:      TokenUsage{PromptTokens: 200, CompletionTokens: 100, TotalTokens: 300},
-			expected: TokenUsage{PromptTokens: 300, CompletionTokens: 150, TotalTokens: 450},
-		},
-		{
-			name:     "累加零值",
-			initial:  TokenUsage{PromptTokens: 100, CompletionTokens: 50, TotalTokens: 150},
-			add:      TokenUsage{},
-			expected: TokenUsage{PromptTokens: 100, CompletionTokens: 50, TotalTokens: 150},
-		},
-		{
-			name:     "累加推理和缓存token",
-			initial:  TokenUsage{ReasoningTokens: 50, CachedTokens: 20},
-			add:      TokenUsage{ReasoningTokens: 30, CachedTokens: 10},
-			expected: TokenUsage{ReasoningTokens: 80, CachedTokens: 30},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.initial.Add(tt.add)
-
-			if tt.initial.PromptTokens != tt.expected.PromptTokens {
-				t.Errorf("PromptTokens = %d, 期望 %d", tt.initial.PromptTokens, tt.expected.PromptTokens)
-			}
-
-			if tt.initial.CompletionTokens != tt.expected.CompletionTokens {
-				t.Errorf("CompletionTokens = %d, 期望 %d", tt.initial.CompletionTokens, tt.expected.CompletionTokens)
-			}
-
-			if tt.initial.TotalTokens != tt.expected.TotalTokens {
-				t.Errorf("TotalTokens = %d, 期望 %d", tt.initial.TotalTokens, tt.expected.TotalTokens)
-			}
-
-			if tt.initial.ReasoningTokens != tt.expected.ReasoningTokens {
-				t.Errorf("ReasoningTokens = %d, 期望 %d", tt.initial.ReasoningTokens, tt.expected.ReasoningTokens)
-			}
-
-			if tt.initial.CachedTokens != tt.expected.CachedTokens {
-				t.Errorf("CachedTokens = %d, 期望 %d", tt.initial.CachedTokens, tt.expected.CachedTokens)
-			}
-		})
-	}
-}
-
 // TestSession_AddMessage 测试添加消息到会话
 func TestSession_AddMessage(t *testing.T) {
 	session := &Session{
@@ -93,59 +38,6 @@ func TestSession_AddMessage(t *testing.T) {
 
 	if session.Messages[0].Timestamp.IsZero() {
 		t.Error("消息时间戳不应该为零值")
-	}
-}
-
-// TestSession_AddMessageWithTokenUsage 测试添加带 Token 用量的消息
-func TestSession_AddMessageWithTokenUsage(t *testing.T) {
-	session := &Session{
-		Key:       "test-session",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-
-	usage := TokenUsage{
-		PromptTokens:     100,
-		CompletionTokens: 50,
-		TotalTokens:      150,
-	}
-
-	session.AddMessageWithTokenUsage("user", "测试消息", usage)
-
-	if len(session.Messages) != 1 {
-		t.Fatalf("消息数量 = %d, 期望 1", len(session.Messages))
-	}
-
-	if session.Messages[0].TokenUsage == nil {
-		t.Fatal("TokenUsage 不应该为 nil")
-	}
-
-	if session.Messages[0].TokenUsage.PromptTokens != 100 {
-		t.Errorf("PromptTokens = %d, 期望 100", session.Messages[0].TokenUsage.PromptTokens)
-	}
-
-	if session.TokenUsage.PromptTokens != 100 {
-		t.Errorf("Session 级别 PromptTokens = %d, 期望 100", session.TokenUsage.PromptTokens)
-	}
-}
-
-// TestSession_UpdateTokenUsage 测试更新 Session 级别的 Token 用量
-func TestSession_UpdateTokenUsage(t *testing.T) {
-	session := &Session{
-		Key:       "test-session",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-
-	session.UpdateTokenUsage(TokenUsage{PromptTokens: 100, CompletionTokens: 50})
-	session.UpdateTokenUsage(TokenUsage{PromptTokens: 50, CompletionTokens: 30})
-
-	if session.TokenUsage.PromptTokens != 150 {
-		t.Errorf("PromptTokens = %d, 期望 150", session.TokenUsage.PromptTokens)
-	}
-
-	if session.TokenUsage.CompletionTokens != 80 {
-		t.Errorf("CompletionTokens = %d, 期望 80", session.TokenUsage.CompletionTokens)
 	}
 }
 
@@ -421,33 +313,6 @@ func TestManager_GetSessionPath(t *testing.T) {
 	}
 }
 
-// TestSession_TokenUsageAccumulation 测试 Token 用量累加
-func TestSession_TokenUsageAccumulation(t *testing.T) {
-	session := &Session{
-		Key:       "test-session",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-
-	usage1 := TokenUsage{PromptTokens: 100, CompletionTokens: 50, TotalTokens: 150}
-	usage2 := TokenUsage{PromptTokens: 200, CompletionTokens: 100, TotalTokens: 300}
-
-	session.AddMessageWithTokenUsage("user", "消息1", usage1)
-	session.AddMessageWithTokenUsage("assistant", "回复1", usage2)
-
-	if session.TokenUsage.PromptTokens != 300 {
-		t.Errorf("累计 PromptTokens = %d, 期望 300", session.TokenUsage.PromptTokens)
-	}
-
-	if session.TokenUsage.CompletionTokens != 150 {
-		t.Errorf("累计 CompletionTokens = %d, 期望 150", session.TokenUsage.CompletionTokens)
-	}
-
-	if session.TokenUsage.TotalTokens != 450 {
-		t.Errorf("累计 TotalTokens = %d, 期望 450", session.TokenUsage.TotalTokens)
-	}
-}
-
 // TestManager_LoadNonexistentSession 测试加载不存在的会话
 func TestManager_LoadNonexistentSession(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -474,21 +339,7 @@ func TestManager_SaveAndLoadWithAllFields(t *testing.T) {
 				Role:      "user",
 				Content:   "测试消息",
 				Timestamp: now,
-				TokenUsage: &TokenUsage{
-					PromptTokens:     100,
-					CompletionTokens: 50,
-					TotalTokens:      150,
-					ReasoningTokens:  20,
-					CachedTokens:     10,
-				},
 			},
-		},
-		TokenUsage: TokenUsage{
-			PromptTokens:     100,
-			CompletionTokens: 50,
-			TotalTokens:      150,
-			ReasoningTokens:  20,
-			CachedTokens:     10,
 		},
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -510,18 +361,6 @@ func TestManager_SaveAndLoadWithAllFields(t *testing.T) {
 
 	if len(loaded.Messages) != 1 {
 		t.Fatalf("消息数量 = %d, 期望 1", len(loaded.Messages))
-	}
-
-	if loaded.Messages[0].TokenUsage == nil {
-		t.Fatal("消息 TokenUsage 不应该为 nil")
-	}
-
-	if loaded.Messages[0].TokenUsage.ReasoningTokens != 20 {
-		t.Errorf("ReasoningTokens = %d, 期望 20", loaded.Messages[0].TokenUsage.ReasoningTokens)
-	}
-
-	if loaded.TokenUsage.CachedTokens != 10 {
-		t.Errorf("Session CachedTokens = %d, 期望 10", loaded.TokenUsage.CachedTokens)
 	}
 }
 
@@ -567,50 +406,5 @@ func TestSession_AddMessageWithTrace(t *testing.T) {
 
 	if session.Messages[0].ParentSpanID != "parent-span-789" {
 		t.Errorf("ParentSpanID = %q, 期望 parent-span-789", session.Messages[0].ParentSpanID)
-	}
-}
-
-// TestSession_AddMessageWithTokenUsageAndTrace 测试添加带 Token 用量和链路追踪信息的消息
-func TestSession_AddMessageWithTokenUsageAndTrace(t *testing.T) {
-	session := &Session{
-		Key:       "test-session",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-
-	usage := TokenUsage{
-		PromptTokens:     100,
-		CompletionTokens: 50,
-		TotalTokens:      150,
-	}
-
-	session.AddMessageWithTokenUsageAndTrace("user", "测试消息", usage, "trace-123", "span-456", "parent-span-789")
-
-	if len(session.Messages) != 1 {
-		t.Fatalf("消息数量 = %d, 期望 1", len(session.Messages))
-	}
-
-	if session.Messages[0].TokenUsage == nil {
-		t.Fatal("TokenUsage 不应该为 nil")
-	}
-
-	if session.Messages[0].TokenUsage.PromptTokens != 100 {
-		t.Errorf("PromptTokens = %d, 期望 100", session.Messages[0].TokenUsage.PromptTokens)
-	}
-
-	if session.Messages[0].TraceID != "trace-123" {
-		t.Errorf("TraceID = %q, 期望 trace-123", session.Messages[0].TraceID)
-	}
-
-	if session.Messages[0].SpanID != "span-456" {
-		t.Errorf("SpanID = %q, 期望 span-456", session.Messages[0].SpanID)
-	}
-
-	if session.Messages[0].ParentSpanID != "parent-span-789" {
-		t.Errorf("ParentSpanID = %q, 期望 parent-span-789", session.Messages[0].ParentSpanID)
-	}
-
-	if session.TokenUsage.PromptTokens != 100 {
-		t.Errorf("Session 级别 PromptTokens = %d, 期望 100", session.TokenUsage.PromptTokens)
 	}
 }

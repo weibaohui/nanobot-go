@@ -13,42 +13,22 @@ import (
 	"go.uber.org/zap"
 )
 
-// TokenUsage Token 用量统计
-type TokenUsage struct {
-	PromptTokens     int `json:"prompt_tokens"`     // 输入 token 数量
-	CompletionTokens int `json:"completion_tokens"` // 输出 token 数量
-	TotalTokens      int `json:"total_tokens"`      // 总 token 数量
-	ReasoningTokens  int `json:"reasoning_tokens"`  // 推理 token 数量 (o1 等模型)
-	CachedTokens     int `json:"cached_tokens"`     // 缓存 token 数量 (缓存命中)
-}
-
-// Add 将另一个 TokenUsage 累加到当前用量
-func (t *TokenUsage) Add(other TokenUsage) {
-	t.PromptTokens += other.PromptTokens
-	t.CompletionTokens += other.CompletionTokens
-	t.TotalTokens += other.TotalTokens
-	t.ReasoningTokens += other.ReasoningTokens
-	t.CachedTokens += other.CachedTokens
-}
-
 // Message 会话消息
 type Message struct {
-	Role         string      `json:"role"`
-	Content      string      `json:"content"`
-	Timestamp    time.Time   `json:"timestamp"`
-	TokenUsage   *TokenUsage `json:"token_usage,omitempty"`    // 该消息对应的 token 用量
-	TraceID      string      `json:"trace_id,omitempty"`       // 链路追踪 ID
-	SpanID       string      `json:"span_id,omitempty"`        // 跨度 ID
-	ParentSpanID string      `json:"parent_span_id,omitempty"` // 父跨度 ID
+	Role         string    `json:"role"`
+	Content      string    `json:"content"`
+	Timestamp    time.Time `json:"timestamp"`
+	TraceID      string    `json:"trace_id,omitempty"`       // 链路追踪 ID
+	SpanID       string    `json:"span_id,omitempty"`        // 跨度 ID
+	ParentSpanID string    `json:"parent_span_id,omitempty"` // 父跨度 ID
 }
 
 // Session 会话
 type Session struct {
-	Key        string     `json:"key"`
-	Messages   []Message  `json:"messages"`
-	TokenUsage TokenUsage `json:"token_usage"` // 累加的 token 用量
-	CreatedAt  time.Time  `json:"createdAt"`
-	UpdatedAt  time.Time  `json:"updatedAt"`
+	Key       string     `json:"key"`
+	Messages  []Message  `json:"messages"`
+	CreatedAt time.Time  `json:"createdAt"`
+	UpdatedAt time.Time  `json:"updatedAt"`
 }
 
 // AddMessage 添加消息到会话
@@ -71,39 +51,6 @@ func (s *Session) AddMessageWithTrace(role, content, traceID, spanID, parentSpan
 		SpanID:       spanID,
 		ParentSpanID: parentSpanID,
 	})
-	s.UpdatedAt = time.Now().UTC()
-}
-
-// AddMessageWithTokenUsage 添加消息到会话并记录 token 用量
-func (s *Session) AddMessageWithTokenUsage(role, content string, usage TokenUsage) {
-	s.Messages = append(s.Messages, Message{
-		Role:       role,
-		Content:    content,
-		Timestamp:  time.Now().UTC(),
-		TokenUsage: &usage,
-	})
-	s.TokenUsage.Add(usage)
-	s.UpdatedAt = time.Now().UTC()
-}
-
-// AddMessageWithTokenUsageAndTrace 添加消息到会话并记录 token 用量和链路追踪信息
-func (s *Session) AddMessageWithTokenUsageAndTrace(role, content string, usage TokenUsage, traceID, spanID, parentSpanID string) {
-	s.Messages = append(s.Messages, Message{
-		Role:         role,
-		Content:      content,
-		Timestamp:    time.Now().UTC(),
-		TokenUsage:   &usage,
-		TraceID:      traceID,
-		SpanID:       spanID,
-		ParentSpanID: parentSpanID,
-	})
-	s.TokenUsage.Add(usage)
-	s.UpdatedAt = time.Now().UTC()
-}
-
-// UpdateTokenUsage 更新 Session 级别的累加 token 用量
-func (s *Session) UpdateTokenUsage(usage TokenUsage) {
-	s.TokenUsage.Add(usage)
 	s.UpdatedAt = time.Now().UTC()
 }
 

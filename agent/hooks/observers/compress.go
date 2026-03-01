@@ -74,7 +74,6 @@ func (co *CompressObserver) OnEvent(ctx context.Context, event hookevents.Event)
 	co.logger.Info("触发对话压缩",
 		zap.String("session_key", sess.Key),
 		zap.Int("messages", len(sess.Messages)),
-		zap.Int("tokens", sess.TokenUsage.TotalTokens),
 	)
 
 	if err := co.compressSession(ctx, sess); err != nil {
@@ -99,19 +98,13 @@ func (co *CompressObserver) OnEvent(ctx context.Context, event hookevents.Event)
 // shouldCompress 检查是否满足压缩触发条件
 func (co *CompressObserver) shouldCompress(sess *session.Session) bool {
 	messageCount := len(sess.Messages)
-	tokenCount := sess.TokenUsage.TotalTokens
 
 	minMessages := co.cfg.Compress.MinMessages
 	if minMessages <= 0 {
 		minMessages = 20
 	}
 
-	minTokens := co.cfg.Compress.MinTokens
-	if minTokens <= 0 {
-		minTokens = 50000
-	}
-
-	return messageCount >= minMessages && tokenCount >= minTokens
+	return messageCount >= minMessages
 }
 
 // compressSession 执行压缩流程
@@ -238,9 +231,6 @@ func (co *CompressObserver) cleanupSession(sess *session.Session) {
 	if len(sess.Messages) > maxHistory {
 		sess.Messages = sess.Messages[len(sess.Messages)-maxHistory:]
 	}
-
-	// 重置 Token 用量统计
-	sess.TokenUsage = session.TokenUsage{}
 }
 
 // CreateCompressLLM 创建压缩专用的 LLM 实例

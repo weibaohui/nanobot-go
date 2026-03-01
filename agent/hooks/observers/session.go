@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observer"
@@ -19,8 +20,8 @@ type SessionObserver struct {
 	sessions *session.Manager
 	logger   *zap.Logger
 
-	// 去重：记录最近保存的消息（基于 role + content + span_id + trace_id 组合去重）
-	recentMessages map[string]map[string]struct{} // sessionKey -> messageKey -> struct{}
+	// 去重：记录最近保存的消息（基于 role + content + 秒级时间戳）
+	recentMessages map[string]map[string]time.Time // sessionKey -> messageKey -> timestamp
 	mu             sync.RWMutex
 }
 
@@ -33,7 +34,7 @@ func NewSessionObserver(sessions *session.Manager, logger *zap.Logger, filter *o
 		BaseObserver:   observer.NewBaseObserver("session", filter),
 		sessions:       sessions,
 		logger:         logger,
-		recentMessages: make(map[string]map[string]struct{}),
+		recentMessages: make(map[string]map[string]time.Time),
 	}
 }
 
@@ -48,9 +49,9 @@ func (so *SessionObserver) OnEvent(ctx context.Context, event events.Event) erro
 	return nil
 }
 
-// isDuplicate 检查是否是重复消息（基于 role + content + span_id + trace_id）
-func (so *SessionObserver) isDuplicate(sessionKey, role, content, traceID, spanID string) bool {
-	messageKey := so.buildMessageKey(role, content, traceID, spanID)
+// isDuplicate 检查是否是重复消息（基于 role + content + 秒级时间戳）
+func (so *SessionObserver) isDuplicate(sessionKey, role, content string, timestamp time.Time) bool {
+	messageKey := so.buildMessageKey(role, content)
 
 	so.mu.RLock()
 	messages, exists := so.recentMessages[sessionKey]
@@ -61,27 +62,52 @@ func (so *SessionObserver) isDuplicate(sessionKey, role, content, traceID, spanI
 	}
 
 	so.mu.RLock()
-	_, exists = messages[messageKey]
+	lastTime, exists := messages[messageKey]
 	so.mu.RUnlock()
 
-	return exists
+	if !exists {
+		return false
+	}
+
+	// 如果在1秒内（包含），认为是重复
+	return timestamp.Sub(lastTime) < time.Second
 }
 
-// buildMessageKey 构建消息唯一键（基于 role + content + span_id + trace_id）
-func (so *SessionObserver) buildMessageKey(role, content, traceID, spanID string) string {
-	return role + "|" + content + "|" + traceID + "|" + spanID
+// buildMessageKey 构建消息唯一键（基于 role + content）
+func (so *SessionObserver) buildMessageKey(role, content string) string {
+	return role + "|" + content
 }
 
-// recordMessage 记录消息用于去重（基于 role + content + span_id + trace_id）
-func (so *SessionObserver) recordMessage(sessionKey, role, content, traceID, spanID string) {
-	messageKey := so.buildMessageKey(role, content, traceID, spanID)
+// recordMessage 记录消息用于去重（基于 role + content + 秒级时间戳）
+func (so *SessionObserver) recordMessage(sessionKey, role, content string, timestamp time.Time) {
+	messageKey := so.buildMessageKey(role, content)
 
 	so.mu.Lock()
+	defer so.mu.Unlock()
+
 	if so.recentMessages[sessionKey] == nil {
-		so.recentMessages[sessionKey] = make(map[string]struct{})
+		so.recentMessages[sessionKey] = make(map[string]time.Time)
 	}
-	so.recentMessages[sessionKey][messageKey] = struct{}{}
-	so.mu.Unlock()
+
+	// 记录消息时间
+	so.recentMessages[sessionKey][messageKey] = timestamp
+
+	// 清理超过1秒的记录
+	so.cleanupExpiredMessages(sessionKey, timestamp)
+}
+
+// cleanupExpiredMessages 清理超过1秒的消息记录
+func (so *SessionObserver) cleanupExpiredMessages(sessionKey string, currentTime time.Time) {
+	messages, exists := so.recentMessages[sessionKey]
+	if !exists {
+		return
+	}
+
+	for key, ts := range messages {
+		if currentTime.Sub(ts) >= time.Second {
+			delete(messages, key)
+		}
+	}
 }
 
 // handlePromptSubmitted 处理 Prompt 提交事件
@@ -96,13 +122,15 @@ func (so *SessionObserver) handlePromptSubmitted(_ context.Context, event events
 		return
 	}
 
-	// 去重检查（基于 role + content + span_id + trace_id）
-	if so.isDuplicate(e.SessionKey, "user", e.UserInput, e.GetTraceID(), e.GetSpanID()) {
+	timestamp := event.GetTimestamp()
+
+	// 去重检查（基于 role + content + 秒级时间戳）
+	if so.isDuplicate(e.SessionKey, "user", e.UserInput, timestamp) {
 		return
 	}
 
 	// 立即记录消息用于去重（防止并发导致重复）
-	so.recordMessage(e.SessionKey, "user", e.UserInput, e.GetTraceID(), e.GetSpanID())
+	so.recordMessage(e.SessionKey, "user", e.UserInput, timestamp)
 
 	sess := so.sessions.GetOrCreate(e.SessionKey)
 	sess.AddMessageWithTrace("user", e.UserInput, e.GetTraceID(), e.GetSpanID(), e.GetParentSpanID())
@@ -148,8 +176,8 @@ func (so *SessionObserver) handleLLMCallEnd(ctx context.Context, event events.Ev
 		return
 	}
 
-	// 去重检查（基于 role + content + span_id + trace_id）
-	if so.isDuplicate(sessionKey, role, content, e.GetTraceID(), e.GetSpanID()) {
+	// 去重检查（基于 role + content + 秒级时间戳）
+	if so.isDuplicate(sessionKey, role, content, event.GetTimestamp()) {
 		// so.logger.Debug("跳过重复消息（相同 role+content+trace_id+span_id）",
 		// 	zap.String("session_key", sessionKey),
 		// 	zap.String("role", role),
@@ -166,24 +194,12 @@ func (so *SessionObserver) handleLLMCallEnd(ctx context.Context, event events.Ev
 	}
 
 	// 立即记录消息用于去重（防止并发导致重复）
-	so.recordMessage(sessionKey, role, content, e.GetTraceID(), e.GetSpanID())
+	so.recordMessage(sessionKey, role, content, event.GetTimestamp())
 
 	sess := so.sessions.GetOrCreate(sessionKey)
 
-	// 如果有 TokenUsage，使用 AddMessageWithTokenUsageAndTrace（记录到消息级别并累加到 session 级别）
-	if e.TokenUsage != nil {
-		tokenUsage := session.TokenUsage{
-			PromptTokens:     e.TokenUsage.PromptTokens,
-			CompletionTokens: e.TokenUsage.CompletionTokens,
-			TotalTokens:      e.TokenUsage.TotalTokens,
-			ReasoningTokens:  0,
-			CachedTokens:     0,
-		}
-		sess.AddMessageWithTokenUsageAndTrace(role, content, tokenUsage, e.GetTraceID(), e.GetSpanID(), e.GetParentSpanID())
-	} else {
-		// 没有 TokenUsage，使用 AddMessageWithTrace
-		sess.AddMessageWithTrace(role, content, e.GetTraceID(), e.GetSpanID(), e.GetParentSpanID())
-	}
+	// 只记录对话内容，不记录 TokenUsage
+	sess.AddMessageWithTrace(role, content, e.GetTraceID(), e.GetSpanID(), e.GetParentSpanID())
 
 	if err := so.sessions.Save(sess); err != nil {
 		so.logger.Error("保存助手消息到会话失败",
