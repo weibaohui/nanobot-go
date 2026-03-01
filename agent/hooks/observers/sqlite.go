@@ -80,6 +80,11 @@ func initDB(db *sql.DB) error {
 		session_key TEXT,
 		role TEXT,
 		content TEXT,
+		prompt_tokens INTEGER DEFAULT 0,
+		completion_tokens INTEGER DEFAULT 0,
+		total_tokens INTEGER DEFAULT 0,
+		reasoning_tokens INTEGER DEFAULT 0,
+		cached_tokens INTEGER DEFAULT 0,
 		data TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);`
@@ -107,13 +112,15 @@ func initDB(db *sql.DB) error {
 }
 
 // OnEvent 处理事件（实现 Observer 接口）
-// 只处理 PromptSubmitted 和 LLMCallEnd 事件，与 SessionObserver 保持一致
+// 处理 PromptSubmitted、LLMCallEnd 和 ToolCompleted 事件
 func (o *SQLiteObserver) OnEvent(ctx context.Context, event events.Event) error {
 	switch event.GetEventType() {
 	case events.EventPromptSubmitted:
 		return o.handlePromptSubmitted(ctx, event)
 	case events.EventLLMCallEnd:
 		return o.handleLLMCallEnd(ctx, event)
+	case events.EventToolCompleted:
+		return o.handleToolCompleted(ctx, event)
 	}
 	return nil
 }
@@ -187,6 +194,16 @@ func (o *SQLiteObserver) handleLLMCallEnd(ctx context.Context, event events.Even
 		return nil
 	}
 
+	// 提取 Token Usage 信息
+	var promptTokens, completionTokens, totalTokens, reasoningTokens, cachedTokens int
+	if e.TokenUsage != nil {
+		promptTokens = e.TokenUsage.PromptTokens
+		completionTokens = e.TokenUsage.CompletionTokens
+		totalTokens = e.TokenUsage.TotalTokens
+		reasoningTokens = e.TokenUsage.CompletionTokensDetails.ReasoningTokens
+		cachedTokens = e.TokenUsage.PromptTokenDetails.CachedTokens
+	}
+
 	// 序列化事件数据
 	data, err := json.Marshal(event)
 	if err != nil {
@@ -196,29 +213,39 @@ func (o *SQLiteObserver) handleLLMCallEnd(ctx context.Context, event events.Even
 
 	// 插入数据库
 	return o.insertEvent(&eventRecord{
-		TraceID:      baseEvent.TraceID,
-		SpanID:       baseEvent.SpanID,
-		ParentSpanID: baseEvent.ParentSpanID,
-		EventType:    string(baseEvent.EventType),
-		Timestamp:    baseEvent.Timestamp,
-		SessionKey:   sessionKey,
-		Role:         role,
-		Content:      content,
-		Data:         string(data),
+		TraceID:          baseEvent.TraceID,
+		SpanID:           baseEvent.SpanID,
+		ParentSpanID:     baseEvent.ParentSpanID,
+		EventType:        string(baseEvent.EventType),
+		Timestamp:        baseEvent.Timestamp,
+		SessionKey:       sessionKey,
+		Role:             role,
+		Content:          content,
+		PromptTokens:     promptTokens,
+		CompletionTokens: completionTokens,
+		TotalTokens:      totalTokens,
+		ReasoningTokens:  reasoningTokens,
+		CachedTokens:     cachedTokens,
+		Data:             string(data),
 	})
 }
 
 // eventRecord 事件记录
 type eventRecord struct {
-	TraceID      string
-	SpanID       string
-	ParentSpanID string
-	EventType    string
-	Timestamp    time.Time
-	SessionKey   string
-	Role         string
-	Content      string
-	Data         string
+	TraceID          string
+	SpanID           string
+	ParentSpanID     string
+	EventType        string
+	Timestamp        time.Time
+	SessionKey       string
+	Role             string
+	Content          string
+	PromptTokens     int
+	CompletionTokens int
+	TotalTokens      int
+	ReasoningTokens  int
+	CachedTokens     int
+	Data             string
 }
 
 // insertEvent 插入事件到数据库
@@ -227,8 +254,8 @@ func (o *SQLiteObserver) insertEvent(record *eventRecord) error {
 	defer o.mu.Unlock()
 
 	insertSQL := `
-	INSERT INTO events (trace_id, span_id, parent_span_id, event_type, timestamp, session_key, role, content, data)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`
+	INSERT INTO events (trace_id, span_id, parent_span_id, event_type, timestamp, session_key, role, content, prompt_tokens, completion_tokens, total_tokens, reasoning_tokens, cached_tokens, data)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
 
 	_, err := o.db.Exec(insertSQL,
 		record.TraceID,
@@ -239,6 +266,11 @@ func (o *SQLiteObserver) insertEvent(record *eventRecord) error {
 		record.SessionKey,
 		record.Role,
 		record.Content,
+		record.PromptTokens,
+		record.CompletionTokens,
+		record.TotalTokens,
+		record.ReasoningTokens,
+		record.CachedTokens,
 		record.Data,
 	)
 

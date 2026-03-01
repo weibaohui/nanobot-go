@@ -6,6 +6,7 @@
 | ---------- | ---- | ---------------------------------- | ------ |
 | 2026-03-01 | v1.0 | 初始设计文档创建                   | AI     |
 | 2026-03-01 | v1.1 | 简化事件类型，与 SessionObserver 一致 | AI     |
+| 2026-03-01 | v1.2 | 添加 Token Usage 字段              | AI     |
 
 ---
 
@@ -21,6 +22,7 @@
 - 使用纯 Go 实现的 SQLite 驱动（`modernc.org/sqlite`），无需 CGO
 - 提供结构化的数据存储，便于后续查询和分析
 - 提取 role 和 content 字段作为独立列存储
+- 记录 Token Usage 信息，便于统计分析
 
 ### 1.3 边界
 
@@ -47,9 +49,14 @@ CREATE TABLE IF NOT EXISTS events (
     event_type TEXT NOT NULL,
     timestamp DATETIME NOT NULL,
     session_key TEXT,
-    role TEXT,           -- user / assistant / tool
-    content TEXT,        -- 消息内容
-    data TEXT,           -- JSON 格式存储完整事件数据
+    role TEXT,               -- user / assistant / tool
+    content TEXT,            -- 消息内容
+    prompt_tokens INTEGER DEFAULT 0,      -- 输入 token 数量
+    completion_tokens INTEGER DEFAULT 0,  -- 输出 token 数量
+    total_tokens INTEGER DEFAULT 0,       -- 总 token 数量
+    reasoning_tokens INTEGER DEFAULT 0,   -- 推理 token 数量 (o1 等模型)
+    cached_tokens INTEGER DEFAULT 0,      -- 缓存 token 数量 (缓存命中)
+    data TEXT,               -- JSON 格式存储完整事件数据
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -62,33 +69,24 @@ CREATE INDEX IF NOT EXISTS idx_events_role ON events(role);
 
 ### 2.2 事件处理
 
-| 事件类型 | role | content 来源 |
-|---------|------|-------------|
-| PromptSubmitted | user | e.UserInput |
-| LLMCallEnd (无工具调用) | assistant | e.ResponseContent |
-| LLMCallEnd (有工具调用) | tool | 拼接工具调用信息 |
+| 事件类型 | role | content | Token Usage |
+|---------|------|---------|-------------|
+| PromptSubmitted | user | e.UserInput | 无 |
+| LLMCallEnd (无工具调用) | assistant | e.ResponseContent | 有 |
+| LLMCallEnd (有工具调用) | tool | 拼接工具调用信息 | 有 |
 
-### 2.3 核心接口设计
+### 2.3 Token Usage 字段
 
-```go
-// SQLiteObserver SQLite 观察器
-type SQLiteObserver struct {
-    *observer.BaseObserver
-    db     *sql.DB
-    dbPath string
-    logger *zap.Logger
-    mu     sync.RWMutex
-}
-
-// OnEvent 处理事件（只处理 PromptSubmitted 和 LLMCallEnd）
-func (o *SQLiteObserver) OnEvent(ctx context.Context, event events.Event) error
-```
+参考 TokenUsageObserver 的实现，提取以下字段：
+- `prompt_tokens`: 输入 token 数量
+- `completion_tokens`: 输出 token 数量
+- `total_tokens`: 总 token 数量
+- `reasoning_tokens`: 推理 token 数量（如 o1 模型）
+- `cached_tokens`: 缓存命中的 token 数量
 
 ---
 
 ## 3. 依赖
-
-### 3.1 新增依赖
 
 - `modernc.org/sqlite` - 纯 Go 实现的 SQLite 驱动
 

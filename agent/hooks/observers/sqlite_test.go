@@ -191,6 +191,72 @@ func TestSQLiteObserver_OnEvent_LLMCallEnd_WithToolCalls(t *testing.T) {
 	}
 }
 
+func TestSQLiteObserver_OnEvent_LLMCallEnd_WithTokenUsage(t *testing.T) {
+	tmpDir := t.TempDir()
+	obs, err := NewSQLiteObserver(tmpDir, zap.NewNop(), nil)
+	if err != nil {
+		t.Fatalf("创建 SQLiteObserver 失败: %v", err)
+	}
+	defer obs.Close()
+
+	// 创建带 session_key 的 context
+	ctx := context.WithValue(context.Background(), "session_key", "session-001")
+
+	// 创建带 Token Usage 的 LLM 调用结束事件
+	event := events.NewLLMCallEndEvent(
+		"trace-123",
+		"span-456",
+		"parent-span-789",
+		&callbacks.RunInfo{Component: "LLM", Name: "test-model"},
+		&model.CallbackOutput{
+			Message: &schema.Message{
+				Content: "AI 回复内容",
+			},
+			TokenUsage: &model.TokenUsage{
+				PromptTokens:     100,
+				CompletionTokens: 50,
+				TotalTokens:      150,
+				CompletionTokensDetails: model.CompletionTokensDetails{
+					ReasoningTokens: 20,
+				},
+				PromptTokenDetails: model.PromptTokenDetails{
+					CachedTokens: 30,
+				},
+			},
+		},
+		100,
+	)
+
+	// 处理事件
+	if err := obs.OnEvent(ctx, event); err != nil {
+		t.Fatalf("处理事件失败: %v", err)
+	}
+
+	// 验证 Token Usage 字段
+	var promptTokens, completionTokens, totalTokens, reasoningTokens, cachedTokens int
+	row := obs.db.QueryRow(`SELECT prompt_tokens, completion_tokens, total_tokens, reasoning_tokens, cached_tokens
+		FROM events WHERE event_type = ?`, "llm_call_end")
+	if err := row.Scan(&promptTokens, &completionTokens, &totalTokens, &reasoningTokens, &cachedTokens); err != nil {
+		t.Fatalf("查询失败: %v", err)
+	}
+
+	if promptTokens != 100 {
+		t.Errorf("prompt_tokens 错误: got %d, want 100", promptTokens)
+	}
+	if completionTokens != 50 {
+		t.Errorf("completion_tokens 错误: got %d, want 50", completionTokens)
+	}
+	if totalTokens != 150 {
+		t.Errorf("total_tokens 错误: got %d, want 150", totalTokens)
+	}
+	if reasoningTokens != 20 {
+		t.Errorf("reasoning_tokens 错误: got %d, want 20", reasoningTokens)
+	}
+	if cachedTokens != 30 {
+		t.Errorf("cached_tokens 错误: got %d, want 30", cachedTokens)
+	}
+}
+
 func TestSQLiteObserver_OnEvent_IgnoredEvents(t *testing.T) {
 	tmpDir := t.TempDir()
 	obs, err := NewSQLiteObserver(tmpDir, zap.NewNop(), nil)
