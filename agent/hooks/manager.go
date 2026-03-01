@@ -18,10 +18,10 @@ import (
 // HookManager Hook 系统管理器
 // 统一管理所有观察器和事件分发
 type HookManager struct {
-	dispatcher    *dispatcher.Dispatcher
-	einoBridge    *eino.EinoCallbackBridge
-	logger        *zap.Logger
-	enabled       bool
+	dispatcher *dispatcher.Dispatcher
+	einoBridge *eino.EinoCallbackBridge
+	logger     *zap.Logger
+	enabled    bool
 }
 
 // NewHookManager 创建 Hook 管理器
@@ -102,8 +102,8 @@ func (hm *HookManager) OnMessageReceived(ctx context.Context, msg *bus.InboundMe
 		return
 	}
 	traceID := trace.GetTraceID(ctx)
-	spanID := trace.GetSpanID(ctx) // 使用 GetSpanID 确保总是有 ID
-	parentSpanID := trace.MustGetSpanID(ctx) // 使用 MustGetSpanID 获取父 SpanID（如果存在）
+	spanID := trace.GetSpanID(ctx)             // 使用 GetSpanID 确保总是有 ID
+	parentSpanID := trace.GetParentSpanID(ctx) // 使用 GetParentSpanID 获取父 SpanID
 	event := hookevents.NewMessageReceivedEvent(traceID, spanID, parentSpanID, msg)
 	hm.Dispatch(ctx, event, msg.Channel, msg.SessionKey())
 }
@@ -115,7 +115,7 @@ func (hm *HookManager) OnMessageSent(ctx context.Context, msg *bus.OutboundMessa
 	}
 	traceID := trace.GetTraceID(ctx)
 	spanID := trace.GetSpanID(ctx)
-	parentSpanID := trace.MustGetSpanID(ctx)
+	parentSpanID := trace.GetParentSpanID(ctx)
 	event := hookevents.NewMessageSentEvent(traceID, spanID, parentSpanID, msg, sessionKey)
 	hm.Dispatch(ctx, event, msg.Channel, sessionKey)
 }
@@ -127,7 +127,7 @@ func (hm *HookManager) OnPromptSubmitted(ctx context.Context, userInput string, 
 	}
 	traceID := trace.GetTraceID(ctx)
 	spanID := trace.GetSpanID(ctx)
-	parentSpanID := trace.MustGetSpanID(ctx)
+	parentSpanID := trace.GetParentSpanID(ctx)
 	event := hookevents.NewPromptSubmittedEvent(traceID, spanID, parentSpanID, userInput, messages, sessionKey)
 	hm.Dispatch(ctx, event, "", sessionKey)
 }
@@ -139,7 +139,7 @@ func (hm *HookManager) OnSystemPromptBuilt(ctx context.Context, systemPrompt str
 	}
 	traceID := trace.GetTraceID(ctx)
 	spanID := trace.GetSpanID(ctx)
-	parentSpanID := trace.MustGetSpanID(ctx)
+	parentSpanID := trace.GetParentSpanID(ctx)
 	event := hookevents.NewSystemPromptBuiltEvent(traceID, spanID, parentSpanID, systemPrompt)
 	hm.Dispatch(ctx, event, "", "")
 }
@@ -151,7 +151,7 @@ func (hm *HookManager) OnToolUsed(ctx context.Context, toolName, toolArguments s
 	}
 	traceID := trace.GetTraceID(ctx)
 	spanID := trace.GetSpanID(ctx)
-	parentSpanID := trace.MustGetSpanID(ctx)
+	parentSpanID := trace.GetParentSpanID(ctx)
 	event := hookevents.NewToolUsedEvent(traceID, spanID, parentSpanID, toolName, toolArguments)
 	hm.Dispatch(ctx, event, "", "")
 }
@@ -163,7 +163,7 @@ func (hm *HookManager) OnToolCompleted(ctx context.Context, toolName, response s
 	}
 	traceID := trace.GetTraceID(ctx)
 	spanID := trace.GetSpanID(ctx)
-	parentSpanID := trace.MustGetSpanID(ctx)
+	parentSpanID := trace.GetParentSpanID(ctx)
 	event := hookevents.NewToolCompletedEvent(traceID, spanID, parentSpanID, toolName, response, success)
 	hm.Dispatch(ctx, event, "", "")
 }
@@ -175,7 +175,7 @@ func (hm *HookManager) OnToolError(ctx context.Context, toolName, error string) 
 	}
 	traceID := trace.GetTraceID(ctx)
 	spanID := trace.GetSpanID(ctx)
-	parentSpanID := trace.MustGetSpanID(ctx)
+	parentSpanID := trace.GetParentSpanID(ctx)
 	event := hookevents.NewToolErrorEvent(traceID, spanID, parentSpanID, toolName, error)
 	hm.Dispatch(ctx, event, "", "")
 }
@@ -187,7 +187,7 @@ func (hm *HookManager) OnSkillLookup(ctx context.Context, skillName string, foun
 	}
 	traceID := trace.GetTraceID(ctx)
 	spanID := trace.GetSpanID(ctx)
-	parentSpanID := trace.MustGetSpanID(ctx)
+	parentSpanID := trace.GetParentSpanID(ctx)
 	event := hookevents.NewSkillLookupEvent(traceID, spanID, parentSpanID, skillName, found, source, path)
 	hm.Dispatch(ctx, event, "", "")
 }
@@ -199,7 +199,7 @@ func (hm *HookManager) OnSkillUsed(ctx context.Context, skillName string, skillL
 	}
 	traceID := trace.GetTraceID(ctx)
 	spanID := trace.GetSpanID(ctx)
-	parentSpanID := trace.MustGetSpanID(ctx)
+	parentSpanID := trace.GetParentSpanID(ctx)
 	event := hookevents.NewSkillUsedEvent(traceID, spanID, parentSpanID, skillName, skillLength)
 	hm.Dispatch(ctx, event, "", "")
 }
@@ -228,16 +228,16 @@ func MustGetTraceID(ctx context.Context) string {
 
 // Stats 统计信息
 type Stats struct {
-	ObserverCount int       `json:"observer_count"`
-	Enabled       bool      `json:"enabled"`
+	ObserverCount int        `json:"observer_count"`
+	Enabled       bool       `json:"enabled"`
 	LastEvent     *LastEvent `json:"last_event,omitempty"`
 }
 
 // LastEvent 最后一个事件
 type LastEvent struct {
-	EventType  string    `json:"event_type"`
-	TraceID    string    `json:"trace_id"`
-	Timestamp  time.Time `json:"timestamp"`
+	EventType string    `json:"event_type"`
+	TraceID   string    `json:"trace_id"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 // GetStats 获取统计信息

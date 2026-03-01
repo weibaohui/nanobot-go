@@ -69,7 +69,7 @@ func TestSession_AddMessage(t *testing.T) {
 	session := &Session{
 		Key:       "test-session",
 		CreatedAt: time.Now(),
-		UpdatedAt:  time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	session.AddMessage("user", "你好")
@@ -101,7 +101,7 @@ func TestSession_AddMessageWithTokenUsage(t *testing.T) {
 	session := &Session{
 		Key:       "test-session",
 		CreatedAt: time.Now(),
-		UpdatedAt:  time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	usage := TokenUsage{
@@ -134,7 +134,7 @@ func TestSession_UpdateTokenUsage(t *testing.T) {
 	session := &Session{
 		Key:       "test-session",
 		CreatedAt: time.Now(),
-		UpdatedAt:  time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	session.UpdateTokenUsage(TokenUsage{PromptTokens: 100, CompletionTokens: 50})
@@ -160,7 +160,7 @@ func TestSession_GetHistory(t *testing.T) {
 				{Role: "user", Content: "消息2", Timestamp: time.Now()},
 			},
 			CreatedAt: time.Now(),
-			UpdatedAt:  time.Now(),
+			UpdatedAt: time.Now(),
 		}
 
 		history := session.GetHistory(10)
@@ -180,7 +180,7 @@ func TestSession_GetHistory(t *testing.T) {
 				{Role: "user", Content: "消息3", Timestamp: time.Now()},
 			},
 			CreatedAt: time.Now(),
-			UpdatedAt:  time.Now(),
+			UpdatedAt: time.Now(),
 		}
 
 		history := session.GetHistory(2)
@@ -202,7 +202,7 @@ func TestSession_GetHistory(t *testing.T) {
 			Key:       "test-session",
 			Messages:  []Message{},
 			CreatedAt: time.Now(),
-			UpdatedAt:  time.Now(),
+			UpdatedAt: time.Now(),
 		}
 
 		history := session.GetHistory(10)
@@ -221,7 +221,7 @@ func TestSession_Clear(t *testing.T) {
 			{Role: "assistant", Content: "回复1"},
 		},
 		CreatedAt: time.Now(),
-		UpdatedAt:  time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	session.Clear()
@@ -294,7 +294,7 @@ func TestManager_Save(t *testing.T) {
 		Key:       "save-test-session",
 		Messages:  []Message{{Role: "user", Content: "测试消息", Timestamp: time.Now()}},
 		CreatedAt: time.Now(),
-		UpdatedAt:  time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	err := manager.Save(session)
@@ -322,7 +322,7 @@ func TestManager_Delete(t *testing.T) {
 		session := &Session{
 			Key:       "delete-test-session",
 			CreatedAt: time.Now(),
-			UpdatedAt:  time.Now(),
+			UpdatedAt: time.Now(),
 		}
 		manager.Save(session)
 
@@ -354,12 +354,12 @@ func TestManager_ListSessions(t *testing.T) {
 	session1 := &Session{
 		Key:       "list-test-1",
 		CreatedAt: time.Now().Add(-1 * time.Hour),
-		UpdatedAt:  time.Now().Add(-30 * time.Minute),
+		UpdatedAt: time.Now().Add(-30 * time.Minute),
 	}
 	session2 := &Session{
 		Key:       "list-test-2",
 		CreatedAt: time.Now().Add(-2 * time.Hour),
-		UpdatedAt:  time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	manager.Save(session1)
@@ -426,7 +426,7 @@ func TestSession_TokenUsageAccumulation(t *testing.T) {
 	session := &Session{
 		Key:       "test-session",
 		CreatedAt: time.Now(),
-		UpdatedAt:  time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	usage1 := TokenUsage{PromptTokens: 100, CompletionTokens: 50, TotalTokens: 150}
@@ -540,5 +540,77 @@ func TestManager_DataDirCreation(t *testing.T) {
 
 	if manager.sessionsDir != expectedDir {
 		t.Errorf("sessionsDir = %q, 期望 %q", manager.sessionsDir, expectedDir)
+	}
+}
+
+// TestSession_AddMessageWithTrace 测试添加带链路追踪信息的消息
+func TestSession_AddMessageWithTrace(t *testing.T) {
+	session := &Session{
+		Key:       "test-session",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	session.AddMessageWithTrace("user", "测试消息", "trace-123", "span-456", "parent-span-789")
+
+	if len(session.Messages) != 1 {
+		t.Fatalf("消息数量 = %d, 期望 1", len(session.Messages))
+	}
+
+	if session.Messages[0].TraceID != "trace-123" {
+		t.Errorf("TraceID = %q, 期望 trace-123", session.Messages[0].TraceID)
+	}
+
+	if session.Messages[0].SpanID != "span-456" {
+		t.Errorf("SpanID = %q, 期望 span-456", session.Messages[0].SpanID)
+	}
+
+	if session.Messages[0].ParentSpanID != "parent-span-789" {
+		t.Errorf("ParentSpanID = %q, 期望 parent-span-789", session.Messages[0].ParentSpanID)
+	}
+}
+
+// TestSession_AddMessageWithTokenUsageAndTrace 测试添加带 Token 用量和链路追踪信息的消息
+func TestSession_AddMessageWithTokenUsageAndTrace(t *testing.T) {
+	session := &Session{
+		Key:       "test-session",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	usage := TokenUsage{
+		PromptTokens:     100,
+		CompletionTokens: 50,
+		TotalTokens:      150,
+	}
+
+	session.AddMessageWithTokenUsageAndTrace("user", "测试消息", usage, "trace-123", "span-456", "parent-span-789")
+
+	if len(session.Messages) != 1 {
+		t.Fatalf("消息数量 = %d, 期望 1", len(session.Messages))
+	}
+
+	if session.Messages[0].TokenUsage == nil {
+		t.Fatal("TokenUsage 不应该为 nil")
+	}
+
+	if session.Messages[0].TokenUsage.PromptTokens != 100 {
+		t.Errorf("PromptTokens = %d, 期望 100", session.Messages[0].TokenUsage.PromptTokens)
+	}
+
+	if session.Messages[0].TraceID != "trace-123" {
+		t.Errorf("TraceID = %q, 期望 trace-123", session.Messages[0].TraceID)
+	}
+
+	if session.Messages[0].SpanID != "span-456" {
+		t.Errorf("SpanID = %q, 期望 span-456", session.Messages[0].SpanID)
+	}
+
+	if session.Messages[0].ParentSpanID != "parent-span-789" {
+		t.Errorf("ParentSpanID = %q, 期望 parent-span-789", session.Messages[0].ParentSpanID)
+	}
+
+	if session.TokenUsage.PromptTokens != 100 {
+		t.Errorf("Session 级别 PromptTokens = %d, 期望 100", session.TokenUsage.PromptTokens)
 	}
 }

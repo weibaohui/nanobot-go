@@ -33,10 +33,13 @@ func (t *TokenUsage) Add(other TokenUsage) {
 
 // Message 会话消息
 type Message struct {
-	Role       string      `json:"role"`
-	Content    string      `json:"content"`
-	Timestamp  time.Time   `json:"timestamp"`
-	TokenUsage *TokenUsage `json:"token_usage,omitempty"` // 该消息对应的 token 用量
+	Role         string      `json:"role"`
+	Content      string      `json:"content"`
+	Timestamp    time.Time   `json:"timestamp"`
+	TokenUsage   *TokenUsage `json:"token_usage,omitempty"`    // 该消息对应的 token 用量
+	TraceID      string      `json:"trace_id,omitempty"`       // 链路追踪 ID
+	SpanID       string      `json:"span_id,omitempty"`        // 跨度 ID
+	ParentSpanID string      `json:"parent_span_id,omitempty"` // 父跨度 ID
 }
 
 // Session 会话
@@ -58,6 +61,19 @@ func (s *Session) AddMessage(role, content string) {
 	s.UpdatedAt = time.Now().UTC()
 }
 
+// AddMessageWithTrace 添加消息到会话（带链路追踪信息）
+func (s *Session) AddMessageWithTrace(role, content, traceID, spanID, parentSpanID string) {
+	s.Messages = append(s.Messages, Message{
+		Role:         role,
+		Content:      content,
+		Timestamp:    time.Now().UTC(),
+		TraceID:      traceID,
+		SpanID:       spanID,
+		ParentSpanID: parentSpanID,
+	})
+	s.UpdatedAt = time.Now().UTC()
+}
+
 // AddMessageWithTokenUsage 添加消息到会话并记录 token 用量
 func (s *Session) AddMessageWithTokenUsage(role, content string, usage TokenUsage) {
 	msg := Message{
@@ -65,6 +81,24 @@ func (s *Session) AddMessageWithTokenUsage(role, content string, usage TokenUsag
 		Content:    content,
 		Timestamp:  time.Now().UTC(),
 		TokenUsage: &usage,
+	}
+	s.Messages = append(s.Messages, msg)
+
+	// 累加到 Session 级别的 TokenUsage
+	s.TokenUsage.Add(usage)
+	s.UpdatedAt = time.Now().UTC()
+}
+
+// AddMessageWithTokenUsageAndTrace 添加消息到会话并记录 token 用量和链路追踪信息
+func (s *Session) AddMessageWithTokenUsageAndTrace(role, content string, usage TokenUsage, traceID, spanID, parentSpanID string) {
+	msg := Message{
+		Role:         role,
+		Content:      content,
+		Timestamp:    time.Now().UTC(),
+		TokenUsage:   &usage,
+		TraceID:      traceID,
+		SpanID:       spanID,
+		ParentSpanID: parentSpanID,
 	}
 	s.Messages = append(s.Messages, msg)
 

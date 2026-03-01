@@ -190,12 +190,13 @@ func TestEinoCallbacks_nodeKey(t *testing.T) {
 // TestEinoCallbacks_logModelInput 测试记录模型输入
 func TestEinoCallbacks_logModelInput(t *testing.T) {
 	ec := NewEinoCallbacks(true, zap.NewNop())
+	ctx := context.Background()
 	info := &callbacks.RunInfo{
 		Component: "ChatModel",
 	}
 
 	t.Run("nil 输入", func(t *testing.T) {
-		ec.logModelInput(nil, info)
+		ec.logModelInput(ctx, nil, info)
 	})
 
 	t.Run("有效输入", func(t *testing.T) {
@@ -209,19 +210,20 @@ func TestEinoCallbacks_logModelInput(t *testing.T) {
 				{Name: "tool2"},
 			},
 		}
-		ec.logModelInput(input, info)
+		ec.logModelInput(ctx, input, info)
 	})
 }
 
 // TestEinoCallbacks_logModelOutput 测试记录模型输出
 func TestEinoCallbacks_logModelOutput(t *testing.T) {
 	ec := NewEinoCallbacks(true, zap.NewNop())
+	ctx := context.Background()
 	info := &callbacks.RunInfo{
 		Component: "ChatModel",
 	}
 
 	t.Run("nil 输出", func(t *testing.T) {
-		ec.logModelOutput(nil, info)
+		ec.logModelOutput(ctx, nil, info)
 	})
 
 	t.Run("有效输出", func(t *testing.T) {
@@ -240,66 +242,70 @@ func TestEinoCallbacks_logModelOutput(t *testing.T) {
 				},
 			},
 		}
-		ec.logModelOutput(output, info)
+		ec.logModelOutput(ctx, output, info)
 	})
 }
 
 // TestEinoCallbacks_logToolInput 测试记录工具输入
 func TestEinoCallbacks_logToolInput(t *testing.T) {
 	ec := NewEinoCallbacks(true, zap.NewNop())
+	ctx := context.Background()
 	info := &callbacks.RunInfo{
 		Component: "Tool",
 	}
 
 	t.Run("nil 输入", func(t *testing.T) {
-		ec.logToolInput(nil, info)
+		ec.logToolInput(ctx, nil, info)
 	})
 
 	t.Run("有效输入", func(t *testing.T) {
 		input := &tool.CallbackInput{
 			ArgumentsInJSON: `{"arg1": "value1"}`,
 		}
-		ec.logToolInput(input, info)
+		ec.logToolInput(ctx, input, info)
 	})
 }
 
 // TestEinoCallbacks_logToolOutput 测试记录工具输出
 func TestEinoCallbacks_logToolOutput(t *testing.T) {
 	ec := NewEinoCallbacks(true, zap.NewNop())
+	ctx := context.Background()
 	info := &callbacks.RunInfo{
 		Component: "Tool",
 	}
 
 	t.Run("nil 输出", func(t *testing.T) {
-		ec.logToolOutput(nil, info)
+		ec.logToolOutput(ctx, nil, info)
 	})
 
 	t.Run("有效输出", func(t *testing.T) {
 		output := &tool.CallbackOutput{
 			Response: "工具执行结果",
 		}
-		ec.logToolOutput(output, info)
+		ec.logToolOutput(ctx, output, info)
 	})
 }
 
 // TestEinoCallbacks_logGenericInput 测试记录通用输入
 func TestEinoCallbacks_logGenericInput(t *testing.T) {
 	ec := NewEinoCallbacks(true, zap.NewNop())
+	ctx := context.Background()
 	info := &callbacks.RunInfo{
 		Component: "Unknown",
 	}
 
-	ec.logGenericInput("test input", info)
+	ec.logGenericInput(ctx, "test input", info)
 }
 
 // TestEinoCallbacks_logGenericOutput 测试记录通用输出
 func TestEinoCallbacks_logGenericOutput(t *testing.T) {
 	ec := NewEinoCallbacks(true, zap.NewNop())
+	ctx := context.Background()
 	info := &callbacks.RunInfo{
 		Component: "Unknown",
 	}
 
-	ec.logGenericOutput("test output", info)
+	ec.logGenericOutput(ctx, "test output", info)
 }
 
 // TestRegisterGlobalCallbacks 测试注册全局回调

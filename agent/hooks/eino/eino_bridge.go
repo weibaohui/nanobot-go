@@ -27,7 +27,7 @@ func NewEinoCallbackBridge(dispatcher *dispatcher.Dispatcher, logger *zap.Logger
 		logger = zap.NewNop()
 	}
 	return &EinoCallbackBridge{
-		dispatcher:  dispatcher,
+		dispatcher: dispatcher,
 		logger:     logger,
 		startTimes: make(map[string]time.Time),
 	}
@@ -54,7 +54,7 @@ func (cb *EinoCallbackBridge) onStart(ctx context.Context, info *callbacks.RunIn
 
 	traceID := trace.GetTraceID(ctx)
 	spanID := trace.GetSpanID(ctx)
-	parentSpanID := trace.MustGetSpanID(ctx) // 使用 MustGetSpanID 获取父 SpanID（如果存在）
+	parentSpanID := trace.GetParentSpanID(ctx) // 使用 GetParentSpanID 获取真正的父 SpanID
 
 	// 分发组件开始事件
 	componentEvent := events.NewComponentStartEvent(traceID, spanID, parentSpanID, info)
@@ -83,7 +83,7 @@ func (cb *EinoCallbackBridge) onEnd(ctx context.Context, info *callbacks.RunInfo
 	durationMs := time.Since(startTime).Milliseconds()
 	traceID := trace.GetTraceID(ctx)
 	spanID := trace.GetSpanID(ctx)
-	parentSpanID := trace.MustGetSpanID(ctx)
+	parentSpanID := trace.GetParentSpanID(ctx)
 
 	// 分发组件结束事件
 	componentEvent := events.NewComponentEndEvent(traceID, spanID, parentSpanID, info, durationMs)
@@ -116,7 +116,7 @@ func (cb *EinoCallbackBridge) onError(ctx context.Context, info *callbacks.RunIn
 
 	traceID := trace.GetTraceID(ctx)
 	spanID := trace.GetSpanID(ctx)
-	parentSpanID := trace.MustGetSpanID(ctx)
+	parentSpanID := trace.GetParentSpanID(ctx)
 
 	// 分发组件错误事件
 	componentEvent := events.NewComponentErrorEvent(traceID, spanID, parentSpanID, info, err, durationMs)

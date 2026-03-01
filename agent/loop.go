@@ -6,6 +6,7 @@ import (
 
 	"github.com/weibaohui/nanobot-go/agent/hooks"
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
+	"github.com/weibaohui/nanobot-go/agent/hooks/trace"
 	"github.com/weibaohui/nanobot-go/agent/tools"
 	"github.com/weibaohui/nanobot-go/agent/tools/askuser"
 	toolcron "github.com/weibaohui/nanobot-go/agent/tools/cron"
@@ -61,7 +62,7 @@ type LoopConfig struct {
 	CronService         *cron.Service
 	SessionManager      *session.Manager
 	Logger              *zap.Logger
-	HookManager         *hooks.HookManager // Hook 系统管理器
+	HookManager         *hooks.HookManager                                            // Hook 系统管理器
 	HookCallback        func(eventType events.EventType, data map[string]interface{}) // Hook 回调
 }
 
@@ -305,6 +306,16 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 		zap.String("发送者", msg.SenderID),
 		zap.String("内容", preview),
 	)
+
+	// 为每条消息创建根 span，建立完整的调用链
+	ctx = trace.WithTraceID(ctx, trace.NewTraceID())
+	ctx = trace.WithSpanID(ctx, trace.NewSpanID())
+	// 根 span 没有 parentSpanID
+
+	// 触发收到消息事件
+	if l.hookManager != nil {
+		l.hookManager.OnMessageReceived(ctx, msg)
+	}
 
 	// 更新工具上下文
 	l.updateToolContext(msg.Channel, msg.ChatID)
