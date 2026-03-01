@@ -133,9 +133,14 @@ func (m *Manager) GetOrCreate(key string) *Session {
 	return session
 }
 
-// load 从磁盘加载会话
+// load 从磁盘加载会话（查找最近存在的会话文件）
 func (m *Manager) load(key string) *Session {
-	path := m.getSessionPath(key)
+	// 先查找最近存在的会话文件
+	path := m.findLatestSessionFile(key)
+	if path == "" {
+		return nil
+	}
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil
@@ -166,18 +171,34 @@ func (m *Manager) Save(session *Session) error {
 	return err
 }
 
-// Delete 删除会话
+// Delete 删除会话（删除所有相关的会话文件）
 func (m *Manager) Delete(key string) bool {
 	m.mu.Lock()
 	delete(m.cache, key)
 	m.mu.Unlock()
 
-	path := m.getSessionPath(key)
-	if _, err := os.Stat(path); os.IsNotExist(err) {
+	// 先替换 : 为 _
+	keyWithUnderscore := strings.ReplaceAll(key, ":", "_")
+	safeKey := safeFilename(keyWithUnderscore)
+
+	// 列出所有匹配的文件
+	files, err := os.ReadDir(m.sessionsDir)
+	if err != nil {
 		return false
 	}
-	os.Remove(path)
-	return true
+
+	// 删除所有匹配前缀的文件
+	prefix := safeKey + "_"
+	deleted := false
+	for _, f := range files {
+		name := f.Name()
+		if strings.HasPrefix(name, prefix) && strings.HasSuffix(name, ".json") {
+			os.Remove(filepath.Join(m.sessionsDir, name))
+			deleted = true
+		}
+	}
+
+	return deleted
 }
 
 // ListSessions 列出所有会话
@@ -221,18 +242,50 @@ func (m *Manager) ListSessions() []map[string]any {
 	return sessions
 }
 
-// getSessionPath 获取会话文件路径
-// 使用固定文件名，不再按日期分割，历史消息持久保存
+// getSessionPath 获取会话文件路径（带当天日期）
 func (m *Manager) getSessionPath(key string) string {
+	now := time.Now()
+	date := now.Format("20060102")
+
 	// 先替换 : 为 _
 	keyWithUnderscore := strings.ReplaceAll(key, ":", "_")
 
 	// 再处理其他不安全字符（包括单引号和双引号）
 	safeKey := safeFilename(keyWithUnderscore)
 
-	result := filepath.Join(m.sessionsDir, safeKey+".json")
+	return filepath.Join(m.sessionsDir, safeKey+"_"+date+".json")
+}
 
-	return result
+// findLatestSessionFile 查找该 key 最近存在的会话文件
+func (m *Manager) findLatestSessionFile(key string) string {
+	// 先替换 : 为 _
+	keyWithUnderscore := strings.ReplaceAll(key, ":", "_")
+	safeKey := safeFilename(keyWithUnderscore)
+
+	// 列出所有匹配的文件
+	files, err := os.ReadDir(m.sessionsDir)
+	if err != nil {
+		return ""
+	}
+
+	// 查找匹配前缀的文件
+	prefix := safeKey + "_"
+	var candidates []string
+	for _, f := range files {
+		name := f.Name()
+		if strings.HasPrefix(name, prefix) && strings.HasSuffix(name, ".json") {
+			candidates = append(candidates, name)
+		}
+	}
+
+	if len(candidates) == 0 {
+		return ""
+	}
+
+	// 按日期降序排序（文件名中包含日期，字符串排序即可）
+	sort.Sort(sort.Reverse(sort.StringSlice(candidates)))
+
+	return filepath.Join(m.sessionsDir, candidates[0])
 }
 
 // safeFilename 转换为安全文件名
