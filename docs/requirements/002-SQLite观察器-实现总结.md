@@ -7,12 +7,13 @@
 | 2026-03-01 | v1.0 | 初始实现总结创建                   | AI     |
 | 2026-03-01 | v1.1 | 简化事件类型，添加 role/content 列 | AI     |
 | 2026-03-01 | v1.2 | 添加 Token Usage 字段              | AI     |
+| 2026-03-01 | v1.3 | 添加 ToolCompleted 事件监听        | AI     |
 
 ---
 
 ## 1. 实现概述
 
-成功实现了一个 SQLite 观察器，将消息事件存储到 SQLite 数据库中，与 SessionObserver 保持一致的事件监听范围，并记录 Token Usage 信息。
+成功实现了一个 SQLite 观察器，将消息事件存储到 SQLite 数据库中，支持用户消息、AI 回复和工具执行结果的存储。
 
 ## 2. 实现内容
 
@@ -39,7 +40,7 @@ CREATE TABLE events (
     event_type TEXT NOT NULL,
     timestamp DATETIME NOT NULL,
     session_key TEXT,
-    role TEXT,               -- user / assistant / tool
+    role TEXT,               -- user / assistant / tool / tool_result
     content TEXT,            -- 消息内容
     prompt_tokens INTEGER DEFAULT 0,      -- 输入 token 数量
     completion_tokens INTEGER DEFAULT 0,  -- 输出 token 数量
@@ -55,9 +56,10 @@ CREATE TABLE events (
 
 ### 3.1 事件处理范围
 
-只处理与 SessionObserver 相同的事件：
+处理以下事件类型：
 - `PromptSubmitted` - 用户输入，role=user
 - `LLMCallEnd` - AI 回复，role=assistant 或 tool
+- `ToolCompleted` - 工具执行结果，role=tool_result
 
 ### 3.2 Role 和 Content 提取
 
@@ -66,6 +68,7 @@ CREATE TABLE events (
 | PromptSubmitted | user | e.UserInput |
 | LLMCallEnd (无工具调用) | assistant | e.ResponseContent |
 | LLMCallEnd (有工具调用) | tool | 拼接工具调用信息 |
+| ToolCompleted | tool_result | 工具名: 响应内容 |
 
 ### 3.3 Token Usage 提取
 
@@ -87,11 +90,13 @@ CREATE TABLE events (
 === RUN   TestSQLiteObserver_OnEvent_PromptSubmitted
 --- PASS: TestSQLiteObserver_OnEvent_PromptSubmitted (0.01s)
 === RUN   TestSQLiteObserver_OnEvent_LLMCallEnd
---- PASS: TestSQLiteObserver_OnEvent_LLMCallEnd (0.00s)
+--- PASS: TestSQLiteObserver_OnEvent_LLMCallEnd (0.01s)
 === RUN   TestSQLiteObserver_OnEvent_LLMCallEnd_WithToolCalls
---- PASS: TestSQLiteObserver_OnEvent_LLMCallEnd_WithToolCalls (0.00s)
+--- PASS: TestSQLiteObserver_OnEvent_LLMCallEnd_WithToolCalls (0.01s)
 === RUN   TestSQLiteObserver_OnEvent_LLMCallEnd_WithTokenUsage
---- PASS: TestSQLiteObserver_OnEvent_LLMCallEnd_WithTokenUsage (0.00s)
+--- PASS: TestSQLiteObserver_OnEvent_LLMCallEnd_WithTokenUsage (0.01s)
+=== RUN   TestSQLiteObserver_OnEvent_ToolCompleted
+--- PASS: TestSQLiteObserver_OnEvent_ToolCompleted (0.01s)
 === RUN   TestSQLiteObserver_OnEvent_IgnoredEvents
 --- PASS: TestSQLiteObserver_OnEvent_IgnoredEvents (0.00s)
 === RUN   TestSQLiteObserver_Filter

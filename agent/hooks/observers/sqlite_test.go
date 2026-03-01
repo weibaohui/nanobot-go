@@ -257,6 +257,56 @@ func TestSQLiteObserver_OnEvent_LLMCallEnd_WithTokenUsage(t *testing.T) {
 	}
 }
 
+func TestSQLiteObserver_OnEvent_ToolCompleted(t *testing.T) {
+	tmpDir := t.TempDir()
+	obs, err := NewSQLiteObserver(tmpDir, zap.NewNop(), nil)
+	if err != nil {
+		t.Fatalf("创建 SQLiteObserver 失败: %v", err)
+	}
+	defer obs.Close()
+
+	// 创建带 session_key 的 context
+	ctx := context.WithValue(context.Background(), "session_key", "session-001")
+
+	// 创建工具完成事件
+	event := events.NewToolCompletedEvent(
+		"trace-123",
+		"span-456",
+		"parent-span-789",
+		"read_file",
+		"文件内容读取成功",
+		true,
+	)
+
+	// 处理事件
+	if err := obs.OnEvent(ctx, event); err != nil {
+		t.Fatalf("处理事件失败: %v", err)
+	}
+
+	// 验证数据已插入
+	var count int
+	row := obs.db.QueryRow("SELECT COUNT(*) FROM events WHERE event_type = ?", "tool_completed")
+	if err := row.Scan(&count); err != nil {
+		t.Fatalf("查询失败: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("事件数量错误: got %d, want 1", count)
+	}
+
+	// 验证 role 和 content
+	var role, content string
+	row = obs.db.QueryRow("SELECT role, content FROM events WHERE event_type = ?", "tool_completed")
+	if err := row.Scan(&role, &content); err != nil {
+		t.Fatalf("查询失败: %v", err)
+	}
+	if role != "tool_result" {
+		t.Errorf("role 错误: got %s, want tool_result", role)
+	}
+	if content != "read_file: 文件内容读取成功" {
+		t.Errorf("content 错误: got %s", content)
+	}
+}
+
 func TestSQLiteObserver_OnEvent_IgnoredEvents(t *testing.T) {
 	tmpDir := t.TempDir()
 	obs, err := NewSQLiteObserver(tmpDir, zap.NewNop(), nil)
@@ -352,5 +402,75 @@ func TestSQLiteObserver_ConcurrentWrites(t *testing.T) {
 	}
 	if count != 10 {
 		t.Errorf("事件数量错误: got %d, want 10", count)
+	}
+}
+
+func TestSQLiteObserver_Deduplication(t *testing.T) {
+	tmpDir := t.TempDir()
+	obs, err := NewSQLiteObserver(tmpDir, zap.NewNop(), nil)
+	if err != nil {
+		t.Fatalf("创建 SQLiteObserver 失败: %v", err)
+	}
+	defer obs.Close()
+
+	ctx := context.WithValue(context.Background(), "session_key", "session-001")
+
+	// 第一次插入：无 TokenUsage
+	event1 := events.NewLLMCallEndEvent(
+		"trace-123",
+		"span-456",
+		"parent-span-789",
+		&callbacks.RunInfo{Component: "LLM", Name: "test-model"},
+		&model.CallbackOutput{
+			Message: &schema.Message{
+				Content: "AI 回复内容",
+			},
+		},
+		100,
+	)
+	if err := obs.OnEvent(ctx, event1); err != nil {
+		t.Fatalf("处理事件1失败: %v", err)
+	}
+
+	// 第二次插入：有 TokenUsage（相同 traceID、role、content）
+	event2 := events.NewLLMCallEndEvent(
+		"trace-123",
+		"span-456",
+		"parent-span-789",
+		&callbacks.RunInfo{Component: "LLM", Name: "test-model"},
+		&model.CallbackOutput{
+			Message: &schema.Message{
+				Content: "AI 回复内容",
+			},
+			TokenUsage: &model.TokenUsage{
+				PromptTokens:     100,
+				CompletionTokens: 50,
+				TotalTokens:      150,
+			},
+		},
+		100,
+	)
+	if err := obs.OnEvent(ctx, event2); err != nil {
+		t.Fatalf("处理事件2失败: %v", err)
+	}
+
+	// 验证只有一条记录（去重）
+	var count int
+	row := obs.db.QueryRow("SELECT COUNT(*) FROM events WHERE trace_id = ?", "trace-123")
+	if err := row.Scan(&count); err != nil {
+		t.Fatalf("查询失败: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("去重失败，记录数量: got %d, want 1", count)
+	}
+
+	// 验证保留的是有 TokenUsage 的记录
+	var totalTokens int
+	row = obs.db.QueryRow("SELECT total_tokens FROM events WHERE trace_id = ?", "trace-123")
+	if err := row.Scan(&totalTokens); err != nil {
+		t.Fatalf("查询失败: %v", err)
+	}
+	if totalTokens != 150 {
+		t.Errorf("应保留有 TokenUsage 的记录: got total_tokens=%d, want 150", totalTokens)
 	}
 }
