@@ -16,6 +16,12 @@ type SpanIDKey struct{}
 // ParentSpanIDKey 是 context 中存储 ParentSpanID 的 key
 type ParentSpanIDKey struct{}
 
+// SessionKeyKey 是 context 中存储 SessionKey 的 key
+type SessionKeyKey struct{}
+
+// ChannelKey 是 context 中存储 Channel 的 key
+type ChannelKey struct{}
+
 // NewTraceID 生成新的 TraceID
 func NewTraceID() string {
 	return uuid.New().String()
@@ -41,6 +47,23 @@ func WithParentSpanID(ctx context.Context, parentSpanID string) context.Context 
 	return context.WithValue(ctx, ParentSpanIDKey{}, parentSpanID)
 }
 
+// WithSessionKey 将 SessionKey 注入到 context 中
+func WithSessionKey(ctx context.Context, sessionKey string) context.Context {
+	return context.WithValue(ctx, SessionKeyKey{}, sessionKey)
+}
+
+// WithChannel 将 Channel 注入到 context 中
+func WithChannel(ctx context.Context, channel string) context.Context {
+	return context.WithValue(ctx, ChannelKey{}, channel)
+}
+
+// WithSessionInfo 将会话信息（sessionKey 和 channel）注入到 context 中
+func WithSessionInfo(ctx context.Context, sessionKey, channel string) context.Context {
+	ctx = WithSessionKey(ctx, sessionKey)
+	ctx = WithChannel(ctx, channel)
+	return ctx
+}
+
 // GetTraceID 从 context 中获取 TraceID，如果不存在则生成新的
 func GetTraceID(ctx context.Context) string {
 	if traceID, ok := ctx.Value(TraceIDKey{}).(string); ok && traceID != "" {
@@ -61,6 +84,22 @@ func GetSpanID(ctx context.Context) string {
 func GetParentSpanID(ctx context.Context) string {
 	if parentSpanID, ok := ctx.Value(ParentSpanIDKey{}).(string); ok {
 		return parentSpanID
+	}
+	return ""
+}
+
+// GetSessionKey 从 context 中获取 SessionKey，如果不存在则返回空字符串
+func GetSessionKey(ctx context.Context) string {
+	if sessionKey, ok := ctx.Value(SessionKeyKey{}).(string); ok {
+		return sessionKey
+	}
+	return ""
+}
+
+// GetChannel 从 context 中获取 Channel，如果不存在则返回空字符串
+func GetChannel(ctx context.Context) string {
+	if channel, ok := ctx.Value(ChannelKey{}).(string); ok {
+		return channel
 	}
 	return ""
 }

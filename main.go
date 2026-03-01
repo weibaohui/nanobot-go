@@ -146,6 +146,16 @@ func runGateway(cmd *cobra.Command, args []string) {
 		}
 	}
 
+	// 如果启用了思考过程推送，注册 ThinkingProcessObserver
+	if cfg.ThinkingProcess.Enabled {
+		thinkingProcessObserver := observers.NewThinkingProcessObserver(&cfg.ThinkingProcess, messageBus, logger, nil)
+		hookSystem.Register(thinkingProcessObserver)
+		logger.Info("思考过程观察器已启用",
+			zap.Bool("enabled", cfg.ThinkingProcess.Enabled),
+			zap.Strings("events", cfg.ThinkingProcess.Events),
+		)
+	}
+
 	// 注册 Eino Callback Handler
 	callbacks.AppendGlobalHandlers(hookSystem.EinoHandler())
 
