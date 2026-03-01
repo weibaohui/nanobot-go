@@ -156,6 +156,15 @@ func runGateway(cmd *cobra.Command, args []string) {
 		)
 	}
 
+	// 注册 SQLiteObserver - 负责将所有事件存储到 SQLite 数据库
+	sqliteObserver, err := observers.NewSQLiteObserver(dataDir, logger, nil)
+	if err != nil {
+		logger.Error("创建 SQLite 观察器失败", zap.Error(err))
+	} else {
+		hookSystem.Register(sqliteObserver)
+		logger.Info("SQLite 观察器已注册到 Hook 系统", zap.String("db_path", sqliteObserver.GetDBPath()))
+	}
+
 	// 注册 Eino Callback Handler
 	callbacks.AppendGlobalHandlers(hookSystem.EinoHandler())
 
