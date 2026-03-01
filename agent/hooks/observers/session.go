@@ -21,7 +21,7 @@ type SessionObserver struct {
 
 	// 去重：记录最近保存的消息（基于 role + content + span_id + trace_id 组合去重）
 	recentMessages map[string]map[string]struct{} // sessionKey -> messageKey -> struct{}
-	mu            sync.RWMutex
+	mu             sync.RWMutex
 }
 
 // NewSessionObserver 创建会话观察器
@@ -30,9 +30,9 @@ func NewSessionObserver(sessions *session.Manager, logger *zap.Logger, filter *o
 		logger = zap.NewNop()
 	}
 	return &SessionObserver{
-		BaseObserver:  observer.NewBaseObserver("session", filter),
-		sessions:      sessions,
-		logger:        logger,
+		BaseObserver:   observer.NewBaseObserver("session", filter),
+		sessions:       sessions,
+		logger:         logger,
 		recentMessages: make(map[string]map[string]struct{}),
 	}
 }
@@ -150,18 +150,18 @@ func (so *SessionObserver) handleLLMCallEnd(ctx context.Context, event events.Ev
 
 	// 去重检查（基于 role + content + span_id + trace_id）
 	if so.isDuplicate(sessionKey, role, content, e.GetTraceID(), e.GetSpanID()) {
-		so.logger.Debug("跳过重复消息（相同 role+content+trace_id+span_id）",
-			zap.String("session_key", sessionKey),
-			zap.String("role", role),
-			zap.String("trace_id", e.GetTraceID()),
-			zap.String("span_id", e.GetSpanID()),
-			zap.String("content_preview", func() string {
-				if len(content) > 50 {
-					return content[:50] + "..."
-				}
-				return content
-			}()),
-		)
+		// so.logger.Debug("跳过重复消息（相同 role+content+trace_id+span_id）",
+		// 	zap.String("session_key", sessionKey),
+		// 	zap.String("role", role),
+		// 	zap.String("trace_id", e.GetTraceID()),
+		// 	zap.String("span_id", e.GetSpanID()),
+		// 	zap.String("content_preview", func() string {
+		// 		if len(content) > 50 {
+		// 			return content[:50] + "..."
+		// 		}
+		// 		return content
+		// 	}()),
+		// )
 		return
 	}
 
