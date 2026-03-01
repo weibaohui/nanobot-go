@@ -9,22 +9,30 @@ import (
 
 // CompressConfig 对话压缩配置
 type CompressConfig struct {
-	Enabled    bool   `json:"enabled"`     // 是否启用压缩功能
-	MinMessages int   `json:"minMessages"` // 最小消息数量阈值（默认20）
-	MinTokens  int    `json:"minTokens"`   // 最小 Token 用量阈值（默认50000）
-	Model      string `json:"model"`       // 压缩使用的模型（默认使用默认模型）
-	MaxHistory int    `json:"maxHistory"`  // 压缩后保留的最大历史消息数（默认5）
+	Enabled     bool   `json:"enabled"`     // 是否启用压缩功能
+	MinMessages int    `json:"minMessages"` // 最小消息数量阈值（默认20）
+	MinTokens   int    `json:"minTokens"`   // 最小 Token 用量阈值（默认50000）
+	Model       string `json:"model"`       // 压缩使用的模型（默认使用默认模型）
+	MaxHistory  int    `json:"maxHistory"`  // 压缩后保留的最大历史消息数（默认5）
+}
+
+// ThinkingProcessConfig 思考过程配置
+// 用于控制是否将 AI 的思考过程（工具调用、LLM 响应等）实时发送到 channel
+type ThinkingProcessConfig struct {
+	Enabled bool     `json:"enabled"` // 是否启用思考过程推送
+	Events  []string `json:"events"`  // 要监听的事件类型，如 ["tool_used", "tool_completed", "llm_call_end"]
 }
 
 // Config 根配置结构
 type Config struct {
-	Agents    AgentsConfig    `json:"agents"`
-	Channels  ChannelsConfig  `json:"channels"`
-	Providers ProvidersConfig `json:"providers"`
-	Gateway   GatewayConfig   `json:"gateway"`
-	Tools     ToolsConfig     `json:"tools"`
-	Heartbeat HeartbeatConfig `json:"heartbeat"`
-	Compress  CompressConfig  `json:"compress"`
+	Agents          AgentsConfig          `json:"agents"`
+	Channels        ChannelsConfig        `json:"channels"`
+	Providers       ProvidersConfig       `json:"providers"`
+	Gateway         GatewayConfig         `json:"gateway"`
+	Tools           ToolsConfig           `json:"tools"`
+	Heartbeat       HeartbeatConfig       `json:"heartbeat"`
+	Compress        CompressConfig        `json:"compress"`
+	ThinkingProcess ThinkingProcessConfig `json:"thinkingProcess"` // 思考过程配置
 }
 
 // HeartbeatConfig 心跳配置
@@ -168,6 +176,10 @@ func DefaultConfig() *Config {
 				MaxToolIterations: 20,
 			},
 		},
+		ThinkingProcess: ThinkingProcessConfig{
+			Enabled: true,
+			Events:  []string{"tool_used", "tool_completed"},
+		},
 		Channels: ChannelsConfig{
 			Matrix: MatrixConfig{
 				Homeserver: "https://matrix.example.com",
@@ -199,11 +211,11 @@ func DefaultConfig() *Config {
 			ActiveHours: ActiveHours{Start: "09:00", End: "18:00"},
 		},
 		Compress: CompressConfig{
-			Enabled:    false,
+			Enabled:     false,
 			MinMessages: 20,
-			MinTokens:  50000,
-			Model:      "",
-			MaxHistory: 5,
+			MinTokens:   50000,
+			Model:       "",
+			MaxHistory:  5,
 		},
 	}
 }

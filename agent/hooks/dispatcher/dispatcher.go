@@ -6,6 +6,7 @@ import (
 
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observer"
+	"github.com/weibaohui/nanobot-go/agent/hooks/trace"
 	"go.uber.org/zap"
 )
 
@@ -60,11 +61,23 @@ func (d *Dispatcher) Unregister(name string) {
 }
 
 // Dispatch 分发事件
+// channel 和 sessionKey 会被注入到 context 中，供 Observer 获取
 func (d *Dispatcher) Dispatch(ctx context.Context, event events.Event, channel, sessionKey string) {
 	d.mu.RLock()
 	observers := make([]observer.Observer, len(d.observers))
 	copy(observers, d.observers)
 	d.mu.RUnlock()
+
+	// 如果 context 中没有 sessionKey/channel，使用 Dispatch 参数补充
+	// 这确保从 loop.go 传递的会话信息能被所有事件使用
+	existingSessionKey := trace.GetSessionKey(ctx)
+	existingChannel := trace.GetChannel(ctx)
+	if existingSessionKey == "" && sessionKey != "" {
+		ctx = trace.WithSessionKey(ctx, sessionKey)
+	}
+	if existingChannel == "" && channel != "" {
+		ctx = trace.WithChannel(ctx, channel)
+	}
 
 	for _, obs := range observers {
 		if !obs.Enabled() {

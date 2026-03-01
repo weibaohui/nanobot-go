@@ -314,6 +314,10 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 	ctx = trace.WithSpanID(ctx, trace.NewSpanID())
 	// 根 span 没有 parentSpanID
 
+	// 注入会话信息到 context，用于事件分发时获取
+	sessionKey := msg.SessionKey()
+	ctx = trace.WithSessionInfo(ctx, sessionKey, msg.Channel)
+
 	// 触发收到消息事件
 	if l.hookManager != nil {
 		l.hookManager.OnMessageReceived(ctx, msg)
