@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/weibaohui/nanobot-go/config"
+	"go.uber.org/zap"
 )
 
 // Message 会话消息
@@ -24,10 +25,10 @@ type Message struct {
 
 // Session 会话
 type Session struct {
-	Key       string     `json:"key"`
-	Messages  []Message  `json:"messages"`
-	CreatedAt time.Time  `json:"createdAt"`
-	UpdatedAt time.Time  `json:"updatedAt"`
+	Key       string    `json:"key"`
+	Messages  []Message `json:"messages"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // AddMessage 添加消息到会话
@@ -57,19 +58,27 @@ func (s *Session) AddMessageWithTrace(role, content, traceID, spanID, parentSpan
 func (s *Session) GetHistory(maxMessages int) []map[string]any {
 
 	//TODO 过期机制
-	//超过2小时的消息，认为是过期的，不返回
-	if len(s.Messages) > 0 {
-		first := s.Messages[0].Timestamp
-		if time.Since(first) > 2*time.Hour {
-			return nil
+	// //超过2小时的消息，认为是过期的，不返回
+	// if len(s.Messages) > 0 {
+	// 	first := s.Messages[0].Timestamp
+	// 	if time.Since(first) > 2*time.Hour {
+	// 		return nil
+	// 	}
+	// }
+
+	//筛选出时间上是2小时之内的消息
+	var filteredMessages []Message
+	for _, m := range s.Messages {
+		if time.Since(m.Timestamp) <= 2*time.Hour {
+			filteredMessages = append(filteredMessages, m)
 		}
 	}
 
 	var messages []Message
-	if len(s.Messages) > maxMessages {
-		messages = s.Messages[len(s.Messages)-maxMessages:]
+	if len(filteredMessages) > maxMessages {
+		messages = filteredMessages[len(filteredMessages)-maxMessages:]
 	} else {
-		messages = s.Messages
+		messages = filteredMessages
 	}
 
 	var result []map[string]any
@@ -91,17 +100,19 @@ func (s *Session) Clear() {
 // Manager 会话管理器
 type Manager struct {
 	cfg         *config.Config
+	logger      *zap.Logger
 	sessionsDir string
 	cache       map[string]*Session
 	mu          sync.RWMutex
 }
 
 // NewManager 创建会话管理器
-func NewManager(cfg *config.Config, dataDir string) *Manager {
+func NewManager(cfg *config.Config, logger *zap.Logger, dataDir string) *Manager {
 	sessionsDir := filepath.Join(dataDir, "sessions")
 	os.MkdirAll(sessionsDir, 0755)
 	return &Manager{
 		cfg:         cfg,
+		logger:      logger,
 		sessionsDir: sessionsDir,
 		cache:       make(map[string]*Session),
 	}
@@ -137,20 +148,24 @@ func (m *Manager) GetOrCreate(key string) *Session {
 func (m *Manager) load(key string) *Session {
 	// 先查找最近存在的会话文件
 	path := m.findLatestSessionFile(key)
+	m.logger.Info("findLatestSessionFile", zap.String("key", key), zap.String("path", path))
 	if path == "" {
 		return nil
 	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
+		m.logger.Error("ReadFile", zap.String("path", path), zap.Error(err))
 		return nil
 	}
 
 	var session Session
 	if err := json.Unmarshal(data, &session); err != nil {
+		m.logger.Error("Unmarshal", zap.String("path", path), zap.Error(err))
 		return nil
 	}
 
+	//打印加载的历史消息
 	return &session
 }
 

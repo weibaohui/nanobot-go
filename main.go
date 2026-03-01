@@ -108,7 +108,7 @@ func runGateway(cmd *cobra.Command, args []string) {
 	messageBus := bus.NewMessageBus(logger)
 
 	dataDir := filepath.Join(workspacePath, ".nanobot")
-	sessionManager := session.NewManager(cfg, dataDir)
+	sessionManager := session.NewManager(cfg, logger, dataDir)
 	tokenUsageManager := token_usage.NewTokenUsageManager(dataDir)
 
 	// 创建统一的 Hook 系统
