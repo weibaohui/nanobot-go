@@ -219,8 +219,12 @@ func TestTool_ReadEmptyFile(t *testing.T) {
 		t.Errorf("Run() 返回错误: %v", err)
 	}
 
-	if result != "" {
-		t.Errorf("Run() = %q, 期望空字符串", result)
+	if result == "" {
+		t.Errorf("Run() 返回空字符串，期望占位符")
+	}
+
+	if result != "(文件为空)" {
+		t.Errorf("Run() = %q, 期望 (文件为空)", result)
 	}
 }
 

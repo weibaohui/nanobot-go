@@ -47,6 +47,21 @@ func TestTool_Run(t *testing.T) {
 		}
 	})
 
+	t.Run("执行返回空输出的命令", func(t *testing.T) {
+		tool := &Tool{}
+		ctx := context.Background()
+
+		// 执行一个没有输出的命令（true 是一个总是成功的内置命令）
+		result, err := tool.Run(ctx, `{"command": "true"}`)
+		if err != nil {
+			t.Errorf("Run() 返回错误: %v", err)
+		}
+
+		if result != "(命令执行完成，无输出)" {
+			t.Errorf("Run() = %q, 期望 (命令执行完成，无输出)", result)
+		}
+	})
+
 	t.Run("执行 ls 命令", func(t *testing.T) {
 		tool := &Tool{}
 		ctx := context.Background()

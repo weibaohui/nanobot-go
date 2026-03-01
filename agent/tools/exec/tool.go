@@ -55,6 +55,11 @@ func (t *Tool) Run(ctx context.Context, argumentsInJSON string, opts ...tool.Opt
 	if len(result) > 10000 {
 		result = result[:10000] + "...(已截断)"
 	}
+	// 确保不返回空字符串，避免 Eino 框架构造无效的工具消息
+	// OpenAI API 要求工具消息必须有 content 字段
+	if result == "" {
+		result = "(命令执行完成，无输出)"
+	}
 	return result, nil
 }
 

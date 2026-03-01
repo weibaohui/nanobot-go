@@ -48,7 +48,12 @@ func (t *Tool) Run(ctx context.Context, argumentsInJSON string, opts ...tool.Opt
 	if err != nil {
 		return fmt.Sprintf("错误: 读取文件失败: %s", err), nil
 	}
-	return string(data), nil
+	result := string(data)
+	// 确保不返回空字符串，避免 Eino 框架构造无效的工具消息
+	if result == "" {
+		result = "(命令执行完成，文件为空)"
+	}
+	return result, nil
 }
 
 // InvokableRun 可直接调用的执行入口
