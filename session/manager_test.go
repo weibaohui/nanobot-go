@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/weibaohui/nanobot-go/config"
+	"go.uber.org/zap"
 )
 
 // TestSession_AddMessage 测试添加消息到会话
@@ -127,8 +128,9 @@ func TestSession_Clear(t *testing.T) {
 func TestNewManager(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.DefaultConfig()
+	logger := zap.NewNop()
 
-	manager := NewManager(cfg, tmpDir)
+	manager := NewManager(cfg, logger, tmpDir)
 	if manager == nil {
 		t.Fatal("NewManager 返回 nil")
 	}
@@ -147,7 +149,7 @@ func TestNewManager(t *testing.T) {
 func TestManager_GetOrCreate(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.DefaultConfig()
-	manager := NewManager(cfg, tmpDir)
+	manager := NewManager(cfg, zap.NewNop(), tmpDir)
 
 	t.Run("创建新会话", func(t *testing.T) {
 		session := manager.GetOrCreate("new-session-key")
@@ -180,7 +182,7 @@ func TestManager_GetOrCreate(t *testing.T) {
 func TestManager_Save(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.DefaultConfig()
-	manager := NewManager(cfg, tmpDir)
+	manager := NewManager(cfg, zap.NewNop(), tmpDir)
 
 	session := &Session{
 		Key:       "save-test-session",
@@ -208,7 +210,7 @@ func TestManager_Save(t *testing.T) {
 func TestManager_Delete(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.DefaultConfig()
-	manager := NewManager(cfg, tmpDir)
+	manager := NewManager(cfg, zap.NewNop(), tmpDir)
 
 	t.Run("删除存在的会话", func(t *testing.T) {
 		session := &Session{
@@ -241,7 +243,7 @@ func TestManager_Delete(t *testing.T) {
 func TestManager_ListSessions(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.DefaultConfig()
-	manager := NewManager(cfg, tmpDir)
+	manager := NewManager(cfg, zap.NewNop(), tmpDir)
 
 	session1 := &Session{
 		Key:       "list-test-1",
@@ -296,7 +298,7 @@ func TestSafeFilename(t *testing.T) {
 func TestManager_GetSessionPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.DefaultConfig()
-	manager := NewManager(cfg, tmpDir)
+	manager := NewManager(cfg, zap.NewNop(), tmpDir)
 
 	path := manager.getSessionPath("test:session")
 
@@ -317,7 +319,7 @@ func TestManager_GetSessionPath(t *testing.T) {
 func TestManager_LoadNonexistentSession(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.DefaultConfig()
-	manager := NewManager(cfg, tmpDir)
+	manager := NewManager(cfg, zap.NewNop(), tmpDir)
 
 	session := manager.load("nonexistent-session")
 	if session != nil {
@@ -329,7 +331,7 @@ func TestManager_LoadNonexistentSession(t *testing.T) {
 func TestManager_SaveAndLoadWithAllFields(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.DefaultConfig()
-	manager := NewManager(cfg, tmpDir)
+	manager := NewManager(cfg, zap.NewNop(), tmpDir)
 
 	now := time.Now()
 	original := &Session{
@@ -370,7 +372,7 @@ func TestManager_DataDirCreation(t *testing.T) {
 	nonexistentDir := filepath.Join(tmpDir, "nonexistent", "nested", "dir")
 
 	cfg := config.DefaultConfig()
-	manager := NewManager(cfg, nonexistentDir)
+	manager := NewManager(cfg, zap.NewNop(), nonexistentDir)
 
 	expectedDir := filepath.Join(nonexistentDir, "sessions")
 	if _, err := os.Stat(expectedDir); os.IsNotExist(err) {

@@ -22,7 +22,7 @@ func TestNewLoop(t *testing.T) {
 		cfg := &config.Config{}
 		logger := zap.NewNop()
 		messageBus := bus.NewMessageBus(logger)
-		sessionMgr := session.NewManager(cfg, "/tmp")
+		sessionMgr := session.NewManager(cfg, logger, "/tmp")
 
 		loop := NewLoop(&LoopConfig{
 			Config:         cfg,
