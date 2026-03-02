@@ -277,9 +277,16 @@ func runGateway(cmd *cobra.Command, args []string) {
 				logger.Error("MasterAgent 未初始化，跳过心跳处理")
 				return "", fmt.Errorf("MasterAgent not initialized")
 			}
+			// 使用配置的 Session 作为 ChatID，确保心跳有独立的会话
+			chatID := session
+			if chatID == "" {
+				chatID = "default"
+			}
 			resp, err := agent.Process(ctx, &bus.InboundMessage{
-				Channel: "heartbeat",
-				Content: prompt,
+				Channel:  "heartbeat",
+				ChatID:   chatID,
+				SenderID: "system",
+				Content:  prompt,
 			})
 			if err != nil {
 				logger.Error("处理心跳消息失败", zap.Error(err))
