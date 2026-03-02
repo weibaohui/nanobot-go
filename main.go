@@ -27,6 +27,8 @@ import (
 	"github.com/weibaohui/nanobot-go/token_usage"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/weibaohui/nanobot-go/internal/models"
 )
 
 // convRepoAdapter 将 repository.ConversationRecordRepository 适配为 session.ConversationRecordRepository
@@ -38,33 +40,8 @@ func newConvRepoAdapter(repo repository.ConversationRecordRepository) session.Co
 	return &convRepoAdapter{repo: repo}
 }
 
-func (a *convRepoAdapter) FindBySessionKey(ctx context.Context, sessionKey string, opts *session.QueryOptions) ([]session.ConversationRecord, error) {
-	repoOpts := &repository.QueryOptions{
-		OrderBy: opts.OrderBy,
-		Order:   opts.Order,
-		Limit:   opts.Limit,
-		Offset:  opts.Offset,
-	}
-	records, err := a.repo.FindBySessionKey(ctx, sessionKey, repoOpts)
-	if err != nil {
-		return nil, err
-	}
-	result := make([]session.ConversationRecord, len(records))
-	for i, r := range records {
-		result[i] = session.ConversationRecord{
-			ID:           r.ID,
-			TraceID:      r.TraceID,
-			SpanID:       r.SpanID,
-			ParentSpanID: r.ParentSpanID,
-			EventType:    r.EventType,
-			Timestamp:    r.Timestamp,
-			SessionKey:   r.SessionKey,
-			Role:         r.Role,
-			Content:      r.Content,
-			CreatedAt:    r.CreatedAt,
-		}
-	}
-	return result, nil
+func (a *convRepoAdapter) FindBySessionKey(ctx context.Context, sessionKey string, opts *models.QueryOptions) ([]models.ConversationRecord, error) {
+	return a.repo.FindBySessionKey(ctx, sessionKey, opts)
 }
 
 var (

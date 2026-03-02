@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/weibaohui/nanobot-go/agent/models"
+	"github.com/weibaohui/nanobot-go/internal/models"
 	"github.com/weibaohui/nanobot-go/agent/repository"
 )
 
@@ -100,7 +100,7 @@ func (s *conversationService) ListBySessionKey(ctx context.Context, sessionKey s
 	}
 
 	offset := (page - 1) * pageSize
-	records, err := s.repo.FindBySessionKey(ctx, sessionKey, &repository.QueryOptions{
+	records, err := s.repo.FindBySessionKey(ctx, sessionKey, &models.QueryOptions{
 		OrderBy: "timestamp",
 		Order:   "ASC",
 		Limit:   pageSize,
@@ -135,7 +135,7 @@ func (s *conversationService) ListByTimeRange(ctx context.Context, startTime, en
 	}
 
 	offset := (page - 1) * pageSize
-	records, err := s.repo.FindByTimeRange(ctx, startTime, endTime, &repository.QueryOptions{
+	records, err := s.repo.FindByTimeRange(ctx, startTime, endTime, &models.QueryOptions{
 		OrderBy: "timestamp",
 		Order:   "ASC",
 		Limit:   pageSize,
@@ -170,7 +170,7 @@ func (s *conversationService) ListRecent(ctx context.Context, page, pageSize int
 	}
 
 	offset := (page - 1) * pageSize
-	records, err := s.repo.FindByTimeRange(ctx, time.Time{}, time.Now(), &repository.QueryOptions{
+	records, err := s.repo.FindByTimeRange(ctx, time.Time{}, time.Now(), &models.QueryOptions{
 		OrderBy: "timestamp",
 		Order:   "DESC",
 		Limit:   pageSize,

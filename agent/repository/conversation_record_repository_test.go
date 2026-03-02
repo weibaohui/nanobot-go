@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/weibaohui/nanobot-go/agent/models"
+	"github.com/weibaohui/nanobot-go/internal/models"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )

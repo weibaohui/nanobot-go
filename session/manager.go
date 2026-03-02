@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/weibaohui/nanobot-go/config"
+	"github.com/weibaohui/nanobot-go/internal/models"
 	"go.uber.org/zap"
 )
 
@@ -61,31 +62,9 @@ func (s *Session) Clear() {
 	s.UpdatedAt = time.Now()
 }
 
-// ConversationRecord 对话记录结构（避免循环依赖）
-type ConversationRecord struct {
-	ID           uint      `json:"id"`
-	TraceID      string    `json:"trace_id"`
-	SpanID       string    `json:"span_id,omitempty"`
-	ParentSpanID string    `json:"parent_span_id,omitempty"`
-	EventType    string    `json:"event_type"`
-	Timestamp    time.Time `json:"timestamp"`
-	SessionKey   string    `json:"session_key"`
-	Role         string    `json:"role"`
-	Content      string    `json:"content"`
-	CreatedAt    time.Time `json:"created_at"`
-}
-
-// ConversationRecordRepository 对话记录仓库接口（避免循环依赖）
+// ConversationRecordRepository 对话记录仓库接口
 type ConversationRecordRepository interface {
-	FindBySessionKey(ctx context.Context, sessionKey string, opts *QueryOptions) ([]ConversationRecord, error)
-}
-
-// QueryOptions 查询选项
-type QueryOptions struct {
-	OrderBy string
-	Order   string
-	Limit   int
-	Offset  int
+	FindBySessionKey(ctx context.Context, sessionKey string, opts *models.QueryOptions) ([]models.ConversationRecord, error)
 }
 
 // Manager 会话管理器
@@ -119,7 +98,7 @@ func (m *Manager) GetHistory(ctx context.Context, sessionKey string, maxMessages
 	}
 
 	// 从数据库查询最近的对话记录
-	records, err := m.convRepo.FindBySessionKey(ctx, sessionKey, &QueryOptions{
+	records, err := m.convRepo.FindBySessionKey(ctx, sessionKey, &models.QueryOptions{
 		OrderBy: "timestamp",
 		Order:   "ASC",
 		Limit:   maxMessages * 2,
@@ -133,7 +112,7 @@ func (m *Manager) GetHistory(ctx context.Context, sessionKey string, maxMessages
 
 	// 筛选出2小时之内的消息
 	cutoffTime := time.Now().Add(-2 * time.Hour)
-	var filteredRecords []ConversationRecord
+	var filteredRecords []models.ConversationRecord
 	for _, record := range records {
 		if record.Timestamp.After(cutoffTime) {
 			filteredRecords = append(filteredRecords, record)

@@ -44,12 +44,9 @@ type Loop struct {
 	hookManager         *hooks.HookManager
 	hookCallback        func(eventType events.EventType, data map[string]interface{}) // Hook 回调
 
-	interruptManager   *InterruptManager
-	supervisor         *SupervisorAgent
-	masterAgent        *MasterAgent
-	enableSupervisor   bool
-	taskManager        *AgentTaskManager
-	contextSetterTools []string // 需要设置上下文的工具名列表
+	interruptManager *InterruptManager
+	masterAgent      *MasterAgent
+	taskManager      *AgentTaskManager
 }
 
 // LoopConfig Loop 配置
@@ -92,7 +89,6 @@ func NewLoop(cfg *LoopConfig) *Loop {
 		logger:              logger,
 		hookManager:         cfg.HookManager,
 		hookCallback:        cfg.HookCallback,
-		contextSetterTools:  []string{"message", "cron", "ask_user", "start_task"},
 	}
 
 	loop.interruptManager = NewInterruptManager(cfg.MessageBus, logger)
@@ -127,28 +123,6 @@ func NewLoop(cfg *LoopConfig) *Loop {
 	adapter.SetHookCallback(loop.hookCallback)
 
 	adkTools := loop.tools.GetToolsByNames(toolNames)
-
-	supervisor, err := NewSupervisorAgent(ctx, &SupervisorConfig{
-		Cfg:             loop.cfg,
-		Workspace:       loop.workspace,
-		Tools:           adkTools,
-		Logger:          logger,
-		Sessions:        cfg.SessionManager,
-		Bus:             cfg.MessageBus,
-		Context:         loop.context,
-		InterruptMgr:    loop.interruptManager,
-		CheckpointStore: loop.interruptManager.GetCheckpointStore(),
-		MaxIterations:   cfg.MaxIterations,
-		RegisteredTools: toolNames,
-		HookManager:     loop.hookManager,
-	})
-	if err != nil {
-		logger.Error("创建 Supervisor Agent 失败，将使用传统模式", zap.Error(err))
-	} else {
-		loop.supervisor = supervisor
-		loop.enableSupervisor = true
-		logger.Info("Supervisor Agent 创建成功，已启用入口型 Agent 模式")
-	}
 
 	masterAgent, err := NewMasterAgent(ctx, &MasterAgentConfig{
 		Cfg:             loop.cfg,
@@ -323,9 +297,6 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 		l.hookManager.OnMessageReceived(ctx, msg)
 	}
 
-	// 更新工具上下文
-	l.updateToolContext(msg.Channel, msg.ChatID)
-
 	// 使用 Master Agent 处理消息（包括中断恢复和正常处理）
 	l.logger.Info("使用 Master Agent 处理消息")
 	response, err := l.masterAgent.Process(ctx, msg)
@@ -353,24 +324,10 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 
 }
 
-// updateToolContext 更新需要上下文的工具
-func (l *Loop) updateToolContext(channel, chatID string) {
-	for _, toolName := range l.contextSetterTools {
-		if tool, ok := l.tools.Get(toolName).(tools.ContextSetter); ok {
-			tool.SetContext(channel, chatID)
-		}
-	}
-}
-
-// GetSupervisor 获取 Supervisor Agent
+// GetMasterAgent 获取 Master Agent
 func (l *Loop) GetMasterAgent() *MasterAgent {
 	if l.masterAgent == nil {
 		l.logger.Warn("GetMasterAgent() 被调用但 MasterAgent 未初始化")
 	}
 	return l.masterAgent
-}
-
-// GetSupervisor 获取 Supervisor Agent
-func (l *Loop) GetSupervisor() *SupervisorAgent {
-	return l.supervisor
 }

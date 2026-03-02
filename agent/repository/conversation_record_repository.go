@@ -6,15 +6,15 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/weibaohui/nanobot-go/agent/models"
+	"github.com/weibaohui/nanobot-go/internal/models"
 )
 
 // ConversationRecordRepository 对话记录仓储接口
 type ConversationRecordRepository interface {
 	FindByID(ctx context.Context, id uint) (*models.ConversationRecord, error)
 	FindByTraceID(ctx context.Context, traceID string) ([]models.ConversationRecord, error)
-	FindBySessionKey(ctx context.Context, sessionKey string, opts *QueryOptions) ([]models.ConversationRecord, error)
-	FindByTimeRange(ctx context.Context, startTime, endTime time.Time, opts *QueryOptions) ([]models.ConversationRecord, error)
+	FindBySessionKey(ctx context.Context, sessionKey string, opts *models.QueryOptions) ([]models.ConversationRecord, error)
+	FindByTimeRange(ctx context.Context, startTime, endTime time.Time, opts *models.QueryOptions) ([]models.ConversationRecord, error)
 	FindByTraceIDRoleAndContent(ctx context.Context, traceID, role, content string) ([]models.ConversationRecord, error)
 	CountBySessionKey(ctx context.Context, sessionKey string) (int64, error)
 	CountByTimeRange(ctx context.Context, startTime, endTime time.Time) (int64, error)
@@ -22,15 +22,6 @@ type ConversationRecordRepository interface {
 	Create(ctx context.Context, record *models.ConversationRecord) error
 	CreateBatch(ctx context.Context, records []models.ConversationRecord) error
 	DeleteByID(ctx context.Context, id uint) error
-}
-
-// QueryOptions 查询选项
-type QueryOptions struct {
-	OrderBy string
-	Order   string
-	Limit   int
-	Offset  int
-	Roles   []string
 }
 
 type conversationRecordRepository struct {
@@ -61,7 +52,7 @@ func (r *conversationRecordRepository) FindByTraceID(ctx context.Context, traceI
 	return records, nil
 }
 
-func (r *conversationRecordRepository) FindBySessionKey(ctx context.Context, sessionKey string, opts *QueryOptions) ([]models.ConversationRecord, error) {
+func (r *conversationRecordRepository) FindBySessionKey(ctx context.Context, sessionKey string, opts *models.QueryOptions) ([]models.ConversationRecord, error) {
 	query := r.db.WithContext(ctx).Where("session_key = ?", sessionKey)
 
 	if opts != nil {
@@ -94,7 +85,7 @@ func (r *conversationRecordRepository) FindBySessionKey(ctx context.Context, ses
 	return records, nil
 }
 
-func (r *conversationRecordRepository) FindByTimeRange(ctx context.Context, startTime, endTime time.Time, opts *QueryOptions) ([]models.ConversationRecord, error) {
+func (r *conversationRecordRepository) FindByTimeRange(ctx context.Context, startTime, endTime time.Time, opts *models.QueryOptions) ([]models.ConversationRecord, error) {
 	query := r.db.WithContext(ctx).
 		Where("timestamp >= ?", startTime).
 		Where("timestamp <= ?", endTime)

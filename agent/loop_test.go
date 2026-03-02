@@ -133,27 +133,6 @@ func TestLoop_GetMasterAgent(t *testing.T) {
 	_ = agent
 }
 
-// TestLoop_GetSupervisor 测试获取 Supervisor Agent
-func TestLoop_GetSupervisor(t *testing.T) {
-	cfg := &config.Config{}
-	logger := zap.NewNop()
-	messageBus := bus.NewMessageBus(logger)
-
-	loop := NewLoop(&LoopConfig{
-		Config:     cfg,
-		MessageBus: messageBus,
-		Workspace:  "/tmp/workspace",
-		Logger:     logger,
-	})
-
-	if loop == nil {
-		t.Fatal("NewLoop() 返回 nil")
-	}
-
-	supervisor := loop.GetSupervisor()
-	_ = supervisor
-}
-
 // TestLoopConfig 测试 LoopConfig 结构
 func TestLoopConfig(t *testing.T) {
 	logger := zap.NewNop()

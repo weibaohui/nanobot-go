@@ -26,3 +26,12 @@ type ConversationRecord struct {
 func (ConversationRecord) TableName() string {
 	return "conversation_records"
 }
+
+// QueryOptions 查询选项
+type QueryOptions struct {
+	OrderBy string
+	Order   string
+	Limit   int
+	Offset  int
+	Roles   []string
+}
