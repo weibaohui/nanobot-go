@@ -157,7 +157,7 @@ func runGateway(cmd *cobra.Command, args []string) {
 	}
 
 	// 注册 SQLiteObserver - 负责将所有事件存储到 SQLite 数据库
-	sqliteObserver, err := observers.NewSQLiteObserver(dataDir, logger, nil)
+	sqliteObserver, err := observers.NewSQLiteObserver(cfg, logger, nil)
 	if err != nil {
 		logger.Error("创建 SQLite 观察器失败", zap.Error(err))
 	} else {

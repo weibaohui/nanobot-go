@@ -10,6 +10,7 @@ import (
 	"github.com/weibaohui/nanobot-go/agent/models"
 	"github.com/weibaohui/nanobot-go/agent/repository"
 	"github.com/weibaohui/nanobot-go/agent/service"
+	"github.com/weibaohui/nanobot-go/config"
 	"go.uber.org/zap"
 )
 
@@ -23,16 +24,20 @@ type SQLiteObserver struct {
 }
 
 // NewSQLiteObserver 创建 SQLite 观察器
-func NewSQLiteObserver(dataDir string, logger *zap.Logger, filter *observer.ObserverFilter) (*SQLiteObserver, error) {
+// 使用全局配置中的数据库配置
+func NewSQLiteObserver(cfg *config.Config, logger *zap.Logger, filter *observer.ObserverFilter) (*SQLiteObserver, error) {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
 
+	// 从全局配置创建数据库配置
+	dbConfig := database.NewConfigFromConfig(cfg)
+	if dbConfig == nil {
+		return nil, fmt.Errorf("数据库未启用或配置错误")
+	}
+
 	// 创建数据库客户端
-	dbClient, err := database.NewClient(&database.Config{
-		DataDir: dataDir,
-		DBName:  "events.db",
-	})
+	dbClient, err := database.NewClient(dbConfig)
 	if err != nil {
 		return nil, fmt.Errorf("创建数据库客户端失败: %w", err)
 	}
