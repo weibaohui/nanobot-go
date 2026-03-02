@@ -2,27 +2,30 @@ package observers
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observer"
+	"github.com/weibaohui/nanobot-go/agent/models"
+	"github.com/weibaohui/nanobot-go/agent/repository"
+	"github.com/weibaohui/nanobot-go/agent/service"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 	"go.uber.org/zap"
-	_ "modernc.org/sqlite" // 纯 Go SQLite 驱动
 )
 
 // SQLiteObserver SQLite 观察器
 // 将消息事件存储到 SQLite 数据库中
 type SQLiteObserver struct {
 	*observer.BaseObserver
-	db     *sql.DB
-	dbPath string
-	logger *zap.Logger
-	mu     sync.RWMutex
+	db           *gorm.DB
+	dbPath       string
+	logger       *zap.Logger
+	mu           sync.RWMutex
+	conversation service.ConversationService
 }
 
 // NewSQLiteObserver 创建 SQLite 观察器
@@ -40,58 +43,48 @@ func NewSQLiteObserver(dataDir string, logger *zap.Logger, filter *observer.Obse
 	dbPath := filepath.Join(dataDir, "events.db")
 
 	// 打开数据库连接
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
 		return nil, fmt.Errorf("打开数据库失败: %w", err)
 	}
 
 	// 设置连接池参数
-	db.SetMaxOpenConns(1) // SQLite 建议单连接
-	db.SetMaxIdleConns(1)
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("获取数据库连接失败: %w", err)
+	}
+	sqlDB.SetMaxOpenConns(1) // SQLite 建议单连接
+	sqlDB.SetMaxIdleConns(1)
 
 	// 初始化表结构
 	if err := initDB(db); err != nil {
-		db.Close()
+		sqlDB.Close()
 		return nil, fmt.Errorf("初始化数据库表失败: %w", err)
 	}
 
 	logger.Info("SQLite 观察器已初始化", zap.String("db_path", dbPath))
+
+	// 创建 Repository 和 Service
+	repo := repository.NewEventRepository(db)
+	convService := service.NewConversationService(repo)
 
 	return &SQLiteObserver{
 		BaseObserver: observer.NewBaseObserver("sqlite", filter),
 		db:           db,
 		dbPath:       dbPath,
 		logger:       logger,
+		conversation: convService,
 	}, nil
 }
 
 // initDB 初始化数据库表结构
-func initDB(db *sql.DB) error {
-	// 创建 events 表
-	createTableSQL := `
-	CREATE TABLE IF NOT EXISTS events (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		trace_id TEXT NOT NULL,
-		span_id TEXT,
-		parent_span_id TEXT,
-		event_type TEXT NOT NULL,
-		timestamp DATETIME NOT NULL,
-		session_key TEXT,
-		role TEXT,
-		content TEXT,
-		prompt_tokens INTEGER DEFAULT 0,
-		completion_tokens INTEGER DEFAULT 0,
-		total_tokens INTEGER DEFAULT 0,
-		reasoning_tokens INTEGER DEFAULT 0,
-		cached_tokens INTEGER DEFAULT 0,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);`
-
-	if _, err := db.Exec(createTableSQL); err != nil {
+func initDB(db *gorm.DB) error {
+	// 自动迁移表结构
+	if err := db.AutoMigrate(&models.Event{}); err != nil {
 		return fmt.Errorf("创建 events 表失败: %w", err)
 	}
 
-	// 创建索引
+	// 创建索引（AutoMigrate 会创建主键索引，我们手动创建其他索引）
 	indexes := []string{
 		"CREATE INDEX IF NOT EXISTS idx_events_event_type ON events(event_type);",
 		"CREATE INDEX IF NOT EXISTS idx_events_session_key ON events(session_key);",
@@ -101,7 +94,7 @@ func initDB(db *sql.DB) error {
 	}
 
 	for _, indexSQL := range indexes {
-		if _, err := db.Exec(indexSQL); err != nil {
+		if err := db.Exec(indexSQL).Error; err != nil {
 			return fmt.Errorf("创建索引失败: %w", err)
 		}
 	}
@@ -137,8 +130,8 @@ func (o *SQLiteObserver) handlePromptSubmitted(ctx context.Context, event events
 	// 提取通用字段
 	baseEvent := event.ToBaseEvent()
 
-	// 插入数据库
-	return o.insertEvent(&eventRecord{
+	// 创建 DTO
+	dto := &service.ConversationDTO{
 		TraceID:      baseEvent.TraceID,
 		SpanID:       baseEvent.SpanID,
 		ParentSpanID: baseEvent.ParentSpanID,
@@ -147,7 +140,22 @@ func (o *SQLiteObserver) handlePromptSubmitted(ctx context.Context, event events
 		SessionKey:   e.SessionKey,
 		Role:         "user",
 		Content:      e.UserInput,
-	})
+	}
+
+	// 插入数据库
+	if err := o.conversation.Create(ctx, dto); err != nil {
+		o.logger.Error("插入事件失败",
+			zap.Error(err),
+			zap.String("event_type", dto.EventType),
+			zap.String("trace_id", dto.TraceID),
+		)
+		return err
+	}
+
+	// 执行去重（去重逻辑需要保留，但需要调整实现）
+	o.deduplicateRecords(ctx, dto.TraceID, dto.Role, dto.Content)
+
+	return nil
 }
 
 // handleLLMCallEnd 处理 LLM 调用结束事件
@@ -185,31 +193,44 @@ func (o *SQLiteObserver) handleLLMCallEnd(ctx context.Context, event events.Even
 	}
 
 	// 提取 Token Usage 信息
-	var promptTokens, completionTokens, totalTokens, reasoningTokens, cachedTokens int
+	var tokenUsage *service.TokenUsageDTO
 	if e.TokenUsage != nil {
-		promptTokens = e.TokenUsage.PromptTokens
-		completionTokens = e.TokenUsage.CompletionTokens
-		totalTokens = e.TokenUsage.TotalTokens
-		reasoningTokens = e.TokenUsage.CompletionTokensDetails.ReasoningTokens
-		cachedTokens = e.TokenUsage.PromptTokenDetails.CachedTokens
+		tokenUsage = &service.TokenUsageDTO{
+			PromptTokens:     e.TokenUsage.PromptTokens,
+			CompletionTokens: e.TokenUsage.CompletionTokens,
+			TotalTokens:      e.TokenUsage.TotalTokens,
+			ReasoningTokens:  e.TokenUsage.CompletionTokensDetails.ReasoningTokens,
+			CachedTokens:     e.TokenUsage.PromptTokenDetails.CachedTokens,
+		}
+	}
+
+	// 创建 DTO
+	dto := &service.ConversationDTO{
+		TraceID:      baseEvent.TraceID,
+		SpanID:       baseEvent.SpanID,
+		ParentSpanID: baseEvent.ParentSpanID,
+		EventType:    string(baseEvent.EventType),
+		Timestamp:    baseEvent.Timestamp,
+		SessionKey:   sessionKey,
+		Role:         role,
+		Content:      content,
+		TokenUsage:   tokenUsage,
 	}
 
 	// 插入数据库
-	return o.insertEvent(&eventRecord{
-		TraceID:          baseEvent.TraceID,
-		SpanID:           baseEvent.SpanID,
-		ParentSpanID:     baseEvent.ParentSpanID,
-		EventType:        string(baseEvent.EventType),
-		Timestamp:        baseEvent.Timestamp,
-		SessionKey:       sessionKey,
-		Role:             role,
-		Content:          content,
-		PromptTokens:     promptTokens,
-		CompletionTokens: completionTokens,
-		TotalTokens:      totalTokens,
-		ReasoningTokens:  reasoningTokens,
-		CachedTokens:     cachedTokens,
-	})
+	if err := o.conversation.Create(ctx, dto); err != nil {
+		o.logger.Error("插入事件失败",
+			zap.Error(err),
+			zap.String("event_type", dto.EventType),
+			zap.String("trace_id", dto.TraceID),
+		)
+		return err
+	}
+
+	// 执行去重
+	o.deduplicateRecords(ctx, dto.TraceID, dto.Role, dto.Content)
+
+	return nil
 }
 
 // handleToolCompleted 处理工具执行完成事件
@@ -234,8 +255,8 @@ func (o *SQLiteObserver) handleToolCompleted(ctx context.Context, event events.E
 		content = "(无输出)"
 	}
 
-	// 插入数据库
-	return o.insertEvent(&eventRecord{
+	// 创建 DTO
+	dto := &service.ConversationDTO{
 		TraceID:      baseEvent.TraceID,
 		SpanID:       baseEvent.SpanID,
 		ParentSpanID: baseEvent.ParentSpanID,
@@ -244,68 +265,20 @@ func (o *SQLiteObserver) handleToolCompleted(ctx context.Context, event events.E
 		SessionKey:   sessionKey,
 		Role:         "tool_result",
 		Content:      e.ToolName + ": " + content,
-	})
-}
+	}
 
-// eventRecord 事件记录
-type eventRecord struct {
-	TraceID          string
-	SpanID           string
-	ParentSpanID     string
-	EventType        string
-	Timestamp        time.Time
-	SessionKey       string
-	Role             string
-	Content          string
-	PromptTokens     int
-	CompletionTokens int
-	TotalTokens      int
-	ReasoningTokens  int
-	CachedTokens     int
-}
-
-// insertEvent 插入事件到数据库
-func (o *SQLiteObserver) insertEvent(record *eventRecord) error {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-
-	insertSQL := `
-	INSERT INTO events (trace_id, span_id, parent_span_id, event_type, timestamp, session_key, role, content, prompt_tokens, completion_tokens, total_tokens, reasoning_tokens, cached_tokens)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
-
-	result, err := o.db.Exec(insertSQL,
-		record.TraceID,
-		record.SpanID,
-		record.ParentSpanID,
-		record.EventType,
-		record.Timestamp.Format(time.RFC3339),
-		record.SessionKey,
-		record.Role,
-		record.Content,
-		record.PromptTokens,
-		record.CompletionTokens,
-		record.TotalTokens,
-		record.ReasoningTokens,
-		record.CachedTokens,
-	)
-
-	if err != nil {
+	// 插入数据库
+	if err := o.conversation.Create(ctx, dto); err != nil {
 		o.logger.Error("插入事件失败",
 			zap.Error(err),
-			zap.String("event_type", record.EventType),
-			zap.String("trace_id", record.TraceID),
+			zap.String("event_type", dto.EventType),
+			zap.String("trace_id", dto.TraceID),
 		)
 		return err
 	}
 
-	// 获取新插入记录的 ID
-	newID, err := result.LastInsertId()
-	if err != nil {
-		return nil // 插入成功即可，去重失败不影响
-	}
-
 	// 执行去重
-	o.deduplicateRecords(record.TraceID, record.Role, record.Content, newID)
+	o.deduplicateRecords(ctx, dto.TraceID, dto.Role, dto.Content)
 
 	return nil
 }
@@ -314,68 +287,54 @@ func (o *SQLiteObserver) insertEvent(record *eventRecord) error {
 // 对于相同 traceID、role、content 的记录：
 // 1. 优先保留有 TokenUsage 信息（total_tokens > 0）的记录
 // 2. 如果都没有 TokenUsage 信息，保留 ID 最小的（最早插入的）
-func (o *SQLiteObserver) deduplicateRecords(traceID, role, content string, newID int64) {
+func (o *SQLiteObserver) deduplicateRecords(ctx context.Context, traceID, role, content string) {
 	// 查找相同 traceID、role、content 的所有记录
-	querySQL := `
-	SELECT id, total_tokens FROM events
-	WHERE trace_id = ? AND role = ? AND content = ?
-	ORDER BY id ASC;`
-
-	rows, err := o.db.Query(querySQL, traceID, role, content)
-	if err != nil {
+	var records []models.Event
+	if err := o.db.WithContext(ctx).
+		Where("trace_id = ? AND role = ? AND content = ?", traceID, role, content).
+		Order("id ASC").
+		Find(&records).Error; err != nil {
 		o.logger.Error("查询重复记录失败", zap.Error(err))
 		return
 	}
-	defer rows.Close()
-
-	var ids []int64
-	var totalTokens []int
-	for rows.Next() {
-		var id int64
-		var tokens int
-		if err := rows.Scan(&id, &tokens); err != nil {
-			continue
-		}
-		ids = append(ids, id)
-		totalTokens = append(totalTokens, tokens)
-	}
 
 	// 如果只有一条记录，无需去重
-	if len(ids) <= 1 {
+	if len(records) <= 1 {
 		return
 	}
 
 	// 找出应该保留的记录
-	var keepID int64 = -1
-	var hasTokenUsage bool = false
+	var keepID uint
+	var hasTokenUsage bool
 
 	// 优先找有 TokenUsage 的记录
-	for i, id := range ids {
-		if totalTokens[i] > 0 {
+	for _, r := range records {
+		if r.TotalTokens > 0 {
 			if !hasTokenUsage {
-				// 第一个有 TokenUsage 的记录
-				keepID = id
+				keepID = r.ID
 				hasTokenUsage = true
 			}
 			// 如果已经有有 TokenUsage 的记录，保留 ID 较小的
+			if r.ID < keepID {
+				keepID = r.ID
+			}
 		}
 	}
 
 	// 如果都没有 TokenUsage，保留 ID 最小的
 	if !hasTokenUsage {
-		keepID = ids[0]
+		keepID = records[0].ID
 	}
 
 	// 删除其他记录
-	for _, id := range ids {
-		if id != keepID {
-			deleteSQL := `DELETE FROM events WHERE id = ?;`
-			if _, err := o.db.Exec(deleteSQL, id); err != nil {
-				o.logger.Error("删除重复记录失败", zap.Error(err), zap.Int64("id", id))
+	for _, r := range records {
+		if r.ID != keepID {
+			if err := o.db.WithContext(ctx).Delete(&r).Error; err != nil {
+				o.logger.Error("删除重复记录失败", zap.Error(err), zap.Uint("id", r.ID))
 			} else {
 				o.logger.Debug("删除重复记录",
-					zap.Int64("deleted_id", id),
-					zap.Int64("kept_id", keepID),
+					zap.Uint("deleted_id", r.ID),
+					zap.Uint("kept_id", keepID),
 					zap.String("trace_id", traceID),
 					zap.String("role", role),
 				)
@@ -391,7 +350,11 @@ func (o *SQLiteObserver) Close() error {
 
 	if o.db != nil {
 		o.logger.Info("关闭 SQLite 数据库连接", zap.String("db_path", o.dbPath))
-		return o.db.Close()
+		sqlDB, err := o.db.DB()
+		if err != nil {
+			return err
+		}
+		return sqlDB.Close()
 	}
 	return nil
 }
@@ -399,4 +362,9 @@ func (o *SQLiteObserver) Close() error {
 // GetDBPath 获取数据库文件路径
 func (o *SQLiteObserver) GetDBPath() string {
 	return o.dbPath
+}
+
+// GetConversationService 获取对话服务（供外部查询使用）
+func (o *SQLiteObserver) GetConversationService() service.ConversationService {
+	return o.conversation
 }
