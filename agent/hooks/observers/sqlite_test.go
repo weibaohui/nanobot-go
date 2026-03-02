@@ -11,6 +11,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observer"
+	"github.com/weibaohui/nanobot-go/agent/models"
 	"go.uber.org/zap"
 )
 
@@ -65,27 +66,22 @@ func TestSQLiteObserver_OnEvent_PromptSubmitted(t *testing.T) {
 		t.Fatalf("处理事件失败: %v", err)
 	}
 
-	// 验证数据已插入
-	var count int
-	row := obs.db.QueryRow("SELECT COUNT(*) FROM events WHERE event_type = ?", "prompt_submitted")
-	if err := row.Scan(&count); err != nil {
+	// 验证数据已插入（使用 ConversationService 查询）
+	service := obs.GetConversationService()
+	result, err := service.GetByTraceID(context.Background(), "trace-123")
+	if err != nil {
 		t.Fatalf("查询失败: %v", err)
 	}
-	if count != 1 {
-		t.Errorf("事件数量错误: got %d, want 1", count)
+	if len(result) != 1 {
+		t.Errorf("事件数量错误: got %d, want 1", len(result))
 	}
 
 	// 验证 role 和 content
-	var role, content string
-	row = obs.db.QueryRow("SELECT role, content FROM events WHERE event_type = ?", "prompt_submitted")
-	if err := row.Scan(&role, &content); err != nil {
-		t.Fatalf("查询失败: %v", err)
+	if result[0].Role != "user" {
+		t.Errorf("role 错误: got %s, want user", result[0].Role)
 	}
-	if role != "user" {
-		t.Errorf("role 错误: got %s, want user", role)
-	}
-	if content != "用户输入内容" {
-		t.Errorf("content 错误: got %s, want 用户输入内容", content)
+	if result[0].Content != "用户输入内容" {
+		t.Errorf("content 错误: got %s, want 用户输入内容", result[0].Content)
 	}
 }
 
@@ -120,26 +116,21 @@ func TestSQLiteObserver_OnEvent_LLMCallEnd(t *testing.T) {
 	}
 
 	// 验证数据已插入
-	var count int
-	row := obs.db.QueryRow("SELECT COUNT(*) FROM events WHERE event_type = ?", "llm_call_end")
-	if err := row.Scan(&count); err != nil {
+	service := obs.GetConversationService()
+	result, err := service.GetByTraceID(context.Background(), "trace-123")
+	if err != nil {
 		t.Fatalf("查询失败: %v", err)
 	}
-	if count != 1 {
-		t.Errorf("事件数量错误: got %d, want 1", count)
+	if len(result) != 1 {
+		t.Errorf("事件数量错误: got %d, want 1", len(result))
 	}
 
 	// 验证 role 和 content
-	var role, content string
-	row = obs.db.QueryRow("SELECT role, content FROM events WHERE event_type = ?", "llm_call_end")
-	if err := row.Scan(&role, &content); err != nil {
-		t.Fatalf("查询失败: %v", err)
+	if result[0].Role != "assistant" {
+		t.Errorf("role 错误: got %s, want assistant", result[0].Role)
 	}
-	if role != "assistant" {
-		t.Errorf("role 错误: got %s, want assistant", role)
-	}
-	if content != "AI 回复内容" {
-		t.Errorf("content 错误: got %s, want AI 回复内容", content)
+	if result[0].Content != "AI 回复内容" {
+		t.Errorf("content 错误: got %s, want AI 回复内容", result[0].Content)
 	}
 }
 
@@ -181,13 +172,16 @@ func TestSQLiteObserver_OnEvent_LLMCallEnd_WithToolCalls(t *testing.T) {
 	}
 
 	// 验证 role 为 tool
-	var role string
-	row := obs.db.QueryRow("SELECT role FROM events WHERE event_type = ?", "llm_call_end")
-	if err := row.Scan(&role); err != nil {
+	service := obs.GetConversationService()
+	result, err := service.GetByTraceID(context.Background(), "trace-123")
+	if err != nil {
 		t.Fatalf("查询失败: %v", err)
 	}
-	if role != "tool" {
-		t.Errorf("role 错误: got %s, want tool", role)
+	if len(result) != 1 {
+		t.Fatalf("事件数量错误: got %d, want 1", len(result))
+	}
+	if result[0].Role != "tool" {
+		t.Errorf("role 错误: got %s, want tool", result[0].Role)
 	}
 }
 
@@ -233,27 +227,33 @@ func TestSQLiteObserver_OnEvent_LLMCallEnd_WithTokenUsage(t *testing.T) {
 	}
 
 	// 验证 Token Usage 字段
-	var promptTokens, completionTokens, totalTokens, reasoningTokens, cachedTokens int
-	row := obs.db.QueryRow(`SELECT prompt_tokens, completion_tokens, total_tokens, reasoning_tokens, cached_tokens
-		FROM events WHERE event_type = ?`, "llm_call_end")
-	if err := row.Scan(&promptTokens, &completionTokens, &totalTokens, &reasoningTokens, &cachedTokens); err != nil {
+	service := obs.GetConversationService()
+	result, err := service.GetByTraceID(context.Background(), "trace-123")
+	if err != nil {
 		t.Fatalf("查询失败: %v", err)
 	}
+	if len(result) != 1 {
+		t.Fatalf("事件数量错误: got %d, want 1", len(result))
+	}
 
-	if promptTokens != 100 {
-		t.Errorf("prompt_tokens 错误: got %d, want 100", promptTokens)
+	if result[0].TokenUsage == nil {
+		t.Fatal("TokenUsage 为 nil")
 	}
-	if completionTokens != 50 {
-		t.Errorf("completion_tokens 错误: got %d, want 50", completionTokens)
+
+	if result[0].TokenUsage.PromptTokens != 100 {
+		t.Errorf("prompt_tokens 错误: got %d, want 100", result[0].TokenUsage.PromptTokens)
 	}
-	if totalTokens != 150 {
-		t.Errorf("total_tokens 错误: got %d, want 150", totalTokens)
+	if result[0].TokenUsage.CompletionTokens != 50 {
+		t.Errorf("completion_tokens 错误: got %d, want 50", result[0].TokenUsage.CompletionTokens)
 	}
-	if reasoningTokens != 20 {
-		t.Errorf("reasoning_tokens 错误: got %d, want 20", reasoningTokens)
+	if result[0].TokenUsage.TotalTokens != 150 {
+		t.Errorf("total_tokens 错误: got %d, want 150", result[0].TokenUsage.TotalTokens)
 	}
-	if cachedTokens != 30 {
-		t.Errorf("cached_tokens 错误: got %d, want 30", cachedTokens)
+	if result[0].TokenUsage.ReasoningTokens != 20 {
+		t.Errorf("reasoning_tokens 错误: got %d, want 20", result[0].TokenUsage.ReasoningTokens)
+	}
+	if result[0].TokenUsage.CachedTokens != 30 {
+		t.Errorf("cached_tokens 错误: got %d, want 30", result[0].TokenUsage.CachedTokens)
 	}
 }
 
@@ -284,26 +284,21 @@ func TestSQLiteObserver_OnEvent_ToolCompleted(t *testing.T) {
 	}
 
 	// 验证数据已插入
-	var count int
-	row := obs.db.QueryRow("SELECT COUNT(*) FROM events WHERE event_type = ?", "tool_completed")
-	if err := row.Scan(&count); err != nil {
+	service := obs.GetConversationService()
+	result, err := service.GetByTraceID(context.Background(), "trace-123")
+	if err != nil {
 		t.Fatalf("查询失败: %v", err)
 	}
-	if count != 1 {
-		t.Errorf("事件数量错误: got %d, want 1", count)
+	if len(result) != 1 {
+		t.Errorf("事件数量错误: got %d, want 1", len(result))
 	}
 
 	// 验证 role 和 content
-	var role, content string
-	row = obs.db.QueryRow("SELECT role, content FROM events WHERE event_type = ?", "tool_completed")
-	if err := row.Scan(&role, &content); err != nil {
-		t.Fatalf("查询失败: %v", err)
+	if result[0].Role != "tool_result" {
+		t.Errorf("role 错误: got %s, want tool_result", result[0].Role)
 	}
-	if role != "tool_result" {
-		t.Errorf("role 错误: got %s, want tool_result", role)
-	}
-	if content != "read_file: 文件内容读取成功" {
-		t.Errorf("content 错误: got %s", content)
+	if result[0].Content != "read_file: 文件内容读取成功" {
+		t.Errorf("content 错误: got %s", result[0].Content)
 	}
 }
 
@@ -329,10 +324,9 @@ func TestSQLiteObserver_OnEvent_IgnoredEvents(t *testing.T) {
 		t.Fatalf("处理事件失败: %v", err)
 	}
 
-	// 验证数据未插入
-	var count int
-	row := obs.db.QueryRow("SELECT COUNT(*) FROM events")
-	if err := row.Scan(&count); err != nil {
+	// 验证数据未插入（使用直接数据库查询）
+	var count int64
+	if err := obs.GetDBClient().DB().Model(&models.Event{}).Count(&count).Error; err != nil {
 		t.Fatalf("查询失败: %v", err)
 	}
 	if count != 0 {
@@ -395,9 +389,11 @@ func TestSQLiteObserver_ConcurrentWrites(t *testing.T) {
 	}
 
 	// 验证数据已插入
-	var count int
-	row := obs.db.QueryRow("SELECT COUNT(*) FROM events WHERE event_type = ?", "prompt_submitted")
-	if err := row.Scan(&count); err != nil {
+	var count int64
+	if err := obs.GetDBClient().DB().
+		Model(&models.Event{}).
+		Where("event_type = ?", "prompt_submitted").
+		Count(&count).Error; err != nil {
 		t.Fatalf("查询失败: %v", err)
 	}
 	if count != 10 {
@@ -455,9 +451,11 @@ func TestSQLiteObserver_Deduplication(t *testing.T) {
 	}
 
 	// 验证只有一条记录（去重）
-	var count int
-	row := obs.db.QueryRow("SELECT COUNT(*) FROM events WHERE trace_id = ?", "trace-123")
-	if err := row.Scan(&count); err != nil {
+	var count int64
+	if err := obs.GetDBClient().DB().
+		Model(&models.Event{}).
+		Where("trace_id = ?", "trace-123").
+		Count(&count).Error; err != nil {
 		t.Fatalf("查询失败: %v", err)
 	}
 	if count != 1 {
@@ -465,12 +463,13 @@ func TestSQLiteObserver_Deduplication(t *testing.T) {
 	}
 
 	// 验证保留的是有 TokenUsage 的记录
-	var totalTokens int
-	row = obs.db.QueryRow("SELECT total_tokens FROM events WHERE trace_id = ?", "trace-123")
-	if err := row.Scan(&totalTokens); err != nil {
+	var record models.Event
+	if err := obs.GetDBClient().DB().
+		Where("trace_id = ?", "trace-123").
+		First(&record).Error; err != nil {
 		t.Fatalf("查询失败: %v", err)
 	}
-	if totalTokens != 150 {
-		t.Errorf("应保留有 TokenUsage 的记录: got total_tokens=%d, want 150", totalTokens)
+	if record.TotalTokens != 150 {
+		t.Errorf("应保留有 TokenUsage 的记录: got total_tokens=%d, want 150", record.TotalTokens)
 	}
 }

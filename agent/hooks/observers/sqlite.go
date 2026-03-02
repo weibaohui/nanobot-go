@@ -3,17 +3,13 @@ package observers
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
-	"sync"
 
+	"github.com/weibaohui/nanobot-go/agent/database"
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observer"
 	"github.com/weibaohui/nanobot-go/agent/models"
 	"github.com/weibaohui/nanobot-go/agent/repository"
 	"github.com/weibaohui/nanobot-go/agent/service"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 	"go.uber.org/zap"
 )
 
@@ -21,10 +17,8 @@ import (
 // 将消息事件存储到 SQLite 数据库中
 type SQLiteObserver struct {
 	*observer.BaseObserver
-	db           *gorm.DB
-	dbPath       string
+	dbClient     *database.Client
 	logger       *zap.Logger
-	mu           sync.RWMutex
 	conversation service.ConversationService
 }
 
@@ -34,72 +28,33 @@ func NewSQLiteObserver(dataDir string, logger *zap.Logger, filter *observer.Obse
 		logger = zap.NewNop()
 	}
 
-	// 确保数据目录存在
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		return nil, fmt.Errorf("创建数据目录失败: %w", err)
-	}
-
-	// 数据库文件路径
-	dbPath := filepath.Join(dataDir, "events.db")
-
-	// 打开数据库连接
-	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	// 创建数据库客户端
+	dbClient, err := database.NewClient(&database.Config{
+		DataDir: dataDir,
+		DBName:  "events.db",
+	})
 	if err != nil {
-		return nil, fmt.Errorf("打开数据库失败: %w", err)
+		return nil, fmt.Errorf("创建数据库客户端失败: %w", err)
 	}
-
-	// 设置连接池参数
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, fmt.Errorf("获取数据库连接失败: %w", err)
-	}
-	sqlDB.SetMaxOpenConns(1) // SQLite 建议单连接
-	sqlDB.SetMaxIdleConns(1)
 
 	// 初始化表结构
-	if err := initDB(db); err != nil {
-		sqlDB.Close()
+	if err := dbClient.InitSchema(); err != nil {
+		dbClient.Close()
 		return nil, fmt.Errorf("初始化数据库表失败: %w", err)
 	}
 
-	logger.Info("SQLite 观察器已初始化", zap.String("db_path", dbPath))
+	logger.Info("SQLite 观察器已初始化", zap.String("db_path", dbClient.DBPath()))
 
 	// 创建 Repository 和 Service
-	repo := repository.NewEventRepository(db)
+	repo := repository.NewEventRepository(dbClient.DB())
 	convService := service.NewConversationService(repo)
 
 	return &SQLiteObserver{
 		BaseObserver: observer.NewBaseObserver("sqlite", filter),
-		db:           db,
-		dbPath:       dbPath,
+		dbClient:     dbClient,
 		logger:       logger,
 		conversation: convService,
 	}, nil
-}
-
-// initDB 初始化数据库表结构
-func initDB(db *gorm.DB) error {
-	// 自动迁移表结构
-	if err := db.AutoMigrate(&models.Event{}); err != nil {
-		return fmt.Errorf("创建 events 表失败: %w", err)
-	}
-
-	// 创建索引（AutoMigrate 会创建主键索引，我们手动创建其他索引）
-	indexes := []string{
-		"CREATE INDEX IF NOT EXISTS idx_events_event_type ON events(event_type);",
-		"CREATE INDEX IF NOT EXISTS idx_events_session_key ON events(session_key);",
-		"CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);",
-		"CREATE INDEX IF NOT EXISTS idx_events_trace_id ON events(trace_id);",
-		"CREATE INDEX IF NOT EXISTS idx_events_role ON events(role);",
-	}
-
-	for _, indexSQL := range indexes {
-		if err := db.Exec(indexSQL).Error; err != nil {
-			return fmt.Errorf("创建索引失败: %w", err)
-		}
-	}
-
-	return nil
 }
 
 // OnEvent 处理事件（实现 Observer 接口）
@@ -290,7 +245,7 @@ func (o *SQLiteObserver) handleToolCompleted(ctx context.Context, event events.E
 func (o *SQLiteObserver) deduplicateRecords(ctx context.Context, traceID, role, content string) {
 	// 查找相同 traceID、role、content 的所有记录
 	var records []models.Event
-	if err := o.db.WithContext(ctx).
+	if err := o.dbClient.DB().WithContext(ctx).
 		Where("trace_id = ? AND role = ? AND content = ?", traceID, role, content).
 		Order("id ASC").
 		Find(&records).Error; err != nil {
@@ -329,7 +284,7 @@ func (o *SQLiteObserver) deduplicateRecords(ctx context.Context, traceID, role, 
 	// 删除其他记录
 	for _, r := range records {
 		if r.ID != keepID {
-			if err := o.db.WithContext(ctx).Delete(&r).Error; err != nil {
+			if err := o.dbClient.DB().WithContext(ctx).Delete(&r).Error; err != nil {
 				o.logger.Error("删除重复记录失败", zap.Error(err), zap.Uint("id", r.ID))
 			} else {
 				o.logger.Debug("删除重复记录",
@@ -345,26 +300,21 @@ func (o *SQLiteObserver) deduplicateRecords(ctx context.Context, traceID, role, 
 
 // Close 关闭数据库连接
 func (o *SQLiteObserver) Close() error {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-
-	if o.db != nil {
-		o.logger.Info("关闭 SQLite 数据库连接", zap.String("db_path", o.dbPath))
-		sqlDB, err := o.db.DB()
-		if err != nil {
-			return err
-		}
-		return sqlDB.Close()
-	}
-	return nil
+	o.logger.Info("关闭 SQLite 数据库连接", zap.String("db_path", o.dbClient.DBPath()))
+	return o.dbClient.Close()
 }
 
 // GetDBPath 获取数据库文件路径
 func (o *SQLiteObserver) GetDBPath() string {
-	return o.dbPath
+	return o.dbClient.DBPath()
 }
 
 // GetConversationService 获取对话服务（供外部查询使用）
 func (o *SQLiteObserver) GetConversationService() service.ConversationService {
 	return o.conversation
+}
+
+// GetDBClient 获取数据库客户端（供其他模块使用）
+func (o *SQLiteObserver) GetDBClient() *database.Client {
+	return o.dbClient
 }
