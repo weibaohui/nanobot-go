@@ -24,6 +24,9 @@ type EventRepository interface {
 	// FindByTimeRange 根据时间范围查找事件列表
 	FindByTimeRange(ctx context.Context, startTime, endTime time.Time, opts *QueryOptions) ([]models.Event, error)
 
+	// FindByTraceIDRoleAndContent 根据 TraceID、Role 和 Content 查找事件（用于去重）
+	FindByTraceIDRoleAndContent(ctx context.Context, traceID, role, content string) ([]models.Event, error)
+
 	// CountBySessionKey 统计 SessionKey 下的事件数量
 	CountBySessionKey(ctx context.Context, sessionKey string) (int64, error)
 
@@ -38,6 +41,9 @@ type EventRepository interface {
 
 	// CreateBatch 批量创建事件
 	CreateBatch(ctx context.Context, events []models.Event) error
+
+	// DeleteByID 根据 ID 删除事件
+	DeleteByID(ctx context.Context, id uint) error
 }
 
 // QueryOptions 查询选项
@@ -210,4 +216,21 @@ func (r *eventRepository) CreateBatch(ctx context.Context, events []models.Event
 	}
 	// 使用批量插入，每批最多 100 条
 	return r.db.WithContext(ctx).CreateInBatches(events, 100).Error
+}
+
+// FindByTraceIDRoleAndContent 根据 TraceID、Role 和 Content 查找事件（用于去重）
+func (r *eventRepository) FindByTraceIDRoleAndContent(ctx context.Context, traceID, role, content string) ([]models.Event, error) {
+	var events []models.Event
+	if err := r.db.WithContext(ctx).
+		Where("trace_id = ? AND role = ? AND content = ?", traceID, role, content).
+		Order("id ASC").
+		Find(&events).Error; err != nil {
+		return nil, err
+	}
+	return events, nil
+}
+
+// DeleteByID 根据 ID 删除事件
+func (r *eventRepository) DeleteByID(ctx context.Context, id uint) error {
+	return r.db.WithContext(ctx).Delete(&models.Event{}, id).Error
 }

@@ -13,9 +13,12 @@ import (
 	"github.com/cloudwego/eino/callbacks"
 	"github.com/spf13/cobra"
 	"github.com/weibaohui/nanobot-go/agent"
+	"github.com/weibaohui/nanobot-go/agent/database"
 	"github.com/weibaohui/nanobot-go/agent/hooks"
 	hookevents "github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observers"
+	"github.com/weibaohui/nanobot-go/agent/repository"
+	"github.com/weibaohui/nanobot-go/agent/service"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/channels"
 	"github.com/weibaohui/nanobot-go/config"
@@ -157,12 +160,37 @@ func runGateway(cmd *cobra.Command, args []string) {
 	}
 
 	// 注册 SQLiteObserver - 负责将所有事件存储到 SQLite 数据库
-	sqliteObserver, err := observers.NewSQLiteObserver(cfg, logger, nil)
-	if err != nil {
-		logger.Error("创建 SQLite 观察器失败", zap.Error(err))
-	} else {
-		hookSystem.Register(sqliteObserver)
-		logger.Info("SQLite 观察器已注册到 Hook 系统", zap.String("db_path", sqliteObserver.GetDBPath()))
+	// 创建数据库客户端
+	dbConfig := database.NewConfigFromConfig(cfg)
+	if dbConfig != nil {
+		dbClient, err := database.NewClient(dbConfig)
+		if err != nil {
+			logger.Error("创建数据库客户端失败", zap.Error(err))
+		} else {
+			// 初始化表结构
+			if err := dbClient.InitSchema(); err != nil {
+				dbClient.Close()
+				logger.Error("初始化数据库表失败", zap.Error(err))
+			} else {
+				// 创建 Repository 和 Service
+				repo := repository.NewEventRepository(dbClient.DB())
+				convService := service.NewConversationService(repo)
+
+				// 创建 SQLiteObserver，注入所有依赖
+				sqliteObserver, err := observers.NewSQLiteObserver(logger, nil,
+					observers.WithDBClient(dbClient),
+					observers.WithRepository(&observers.EventRepositoryAdapter{Repo: repo}),
+					observers.WithConversationService(&observers.ConversationServiceAdapter{Svc: convService}),
+				)
+				if err != nil {
+					dbClient.Close()
+					logger.Error("创建 SQLite 观察器失败", zap.Error(err))
+				} else {
+					hookSystem.Register(sqliteObserver)
+					logger.Info("SQLite 观察器已注册到 Hook 系统", zap.String("db_path", sqliteObserver.GetDBPath()))
+				}
+			}
+		}
 	}
 
 	// 注册 Eino Callback Handler

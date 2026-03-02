@@ -4,62 +4,92 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/weibaohui/nanobot-go/agent/database"
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observer"
 	"github.com/weibaohui/nanobot-go/agent/models"
 	"github.com/weibaohui/nanobot-go/agent/repository"
 	"github.com/weibaohui/nanobot-go/agent/service"
-	"github.com/weibaohui/nanobot-go/config"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
+
+// EventRepository 事件仓储接口（用于去重操作）
+type EventRepository interface {
+	FindByTraceIDRoleAndContent(ctx context.Context, traceID, role, content string) ([]models.Event, error)
+	DeleteByID(ctx context.Context, id uint) error
+}
+
+// ConversationService 对话服务接口
+type ConversationService interface {
+	Create(ctx context.Context, dto *service.ConversationDTO) error
+}
+
+// DBClient 数据库客户端接口（用于生命周期管理）
+type DBClient interface {
+	DBPath() string
+	Close() error
+	DB() *gorm.DB // 返回底层 DB 连接（供测试等特殊场景使用）
+}
 
 // SQLiteObserver SQLite 观察器
 // 将消息事件存储到 SQLite 数据库中
 type SQLiteObserver struct {
 	*observer.BaseObserver
-	dbClient     *database.Client
+	dbClient     DBClient
 	logger       *zap.Logger
-	conversation service.ConversationService
+	repository   EventRepository
+	conversation ConversationService
+}
+
+// SQLiteObserverOption SQLiteObserver 构造选项
+type SQLiteObserverOption func(*SQLiteObserver) error
+
+// WithRepository 设置自定义仓储实现
+func WithRepository(repo EventRepository) SQLiteObserverOption {
+	return func(o *SQLiteObserver) error {
+		o.repository = repo
+		return nil
+	}
+}
+
+// WithConversationService 设置自定义对话服务实现
+func WithConversationService(convService ConversationService) SQLiteObserverOption {
+	return func(o *SQLiteObserver) error {
+		o.conversation = convService
+		return nil
+	}
+}
+
+// WithDBClient 设置自定义数据库客户端
+func WithDBClient(dbClient DBClient) SQLiteObserverOption {
+	return func(o *SQLiteObserver) error {
+		o.dbClient = dbClient
+		return nil
+	}
 }
 
 // NewSQLiteObserver 创建 SQLite 观察器
-// 使用全局配置中的数据库配置
-func NewSQLiteObserver(cfg *config.Config, logger *zap.Logger, filter *observer.ObserverFilter) (*SQLiteObserver, error) {
+// 所有依赖必须通过选项注入，不自动创建任何依赖
+func NewSQLiteObserver(logger *zap.Logger, filter *observer.ObserverFilter, opts ...SQLiteObserverOption) (*SQLiteObserver, error) {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
 
-	// 从全局配置创建数据库配置
-	dbConfig := database.NewConfigFromConfig(cfg)
-	if dbConfig == nil {
-		return nil, fmt.Errorf("数据库未启用或配置错误")
-	}
-
-	// 创建数据库客户端
-	dbClient, err := database.NewClient(dbConfig)
-	if err != nil {
-		return nil, fmt.Errorf("创建数据库客户端失败: %w", err)
-	}
-
-	// 初始化表结构
-	if err := dbClient.InitSchema(); err != nil {
-		dbClient.Close()
-		return nil, fmt.Errorf("初始化数据库表失败: %w", err)
-	}
-
-	logger.Info("SQLite 观察器已初始化", zap.String("db_path", dbClient.DBPath()))
-
-	// 创建 Repository 和 Service
-	repo := repository.NewEventRepository(dbClient.DB())
-	convService := service.NewConversationService(repo)
-
-	return &SQLiteObserver{
+	obs := &SQLiteObserver{
 		BaseObserver: observer.NewBaseObserver("sqlite", filter),
-		dbClient:     dbClient,
 		logger:       logger,
-		conversation: convService,
-	}, nil
+	}
+
+	// 应用选项
+	for _, opt := range opts {
+		if opt != nil {
+			if err := opt(obs); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return obs, nil
 }
 
 // OnEvent 处理事件（实现 Observer 接口）
@@ -87,6 +117,10 @@ func (o *SQLiteObserver) handlePromptSubmitted(ctx context.Context, event events
 		return nil
 	}
 
+	if o.conversation == nil {
+		return fmt.Errorf("ConversationService 未设置，请使用 WithConversationService 选项注入")
+	}
+
 	// 提取通用字段
 	baseEvent := event.ToBaseEvent()
 
@@ -112,8 +146,8 @@ func (o *SQLiteObserver) handlePromptSubmitted(ctx context.Context, event events
 		return err
 	}
 
-	// 执行去重（去重逻辑需要保留，但需要调整实现）
-	o.deduplicateRecords(ctx, dto.TraceID, dto.Role, dto.Content)
+	// 执行去重
+	o.deduplicateRecords(ctx, baseEvent.TraceID, "user", e.UserInput)
 
 	return nil
 }
@@ -129,6 +163,10 @@ func (o *SQLiteObserver) handleLLMCallEnd(ctx context.Context, event events.Even
 	sessionKey := getCtxSessionKey(ctx)
 	if sessionKey == "" {
 		return nil
+	}
+
+	if o.conversation == nil {
+		return fmt.Errorf("ConversationService 未设置，请使用 WithConversationService 选项注入")
 	}
 
 	// 提取通用字段
@@ -152,18 +190,6 @@ func (o *SQLiteObserver) handleLLMCallEnd(ctx context.Context, event events.Even
 		return nil
 	}
 
-	// 提取 Token Usage 信息
-	var tokenUsage *service.TokenUsageDTO
-	if e.TokenUsage != nil {
-		tokenUsage = &service.TokenUsageDTO{
-			PromptTokens:     e.TokenUsage.PromptTokens,
-			CompletionTokens: e.TokenUsage.CompletionTokens,
-			TotalTokens:      e.TokenUsage.TotalTokens,
-			ReasoningTokens:  e.TokenUsage.CompletionTokensDetails.ReasoningTokens,
-			CachedTokens:     e.TokenUsage.PromptTokenDetails.CachedTokens,
-		}
-	}
-
 	// 创建 DTO
 	dto := &service.ConversationDTO{
 		TraceID:      baseEvent.TraceID,
@@ -174,7 +200,17 @@ func (o *SQLiteObserver) handleLLMCallEnd(ctx context.Context, event events.Even
 		SessionKey:   sessionKey,
 		Role:         role,
 		Content:      content,
-		TokenUsage:   tokenUsage,
+	}
+
+	// 提取 Token Usage 信息
+	if e.TokenUsage != nil {
+		dto.TokenUsage = &service.TokenUsageDTO{
+			PromptTokens:     e.TokenUsage.PromptTokens,
+			CompletionTokens: e.TokenUsage.CompletionTokens,
+			TotalTokens:      e.TokenUsage.TotalTokens,
+			ReasoningTokens:  e.TokenUsage.CompletionTokensDetails.ReasoningTokens,
+			CachedTokens:     e.TokenUsage.PromptTokenDetails.CachedTokens,
+		}
 	}
 
 	// 插入数据库
@@ -188,7 +224,7 @@ func (o *SQLiteObserver) handleLLMCallEnd(ctx context.Context, event events.Even
 	}
 
 	// 执行去重
-	o.deduplicateRecords(ctx, dto.TraceID, dto.Role, dto.Content)
+	o.deduplicateRecords(ctx, baseEvent.TraceID, role, content)
 
 	return nil
 }
@@ -204,6 +240,10 @@ func (o *SQLiteObserver) handleToolCompleted(ctx context.Context, event events.E
 	sessionKey := getCtxSessionKey(ctx)
 	if sessionKey == "" {
 		return nil
+	}
+
+	if o.conversation == nil {
+		return fmt.Errorf("ConversationService 未设置，请使用 WithConversationService 选项注入")
 	}
 
 	// 提取通用字段
@@ -238,7 +278,7 @@ func (o *SQLiteObserver) handleToolCompleted(ctx context.Context, event events.E
 	}
 
 	// 执行去重
-	o.deduplicateRecords(ctx, dto.TraceID, dto.Role, dto.Content)
+	o.deduplicateRecords(ctx, baseEvent.TraceID, "tool_result", e.ToolName+": "+content)
 
 	return nil
 }
@@ -248,12 +288,13 @@ func (o *SQLiteObserver) handleToolCompleted(ctx context.Context, event events.E
 // 1. 优先保留有 TokenUsage 信息（total_tokens > 0）的记录
 // 2. 如果都没有 TokenUsage 信息，保留 ID 最小的（最早插入的）
 func (o *SQLiteObserver) deduplicateRecords(ctx context.Context, traceID, role, content string) {
+	if o.repository == nil {
+		return
+	}
+
 	// 查找相同 traceID、role、content 的所有记录
-	var records []models.Event
-	if err := o.dbClient.DB().WithContext(ctx).
-		Where("trace_id = ? AND role = ? AND content = ?", traceID, role, content).
-		Order("id ASC").
-		Find(&records).Error; err != nil {
+	records, err := o.repository.FindByTraceIDRoleAndContent(ctx, traceID, role, content)
+	if err != nil {
 		o.logger.Error("查询重复记录失败", zap.Error(err))
 		return
 	}
@@ -289,7 +330,7 @@ func (o *SQLiteObserver) deduplicateRecords(ctx context.Context, traceID, role, 
 	// 删除其他记录
 	for _, r := range records {
 		if r.ID != keepID {
-			if err := o.dbClient.DB().WithContext(ctx).Delete(&r).Error; err != nil {
+			if err := o.repository.DeleteByID(ctx, r.ID); err != nil {
 				o.logger.Error("删除重复记录失败", zap.Error(err), zap.Uint("id", r.ID))
 			} else {
 				o.logger.Debug("删除重复记录",
@@ -305,21 +346,49 @@ func (o *SQLiteObserver) deduplicateRecords(ctx context.Context, traceID, role, 
 
 // Close 关闭数据库连接
 func (o *SQLiteObserver) Close() error {
-	o.logger.Info("关闭 SQLite 数据库连接", zap.String("db_path", o.dbClient.DBPath()))
-	return o.dbClient.Close()
+	if o.dbClient != nil {
+		o.logger.Info("关闭 SQLite 数据库连接", zap.String("db_path", o.dbClient.DBPath()))
+		return o.dbClient.Close()
+	}
+	return nil
 }
 
 // GetDBPath 获取数据库文件路径
 func (o *SQLiteObserver) GetDBPath() string {
-	return o.dbClient.DBPath()
-}
-
-// GetConversationService 获取对话服务（供外部查询使用）
-func (o *SQLiteObserver) GetConversationService() service.ConversationService {
-	return o.conversation
+	if o.dbClient != nil {
+		return o.dbClient.DBPath()
+	}
+	return ""
 }
 
 // GetDBClient 获取数据库客户端（供其他模块使用）
-func (o *SQLiteObserver) GetDBClient() *database.Client {
+func (o *SQLiteObserver) GetDBClient() DBClient {
 	return o.dbClient
+}
+
+// 适配器类型，用于类型转换
+
+// EventRepositoryAdapter 将 repository.EventRepository 适配为 observers.EventRepository
+type EventRepositoryAdapter struct {
+	Repo repository.EventRepository
+}
+
+// FindByTraceIDRoleAndContent 实现 EventRepository 接口
+func (a *EventRepositoryAdapter) FindByTraceIDRoleAndContent(ctx context.Context, traceID, role, content string) ([]models.Event, error) {
+	return a.Repo.FindByTraceIDRoleAndContent(ctx, traceID, role, content)
+}
+
+// DeleteByID 实现 EventRepository 接口
+func (a *EventRepositoryAdapter) DeleteByID(ctx context.Context, id uint) error {
+	return a.Repo.DeleteByID(ctx, id)
+}
+
+// ConversationServiceAdapter 将 service.ConversationService 适配为 observers.ConversationService
+type ConversationServiceAdapter struct {
+	Svc service.ConversationService
+}
+
+// Create 实现 ConversationService 接口
+func (a *ConversationServiceAdapter) Create(ctx context.Context, dto *service.ConversationDTO) error {
+	return a.Svc.Create(ctx, dto)
 }
