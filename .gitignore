@@ -6,3 +6,4 @@ bin/
 .worktrees/
 main
 nanobot-fixed
+agent/database/data/events.db
