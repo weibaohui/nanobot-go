@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -54,47 +55,37 @@ func (s *Session) AddMessageWithTrace(role, content, traceID, spanID, parentSpan
 	s.UpdatedAt = time.Now()
 }
 
-// GetHistory 获取消息历史
-func (s *Session) GetHistory(maxMessages int) []map[string]any {
-
-	//TODO 过期机制
-	// //超过2小时的消息，认为是过期的，不返回
-	// if len(s.Messages) > 0 {
-	// 	first := s.Messages[0].Timestamp
-	// 	if time.Since(first) > 2*time.Hour {
-	// 		return nil
-	// 	}
-	// }
-
-	//筛选出时间上是2小时之内的消息
-	var filteredMessages []Message
-	for _, m := range s.Messages {
-		if time.Since(m.Timestamp) <= 2*time.Hour {
-			filteredMessages = append(filteredMessages, m)
-		}
-	}
-
-	var messages []Message
-	if len(filteredMessages) > maxMessages {
-		messages = filteredMessages[len(filteredMessages)-maxMessages:]
-	} else {
-		messages = filteredMessages
-	}
-
-	var result []map[string]any
-	for _, m := range messages {
-		result = append(result, map[string]any{
-			"role":    m.Role,
-			"content": m.Content,
-		})
-	}
-	return result
-}
-
 // Clear 清空会话消息
 func (s *Session) Clear() {
 	s.Messages = nil
 	s.UpdatedAt = time.Now()
+}
+
+// ConversationRecord 对话记录结构（避免循环依赖）
+type ConversationRecord struct {
+	ID           uint      `json:"id"`
+	TraceID      string    `json:"trace_id"`
+	SpanID       string    `json:"span_id,omitempty"`
+	ParentSpanID string    `json:"parent_span_id,omitempty"`
+	EventType    string    `json:"event_type"`
+	Timestamp    time.Time `json:"timestamp"`
+	SessionKey   string    `json:"session_key"`
+	Role         string    `json:"role"`
+	Content      string    `json:"content"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+// ConversationRecordRepository 对话记录仓库接口（避免循环依赖）
+type ConversationRecordRepository interface {
+	FindBySessionKey(ctx context.Context, sessionKey string, opts *QueryOptions) ([]ConversationRecord, error)
+}
+
+// QueryOptions 查询选项
+type QueryOptions struct {
+	OrderBy string
+	Order   string
+	Limit   int
+	Offset  int
 }
 
 // Manager 会话管理器
@@ -104,10 +95,11 @@ type Manager struct {
 	sessionsDir string
 	cache       map[string]*Session
 	mu          sync.RWMutex
+	convRepo    ConversationRecordRepository
 }
 
 // NewManager 创建会话管理器
-func NewManager(cfg *config.Config, logger *zap.Logger, dataDir string) *Manager {
+func NewManager(cfg *config.Config, logger *zap.Logger, dataDir string, convRepo ConversationRecordRepository) *Manager {
 	sessionsDir := filepath.Join(dataDir, "sessions")
 	os.MkdirAll(sessionsDir, 0755)
 	return &Manager{
@@ -115,7 +107,54 @@ func NewManager(cfg *config.Config, logger *zap.Logger, dataDir string) *Manager
 		logger:      logger,
 		sessionsDir: sessionsDir,
 		cache:       make(map[string]*Session),
+		convRepo:    convRepo,
 	}
+}
+
+// GetHistory 从 ConversationRecordRepository 获取会话历史记录
+func (m *Manager) GetHistory(ctx context.Context, sessionKey string, maxMessages int) []map[string]any {
+	if m.convRepo == nil {
+		m.logger.Warn("ConversationRecordRepository not set, returning empty history")
+		return nil
+	}
+
+	// 从数据库查询最近的对话记录
+	records, err := m.convRepo.FindBySessionKey(ctx, sessionKey, &QueryOptions{
+		OrderBy: "timestamp",
+		Order:   "ASC",
+		Limit:   maxMessages * 2,
+	})
+	if err != nil {
+		m.logger.Error("Failed to find conversation by session key",
+			zap.String("sessionKey", sessionKey),
+			zap.Error(err))
+		return nil
+	}
+
+	// 筛选出2小时之内的消息
+	cutoffTime := time.Now().Add(-2 * time.Hour)
+	var filteredRecords []ConversationRecord
+	for _, record := range records {
+		if record.Timestamp.After(cutoffTime) {
+			filteredRecords = append(filteredRecords, record)
+		}
+	}
+
+	// 限制消息数量（取最近的 maxMessages 条）
+	if len(filteredRecords) > maxMessages {
+		filteredRecords = filteredRecords[len(filteredRecords)-maxMessages:]
+	}
+
+	// 转换为 map 格式
+	var history []map[string]any
+	for _, record := range filteredRecords {
+		history = append(history, map[string]any{
+			"role":    record.Role,
+			"content": record.Content,
+		})
+	}
+
+	return history
 }
 
 // GetOrCreate 获取或创建会话

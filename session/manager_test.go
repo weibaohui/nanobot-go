@@ -42,69 +42,6 @@ func TestSession_AddMessage(t *testing.T) {
 	}
 }
 
-// TestSession_GetHistory 测试获取消息历史
-func TestSession_GetHistory(t *testing.T) {
-	t.Run("获取全部消息", func(t *testing.T) {
-		session := &Session{
-			Key: "test-session",
-			Messages: []Message{
-				{Role: "user", Content: "消息1", Timestamp: time.Now()},
-				{Role: "assistant", Content: "回复1", Timestamp: time.Now()},
-				{Role: "user", Content: "消息2", Timestamp: time.Now()},
-			},
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		}
-
-		history := session.GetHistory(10)
-		if len(history) != 3 {
-			t.Errorf("历史消息数量 = %d, 期望 3", len(history))
-		}
-	})
-
-	t.Run("限制消息数量", func(t *testing.T) {
-		session := &Session{
-			Key: "test-session",
-			Messages: []Message{
-				{Role: "user", Content: "消息1", Timestamp: time.Now()},
-				{Role: "assistant", Content: "回复1", Timestamp: time.Now()},
-				{Role: "user", Content: "消息2", Timestamp: time.Now()},
-				{Role: "assistant", Content: "回复2", Timestamp: time.Now()},
-				{Role: "user", Content: "消息3", Timestamp: time.Now()},
-			},
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		}
-
-		history := session.GetHistory(2)
-		if len(history) != 2 {
-			t.Errorf("历史消息数量 = %d, 期望 2", len(history))
-		}
-
-		if history[0]["content"] != "回复2" {
-			t.Errorf("第一条消息内容 = %v, 期望 回复2", history[0]["content"])
-		}
-
-		if history[1]["content"] != "消息3" {
-			t.Errorf("第二条消息内容 = %v, 期望 消息3", history[1]["content"])
-		}
-	})
-
-	t.Run("空消息列表", func(t *testing.T) {
-		session := &Session{
-			Key:       "test-session",
-			Messages:  []Message{},
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		}
-
-		history := session.GetHistory(10)
-		if len(history) != 0 {
-			t.Errorf("历史消息数量 = %d, 期望 0", len(history))
-		}
-	})
-}
-
 // TestSession_Clear 测试清空会话消息
 func TestSession_Clear(t *testing.T) {
 	session := &Session{
@@ -130,7 +67,7 @@ func TestNewManager(t *testing.T) {
 	cfg := config.DefaultConfig()
 	logger := zap.NewNop()
 
-	manager := NewManager(cfg, logger, tmpDir)
+	manager := NewManager(cfg, logger, tmpDir, nil)
 	if manager == nil {
 		t.Fatal("NewManager 返回 nil")
 	}
@@ -149,7 +86,7 @@ func TestNewManager(t *testing.T) {
 func TestManager_GetOrCreate(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.DefaultConfig()
-	manager := NewManager(cfg, zap.NewNop(), tmpDir)
+	manager := NewManager(cfg, zap.NewNop(), tmpDir, nil)
 
 	t.Run("创建新会话", func(t *testing.T) {
 		session := manager.GetOrCreate("new-session-key")
@@ -182,7 +119,7 @@ func TestManager_GetOrCreate(t *testing.T) {
 func TestManager_Save(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.DefaultConfig()
-	manager := NewManager(cfg, zap.NewNop(), tmpDir)
+	manager := NewManager(cfg, zap.NewNop(), tmpDir, nil)
 
 	session := &Session{
 		Key:       "save-test-session",
@@ -210,7 +147,7 @@ func TestManager_Save(t *testing.T) {
 func TestManager_Delete(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.DefaultConfig()
-	manager := NewManager(cfg, zap.NewNop(), tmpDir)
+	manager := NewManager(cfg, zap.NewNop(), tmpDir, nil)
 
 	t.Run("删除存在的会话", func(t *testing.T) {
 		session := &Session{
@@ -243,7 +180,7 @@ func TestManager_Delete(t *testing.T) {
 func TestManager_ListSessions(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.DefaultConfig()
-	manager := NewManager(cfg, zap.NewNop(), tmpDir)
+	manager := NewManager(cfg, zap.NewNop(), tmpDir, nil)
 
 	session1 := &Session{
 		Key:       "list-test-1",
@@ -298,7 +235,7 @@ func TestSafeFilename(t *testing.T) {
 func TestManager_GetSessionPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.DefaultConfig()
-	manager := NewManager(cfg, zap.NewNop(), tmpDir)
+	manager := NewManager(cfg, zap.NewNop(), tmpDir, nil)
 
 	path := manager.getSessionPath("test:session")
 
@@ -319,7 +256,7 @@ func TestManager_GetSessionPath(t *testing.T) {
 func TestManager_LoadNonexistentSession(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.DefaultConfig()
-	manager := NewManager(cfg, zap.NewNop(), tmpDir)
+	manager := NewManager(cfg, zap.NewNop(), tmpDir, nil)
 
 	session := manager.load("nonexistent-session")
 	if session != nil {
@@ -331,7 +268,7 @@ func TestManager_LoadNonexistentSession(t *testing.T) {
 func TestManager_SaveAndLoadWithAllFields(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.DefaultConfig()
-	manager := NewManager(cfg, zap.NewNop(), tmpDir)
+	manager := NewManager(cfg, zap.NewNop(), tmpDir, nil)
 
 	now := time.Now()
 	original := &Session{
@@ -372,7 +309,7 @@ func TestManager_DataDirCreation(t *testing.T) {
 	nonexistentDir := filepath.Join(tmpDir, "nonexistent", "nested", "dir")
 
 	cfg := config.DefaultConfig()
-	manager := NewManager(cfg, zap.NewNop(), nonexistentDir)
+	manager := NewManager(cfg, zap.NewNop(), nonexistentDir, nil)
 
 	expectedDir := filepath.Join(nonexistentDir, "sessions")
 	if _, err := os.Stat(expectedDir); os.IsNotExist(err) {

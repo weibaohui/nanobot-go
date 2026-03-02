@@ -13,9 +13,11 @@ import (
 	"github.com/cloudwego/eino/callbacks"
 	"github.com/spf13/cobra"
 	"github.com/weibaohui/nanobot-go/agent"
+	"github.com/weibaohui/nanobot-go/agent/database"
 	"github.com/weibaohui/nanobot-go/agent/hooks"
 	hookevents "github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observers"
+	"github.com/weibaohui/nanobot-go/agent/repository"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/channels"
 	"github.com/weibaohui/nanobot-go/config"
@@ -26,6 +28,44 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
+
+// convRepoAdapter 将 repository.ConversationRecordRepository 适配为 session.ConversationRecordRepository
+type convRepoAdapter struct {
+	repo repository.ConversationRecordRepository
+}
+
+func newConvRepoAdapter(repo repository.ConversationRecordRepository) session.ConversationRecordRepository {
+	return &convRepoAdapter{repo: repo}
+}
+
+func (a *convRepoAdapter) FindBySessionKey(ctx context.Context, sessionKey string, opts *session.QueryOptions) ([]session.ConversationRecord, error) {
+	repoOpts := &repository.QueryOptions{
+		OrderBy: opts.OrderBy,
+		Order:   opts.Order,
+		Limit:   opts.Limit,
+		Offset:  opts.Offset,
+	}
+	records, err := a.repo.FindBySessionKey(ctx, sessionKey, repoOpts)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]session.ConversationRecord, len(records))
+	for i, r := range records {
+		result[i] = session.ConversationRecord{
+			ID:           r.ID,
+			TraceID:      r.TraceID,
+			SpanID:       r.SpanID,
+			ParentSpanID: r.ParentSpanID,
+			EventType:    r.EventType,
+			Timestamp:    r.Timestamp,
+			SessionKey:   r.SessionKey,
+			Role:         r.Role,
+			Content:      r.Content,
+			CreatedAt:    r.CreatedAt,
+		}
+	}
+	return result, nil
+}
 
 var (
 	version   = "dev"
@@ -108,7 +148,25 @@ func runGateway(cmd *cobra.Command, args []string) {
 	messageBus := bus.NewMessageBus(logger)
 
 	dataDir := filepath.Join(workspacePath, ".nanobot")
-	sessionManager := session.NewManager(cfg, logger, dataDir)
+
+	// 初始化数据库和对话记录仓库
+	var convRepo session.ConversationRecordRepository
+	if dbConfig := database.NewConfigFromConfig(cfg); dbConfig != nil {
+		dbClient, err := database.NewClient(dbConfig)
+		if err != nil {
+			logger.Error("初始化数据库失败", zap.Error(err))
+		} else {
+			if err := dbClient.InitSchema(); err != nil {
+				logger.Error("初始化数据库 schema 失败", zap.Error(err))
+				dbClient.Close()
+			} else {
+				convRepo = newConvRepoAdapter(repository.NewConversationRecordRepository(dbClient.DB()))
+				logger.Info("数据库和对话记录仓库已初始化")
+			}
+		}
+	}
+
+	sessionManager := session.NewManager(cfg, logger, dataDir, convRepo)
 	tokenUsageManager := token_usage.NewTokenUsageManager(dataDir)
 
 	// 创建统一的 Hook 系统
