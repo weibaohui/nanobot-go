@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 
 	"github.com/weibaohui/nanobot-go/utils"
 )
@@ -23,6 +24,15 @@ type ThinkingProcessConfig struct {
 	Events  []string `json:"events"`  // 要监听的事件类型，如 ["tool_used", "tool_completed", "llm_call_end"]
 }
 
+// DatabaseConfig 数据库配置
+type DatabaseConfig struct {
+	Enabled      bool   `json:"enabled"`      // 是否启用数据库
+	DataDir      string `json:"dataDir"`      // 数据目录，相对于 workspace
+	DBName       string `json:"dbName"`       // 数据库文件名
+	MaxOpenConns int    `json:"maxOpenConns"` // 最大打开连接数
+	MaxIdleConns int    `json:"maxIdleConns"` // 最大空闲连接数
+}
+
 // Config 根配置结构
 type Config struct {
 	Agents          AgentsConfig          `json:"agents"`
@@ -33,6 +43,7 @@ type Config struct {
 	Heartbeat       HeartbeatConfig       `json:"heartbeat"`
 	Compress        CompressConfig        `json:"compress"`
 	ThinkingProcess ThinkingProcessConfig `json:"thinkingProcess"` // 思考过程配置
+	Database        DatabaseConfig        `json:"database"`        // 数据库配置
 }
 
 // HeartbeatConfig 心跳配置
@@ -217,6 +228,13 @@ func DefaultConfig() *Config {
 			Model:       "",
 			MaxHistory:  5,
 		},
+		Database: DatabaseConfig{
+			Enabled:      true,
+			DataDir:      ".data",
+			DBName:       "events.db",
+			MaxOpenConns: 1, // SQLite 建议单连接
+			MaxIdleConns: 1,
+		},
 	}
 }
 
@@ -332,4 +350,11 @@ func (c *Config) GetAPIBase(model string) string {
 		return p.APIBase
 	}
 	return ""
+}
+
+// GetDatabaseDataDir 获取数据库数据目录的完整路径
+// 数据目录位于 workspace 下的 Database.DataDir 子目录
+func (c *Config) GetDatabaseDataDir() string {
+	workspacePath := c.GetWorkspacePath()
+	return filepath.Join(workspacePath, c.Database.DataDir)
 }

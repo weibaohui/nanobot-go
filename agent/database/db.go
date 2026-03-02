@@ -11,14 +11,35 @@ import (
 	"gorm.io/gorm/logger"
 
 	"github.com/weibaohui/nanobot-go/agent/models"
+	"github.com/weibaohui/nanobot-go/config"
 )
 
-// Config 数据库配置
+// Config 数据库配置（简化版，主要配置在 config.Config 中）
 type Config struct {
-	DataDir      string // 数据目录
-	DBName       string // 数据库文件名（不含路径）
+	DataDir      string // 数据目录完整路径（如果为空，从 config.Config 获取）
+	DBName       string // 数据库文件名
 	MaxOpenConns int    // 最大打开连接数
 	MaxIdleConns int    // 最大空闲连接数
+}
+
+// NewConfigFromConfig 从全局配置创建数据库配置
+func NewConfigFromConfig(cfg *config.Config) *Config {
+	if cfg == nil || !cfg.Database.Enabled {
+		return nil
+	}
+
+	// 如果 DataDir 为空，使用 workspace 下的数据库目录
+	dataDir := cfg.Database.DataDir
+	if dataDir == "" {
+		dataDir = ".data"
+	}
+
+	return &Config{
+		DataDir:      filepath.Join(cfg.GetWorkspacePath(), dataDir),
+		DBName:       cfg.Database.DBName,
+		MaxOpenConns: cfg.Database.MaxOpenConns,
+		MaxIdleConns: cfg.Database.MaxIdleConns,
+	}
 }
 
 // DefaultConfig 返回默认配置
