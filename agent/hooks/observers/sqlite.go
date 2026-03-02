@@ -6,8 +6,8 @@ import (
 
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observer"
+	"github.com/weibaohui/nanobot-go/conversation/service"
 	"github.com/weibaohui/nanobot-go/internal/models"
-	"github.com/weibaohui/nanobot-go/agent/service"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/weibaohui/nanobot-go/internal/models"
-	"github.com/weibaohui/nanobot-go/agent/repository"
+	"github.com/weibaohui/nanobot-go/conversation/repository"
 )
 
 var (

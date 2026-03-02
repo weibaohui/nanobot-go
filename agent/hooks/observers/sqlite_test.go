@@ -9,12 +9,12 @@ import (
 	"github.com/cloudwego/eino/callbacks"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
-	"github.com/weibaohui/nanobot-go/agent/database"
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observer"
+	"github.com/weibaohui/nanobot-go/conversation/database"
+	"github.com/weibaohui/nanobot-go/conversation/repository"
+	"github.com/weibaohui/nanobot-go/conversation/service"
 	"github.com/weibaohui/nanobot-go/internal/models"
-	"github.com/weibaohui/nanobot-go/agent/repository"
-	"github.com/weibaohui/nanobot-go/agent/service"
 	"go.uber.org/zap"
 )
 

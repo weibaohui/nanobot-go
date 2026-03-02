@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/weibaohui/nanobot-go/internal/models"
-	"github.com/weibaohui/nanobot-go/agent/repository"
+	"github.com/weibaohui/nanobot-go/conversation/repository"
 )
 
 // setupTestService 创建测试用的 ConversationService
