@@ -10,7 +10,6 @@ import (
 )
 
 // NewSQLiteObserverFromConfig 从配置创建 SQLiteObserver
-// 返回 nil 表示数据库未启用
 func NewSQLiteObserverFromConfig(cfg *config.Config, logger *zap.Logger, filter *observer.ObserverFilter) (*SQLiteObserver, error) {
 	dbConfig := database.NewConfigFromConfig(cfg)
 	if dbConfig == nil {
@@ -27,7 +26,7 @@ func NewSQLiteObserverFromConfig(cfg *config.Config, logger *zap.Logger, filter 
 		return nil, err
 	}
 
-	repo := repository.NewEventRepository(dbClient.DB())
+	repo := repository.NewConversationRecordRepository(dbClient.DB())
 	convService := service.NewConversationService(repo)
 
 	return NewSQLiteObserver(logger, filter,

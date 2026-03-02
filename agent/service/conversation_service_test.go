@@ -20,10 +20,10 @@ func setupTestService(t *testing.T) (ConversationService, *gorm.DB) {
 	require.NoError(t, err)
 
 	// 自动迁移表结构
-	err = db.AutoMigrate(&models.Event{})
+	err = db.AutoMigrate(&models.ConversationRecord{})
 	require.NoError(t, err)
 
-	repo := repository.NewEventRepository(db)
+	repo := repository.NewConversationRecordRepository(db)
 	svc := NewConversationService(repo)
 
 	return svc, db

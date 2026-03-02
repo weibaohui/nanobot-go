@@ -120,17 +120,17 @@ func (c *Client) InitSchema() error {
 	defer c.mu.Unlock()
 
 	// 自动迁移表结构
-	if err := c.db.AutoMigrate(&models.Event{}); err != nil {
-		return fmt.Errorf("创建 events 表失败: %w", err)
+	if err := c.db.AutoMigrate(&models.ConversationRecord{}); err != nil {
+		return fmt.Errorf("创建 conversation_records 表失败: %w", err)
 	}
 
-	// 创建索引（AutoMigrate 会创建主键索引，我们手动创建其他索引）
+	// 创建索引
 	indexes := []string{
-		"CREATE INDEX IF NOT EXISTS idx_events_event_type ON events(event_type);",
-		"CREATE INDEX IF NOT EXISTS idx_events_session_key ON events(session_key);",
-		"CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);",
-		"CREATE INDEX IF NOT EXISTS idx_events_trace_id ON events(trace_id);",
-		"CREATE INDEX IF NOT EXISTS idx_events_role ON events(role);",
+		"CREATE INDEX IF NOT EXISTS idx_conv_records_event_type ON conversation_records(event_type);",
+		"CREATE INDEX IF NOT EXISTS idx_conv_records_session_key ON conversation_records(session_key);",
+		"CREATE INDEX IF NOT EXISTS idx_conv_records_timestamp ON conversation_records(timestamp);",
+		"CREATE INDEX IF NOT EXISTS idx_conv_records_trace_id ON conversation_records(trace_id);",
+		"CREATE INDEX IF NOT EXISTS idx_conv_records_role ON conversation_records(role);",
 	}
 
 	for _, indexSQL := range indexes {

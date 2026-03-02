@@ -2,9 +2,9 @@ package models
 
 import "time"
 
-// Event 对应 events 表的数据模型
-// 用于存储所有对话事件，包括用户输入、AI 响应、工具调用等
-type Event struct {
+// ConversationRecord 对话记录模型
+// 存储完整的对话消息，包括用户输入、AI 响应、工具调用及结果
+type ConversationRecord struct {
 	ID               uint      `gorm:"primarykey" json:"id"`
 	TraceID          string    `gorm:"type:text;index;not null" json:"trace_id"`
 	SpanID           string    `gorm:"type:text" json:"span_id,omitempty"`
@@ -23,6 +23,6 @@ type Event struct {
 }
 
 // TableName 指定表名
-func (Event) TableName() string {
-	return "events"
+func (ConversationRecord) TableName() string {
+	return "conversation_records"
 }
