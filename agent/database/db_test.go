@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/weibaohui/nanobot-go/agent/models"
+	"github.com/weibaohui/nanobot-go/config"
 )
 
 func TestDefaultConfig(t *testing.T) {
@@ -56,8 +57,7 @@ func TestNewClientWithNilConfig(t *testing.T) {
 	require.NotNil(t, client)
 	defer client.Close()
 
-	// 应该使用默认配置
-	// 注意：默认配置会创建 ./data 目录，所以路径包含目录名
+	// 应该使用默认配置，DataDir 是 "./data"，所以完整路径是 "data/events.db"
 	assert.Contains(t, client.DBPath(), "events.db")
 }
 
@@ -71,6 +71,49 @@ func TestNewClientWithInvalidDataDir(t *testing.T) {
 	client, err := NewClient(config)
 	assert.Error(t, err)
 	assert.Nil(t, client)
+}
+
+func TestNewConfigFromConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &config.Config{
+		Agents: config.AgentsConfig{
+			Defaults: config.AgentDefaults{
+				Workspace: tmpDir,
+			},
+		},
+		Database: config.DatabaseConfig{
+			Enabled:      true,
+			DataDir:      ".data",
+			DBName:       "events.db",
+			MaxOpenConns: 1,
+			MaxIdleConns: 1,
+		},
+	}
+
+	dbConfig := NewConfigFromConfig(cfg)
+	require.NotNil(t, dbConfig)
+
+	// 验证路径正确拼接
+	expectedPath := filepath.Join(tmpDir, ".data")
+	assert.Equal(t, expectedPath, dbConfig.DataDir)
+	assert.Equal(t, "events.db", dbConfig.DBName)
+}
+
+func TestNewConfigFromConfig_Disabled(t *testing.T) {
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			Enabled: false,
+		},
+	}
+
+	dbConfig := NewConfigFromConfig(cfg)
+	assert.Nil(t, dbConfig)
+}
+
+func TestNewConfigFromConfig_NilConfig(t *testing.T) {
+	dbConfig := NewConfigFromConfig(nil)
+	assert.Nil(t, dbConfig)
 }
 
 func TestInitSchema(t *testing.T) {
@@ -144,9 +187,7 @@ func TestDBMethodReturnsCopy(t *testing.T) {
 	db1 := client.DB()
 	db2 := client.DB()
 
-	// 验证它们是不同的实例
-	// GORM 的 *gorm.DB 是指针，每次调用 DB() 会返回相同的指针
-	// 但是每个副本有独立的状态
+	// 验证它们是相同的指针
 	assert.Same(t, db1, db2)
 
 	// 验证两个副本都可以正常使用
@@ -273,8 +314,8 @@ func TestClientIntegration(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	config := &Config{
-		DataDir: tmpDir,
-		DBName:  "events.db",
+		DataDir:      tmpDir,
+		DBName:       "events.db",
 		MaxOpenConns: 1,
 		MaxIdleConns: 1,
 	}

@@ -12,25 +12,40 @@ import (
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observer"
 	"github.com/weibaohui/nanobot-go/agent/models"
+	"github.com/weibaohui/nanobot-go/config"
 	"go.uber.org/zap"
 )
 
-func TestNewSQLiteObserver(t *testing.T) {
-	// 创建临时目录
+// setupTestConfig 创建测试配置
+func setupTestConfig(t *testing.T) *config.Config {
 	tmpDir := t.TempDir()
 
+	cfg := &config.Config{
+		Agents: config.AgentsConfig{
+			Defaults: config.AgentDefaults{
+				Workspace: tmpDir,
+			},
+		},
+		Database: config.DatabaseConfig{
+			Enabled:      true,
+			DataDir:      ".data",
+			DBName:       "events.db",
+			MaxOpenConns: 1,
+			MaxIdleConns: 1,
+		},
+	}
+	return cfg
+}
+
+func TestNewSQLiteObserver(t *testing.T) {
+	cfg := setupTestConfig(t)
+
 	// 创建观察器
-	obs, err := NewSQLiteObserver(tmpDir, zap.NewNop(), nil)
+	obs, err := NewSQLiteObserver(cfg, zap.NewNop(), nil)
 	if err != nil {
 		t.Fatalf("创建 SQLiteObserver 失败: %v", err)
 	}
 	defer obs.Close()
-
-	// 验证数据库文件已创建
-	dbPath := filepath.Join(tmpDir, "events.db")
-	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		t.Error("数据库文件未创建")
-	}
 
 	// 验证观察器名称
 	if obs.Name() != "sqlite" {
@@ -44,8 +59,8 @@ func TestNewSQLiteObserver(t *testing.T) {
 }
 
 func TestSQLiteObserver_OnEvent_PromptSubmitted(t *testing.T) {
-	tmpDir := t.TempDir()
-	obs, err := NewSQLiteObserver(tmpDir, zap.NewNop(), nil)
+	cfg := setupTestConfig(t)
+	obs, err := NewSQLiteObserver(cfg, zap.NewNop(), nil)
 	if err != nil {
 		t.Fatalf("创建 SQLiteObserver 失败: %v", err)
 	}
@@ -86,8 +101,8 @@ func TestSQLiteObserver_OnEvent_PromptSubmitted(t *testing.T) {
 }
 
 func TestSQLiteObserver_OnEvent_LLMCallEnd(t *testing.T) {
-	tmpDir := t.TempDir()
-	obs, err := NewSQLiteObserver(tmpDir, zap.NewNop(), nil)
+	cfg := setupTestConfig(t)
+	obs, err := NewSQLiteObserver(cfg, zap.NewNop(), nil)
 	if err != nil {
 		t.Fatalf("创建 SQLiteObserver 失败: %v", err)
 	}
@@ -135,8 +150,8 @@ func TestSQLiteObserver_OnEvent_LLMCallEnd(t *testing.T) {
 }
 
 func TestSQLiteObserver_OnEvent_LLMCallEnd_WithToolCalls(t *testing.T) {
-	tmpDir := t.TempDir()
-	obs, err := NewSQLiteObserver(tmpDir, zap.NewNop(), nil)
+	cfg := setupTestConfig(t)
+	obs, err := NewSQLiteObserver(cfg, zap.NewNop(), nil)
 	if err != nil {
 		t.Fatalf("创建 SQLiteObserver 失败: %v", err)
 	}
@@ -186,8 +201,8 @@ func TestSQLiteObserver_OnEvent_LLMCallEnd_WithToolCalls(t *testing.T) {
 }
 
 func TestSQLiteObserver_OnEvent_LLMCallEnd_WithTokenUsage(t *testing.T) {
-	tmpDir := t.TempDir()
-	obs, err := NewSQLiteObserver(tmpDir, zap.NewNop(), nil)
+	cfg := setupTestConfig(t)
+	obs, err := NewSQLiteObserver(cfg, zap.NewNop(), nil)
 	if err != nil {
 		t.Fatalf("创建 SQLiteObserver 失败: %v", err)
 	}
@@ -258,8 +273,8 @@ func TestSQLiteObserver_OnEvent_LLMCallEnd_WithTokenUsage(t *testing.T) {
 }
 
 func TestSQLiteObserver_OnEvent_ToolCompleted(t *testing.T) {
-	tmpDir := t.TempDir()
-	obs, err := NewSQLiteObserver(tmpDir, zap.NewNop(), nil)
+	cfg := setupTestConfig(t)
+	obs, err := NewSQLiteObserver(cfg, zap.NewNop(), nil)
 	if err != nil {
 		t.Fatalf("创建 SQLiteObserver 失败: %v", err)
 	}
@@ -303,8 +318,8 @@ func TestSQLiteObserver_OnEvent_ToolCompleted(t *testing.T) {
 }
 
 func TestSQLiteObserver_OnEvent_IgnoredEvents(t *testing.T) {
-	tmpDir := t.TempDir()
-	obs, err := NewSQLiteObserver(tmpDir, zap.NewNop(), nil)
+	cfg := setupTestConfig(t)
+	obs, err := NewSQLiteObserver(cfg, zap.NewNop(), nil)
 	if err != nil {
 		t.Fatalf("创建 SQLiteObserver 失败: %v", err)
 	}
@@ -335,13 +350,13 @@ func TestSQLiteObserver_OnEvent_IgnoredEvents(t *testing.T) {
 }
 
 func TestSQLiteObserver_Filter(t *testing.T) {
-	tmpDir := t.TempDir()
+	cfg := setupTestConfig(t)
 
 	// 创建带过滤器的观察器
 	filter := &observer.ObserverFilter{
 		EventTypes: []events.EventType{events.EventPromptSubmitted},
 	}
-	obs, err := NewSQLiteObserver(tmpDir, zap.NewNop(), filter)
+	obs, err := NewSQLiteObserver(cfg, zap.NewNop(), filter)
 	if err != nil {
 		t.Fatalf("创建 SQLiteObserver 失败: %v", err)
 	}
@@ -357,8 +372,8 @@ func TestSQLiteObserver_Filter(t *testing.T) {
 }
 
 func TestSQLiteObserver_ConcurrentWrites(t *testing.T) {
-	tmpDir := t.TempDir()
-	obs, err := NewSQLiteObserver(tmpDir, zap.NewNop(), nil)
+	cfg := setupTestConfig(t)
+	obs, err := NewSQLiteObserver(cfg, zap.NewNop(), nil)
 	if err != nil {
 		t.Fatalf("创建 SQLiteObserver 失败: %v", err)
 	}
@@ -402,8 +417,8 @@ func TestSQLiteObserver_ConcurrentWrites(t *testing.T) {
 }
 
 func TestSQLiteObserver_Deduplication(t *testing.T) {
-	tmpDir := t.TempDir()
-	obs, err := NewSQLiteObserver(tmpDir, zap.NewNop(), nil)
+	cfg := setupTestConfig(t)
+	obs, err := NewSQLiteObserver(cfg, zap.NewNop(), nil)
 	if err != nil {
 		t.Fatalf("创建 SQLiteObserver 失败: %v", err)
 	}
@@ -471,5 +486,27 @@ func TestSQLiteObserver_Deduplication(t *testing.T) {
 	}
 	if record.TotalTokens != 150 {
 		t.Errorf("应保留有 TokenUsage 的记录: got total_tokens=%d, want 150", record.TotalTokens)
+	}
+}
+
+func TestSQLiteObserver_DatabaseLocation(t *testing.T) {
+	cfg := setupTestConfig(t)
+	obs, err := NewSQLiteObserver(cfg, zap.NewNop(), nil)
+	if err != nil {
+		t.Fatalf("创建 SQLiteObserver 失败: %v", err)
+	}
+	defer obs.Close()
+
+	// 验证数据库文件位于 workspace/.data 目录下
+	expectedPath := filepath.Join(cfg.GetWorkspacePath(), ".data", "events.db")
+	actualPath := obs.GetDBPath()
+
+	if actualPath != expectedPath {
+		t.Errorf("数据库路径错误: got %s, want %s", actualPath, expectedPath)
+	}
+
+	// 验证数据库文件已创建
+	if _, err := os.Stat(actualPath); os.IsNotExist(err) {
+		t.Error("数据库文件未创建")
 	}
 }
