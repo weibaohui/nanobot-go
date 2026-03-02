@@ -33,6 +33,48 @@ type DatabaseConfig struct {
 	MaxIdleConns int    `json:"maxIdleConns"` // 最大空闲连接数
 }
 
+// MemoryConfig 记忆模块配置
+type MemoryConfig struct {
+	Enabled       bool                  `json:"enabled"`       // 是否启用记忆模块
+	Summarization SummarizationConfig   `json:"summarization"` // 记忆归纳模型配置
+	Embedding     EmbeddingConfig       `json:"embedding"`     // 向量化模型配置
+	Scheduled     MemoryScheduledConfig `json:"scheduled"`     // 定时任务配置
+	Storage       MemoryStorageConfig   `json:"storage"`       // 存储配置
+}
+
+// SummarizationConfig 记忆归纳模型配置
+type SummarizationConfig struct {
+	Model              string  `json:"model"`              // 模型名称
+	APIKey             string  `json:"apiKey"`             // API Key
+	BaseURL            string  `json:"baseURL"`            // API Base URL
+	Temperature        float64 `json:"temperature"`        // 温度参数
+	MaxTokens          int     `json:"maxTokens"`          // 最大 Token 数
+	ConversationPrompt string  `json:"conversationPrompt"` // 对话总结提示词
+	LongTermPrompt     string  `json:"longTermPrompt"`     // 长期记忆提炼提示词
+}
+
+// EmbeddingConfig 向量化模型配置
+type EmbeddingConfig struct {
+	Enabled    bool   `json:"enabled"`    // 是否启用向量化
+	Model      string `json:"model"`      // 模型名称
+	APIKey     string `json:"apiKey"`     // API Key
+	BaseURL    string `json:"baseURL"`    // API Base URL
+	Dimensions int    `json:"dimensions"` // 向量维度
+}
+
+// MemoryScheduledConfig 记忆定时任务配置
+type MemoryScheduledConfig struct {
+	Enabled    bool   `json:"enabled"`    // 是否启用定时任务
+	TimeWindow string `json:"timeWindow"` // 时间窗口，如 "05:30-06:30"
+	Timezone   string `json:"timezone"`   // 时区
+	BatchSize  int    `json:"batchSize"`  // 每批处理数量
+}
+
+// MemoryStorageConfig 记忆存储配置
+type MemoryStorageConfig struct {
+	StreamVectorization bool `json:"streamVectorization"` // 流水记忆是否向量化
+}
+
 // Config 根配置结构
 type Config struct {
 	Agents          AgentsConfig          `json:"agents"`
@@ -44,6 +86,7 @@ type Config struct {
 	Compress        CompressConfig        `json:"compress"`
 	ThinkingProcess ThinkingProcessConfig `json:"thinkingProcess"` // 思考过程配置
 	Database        DatabaseConfig        `json:"database"`        // 数据库配置
+	Memory          MemoryConfig          `json:"memory"`          // 记忆模块配置
 }
 
 // HeartbeatConfig 心跳配置
@@ -234,6 +277,29 @@ func DefaultConfig() *Config {
 			DBName:       "events.db",
 			MaxOpenConns: 1, // SQLite 建议单连接
 			MaxIdleConns: 1,
+		},
+		Memory: MemoryConfig{
+			Enabled: false, // 默认关闭，需要手动启用
+			Summarization: SummarizationConfig{
+				Model:              "",
+				Temperature:        0.3,
+				MaxTokens:          2048,
+				ConversationPrompt: "",
+				LongTermPrompt:     "",
+			},
+			Embedding: EmbeddingConfig{
+				Enabled:    false,
+				Dimensions: 1024,
+			},
+			Scheduled: MemoryScheduledConfig{
+				Enabled:    true,
+				TimeWindow: "05:30-06:30",
+				Timezone:   "Asia/Shanghai",
+				BatchSize:  100,
+			},
+			Storage: MemoryStorageConfig{
+				StreamVectorization: false,
+			},
 		},
 	}
 }

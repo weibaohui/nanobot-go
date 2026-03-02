@@ -170,7 +170,7 @@ func (i *interruptible) Process(ctx context.Context, msg *bus.InboundMessage, bu
 	}
 
 	// Normal processing flow
-	history := i.convertHistory(sess.GetHistory(10))
+	history := i.convertHistory(i.sessions.GetHistory(ctx, sessionKey, 10))
 	messages := buildMessagesFunc(history, msg.Content, msg.Channel, msg.ChatID)
 	checkpointID := fmt.Sprintf("%s_%d", sessionKey, time.Now().UnixNano())
 

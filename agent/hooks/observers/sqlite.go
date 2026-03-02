@@ -6,19 +6,19 @@ import (
 
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observer"
-	"github.com/weibaohui/nanobot-go/agent/models"
-	"github.com/weibaohui/nanobot-go/agent/service"
+	"github.com/weibaohui/nanobot-go/conversation/service"
+	"github.com/weibaohui/nanobot-go/internal/models"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
-// DedupRepository 去重仓储接口（最小化接口，遵循接口隔离原则）
+// DedupRepository 去重仓储接口
 type DedupRepository interface {
-	FindByTraceIDRoleAndContent(ctx context.Context, traceID, role, content string) ([]models.Event, error)
+	FindByTraceIDRoleAndContent(ctx context.Context, traceID, role, content string) ([]models.ConversationRecord, error)
 	DeleteByID(ctx context.Context, id uint) error
 }
 
-// ConversationCreator 对话创建接口（最小化接口）
+// ConversationCreator 对话创建接口
 type ConversationCreator interface {
 	Create(ctx context.Context, dto *service.ConversationDTO) error
 }
@@ -31,13 +31,12 @@ type DBClient interface {
 }
 
 // SQLiteObserver SQLite 观察器
-// 将消息事件存储到 SQLite 数据库中
 type SQLiteObserver struct {
 	*observer.BaseObserver
-	dbClient   DBClient
-	logger     *zap.Logger
-	repo       DedupRepository
-	creator    ConversationCreator
+	dbClient DBClient
+	logger   *zap.Logger
+	repo     DedupRepository
+	creator  ConversationCreator
 }
 
 // SQLiteObserverOption 构造选项
@@ -58,7 +57,7 @@ func WithDBClient(dbClient DBClient) SQLiteObserverOption {
 	return func(o *SQLiteObserver) { o.dbClient = dbClient }
 }
 
-// NewSQLiteObserver 创建 SQLite 观察器（依赖注入方式）
+// NewSQLiteObserver 创建 SQLite 观察器
 func NewSQLiteObserver(logger *zap.Logger, filter *observer.ObserverFilter, opts ...SQLiteObserverOption) *SQLiteObserver {
 	if logger == nil {
 		logger = zap.NewNop()
@@ -114,7 +113,7 @@ func (o *SQLiteObserver) handlePromptSubmitted(ctx context.Context, event events
 	}
 
 	if err := o.creator.Create(ctx, dto); err != nil {
-		o.logger.Error("插入事件失败", zap.Error(err), zap.String("trace_id", dto.TraceID))
+		o.logger.Error("插入对话记录失败", zap.Error(err), zap.String("trace_id", dto.TraceID))
 		return err
 	}
 
@@ -176,7 +175,7 @@ func (o *SQLiteObserver) handleLLMCallEnd(ctx context.Context, event events.Even
 	}
 
 	if err := o.creator.Create(ctx, dto); err != nil {
-		o.logger.Error("插入事件失败", zap.Error(err), zap.String("trace_id", dto.TraceID))
+		o.logger.Error("插入对话记录失败", zap.Error(err), zap.String("trace_id", dto.TraceID))
 		return err
 	}
 
@@ -217,7 +216,7 @@ func (o *SQLiteObserver) handleToolCompleted(ctx context.Context, event events.E
 	}
 
 	if err := o.creator.Create(ctx, dto); err != nil {
-		o.logger.Error("插入事件失败", zap.Error(err), zap.String("trace_id", dto.TraceID))
+		o.logger.Error("插入对话记录失败", zap.Error(err), zap.String("trace_id", dto.TraceID))
 		return err
 	}
 

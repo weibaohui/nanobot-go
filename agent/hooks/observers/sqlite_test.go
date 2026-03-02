@@ -9,21 +9,21 @@ import (
 	"github.com/cloudwego/eino/callbacks"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
-	"github.com/weibaohui/nanobot-go/agent/database"
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observer"
-	"github.com/weibaohui/nanobot-go/agent/models"
-	"github.com/weibaohui/nanobot-go/agent/repository"
-	"github.com/weibaohui/nanobot-go/agent/service"
+	"github.com/weibaohui/nanobot-go/conversation/database"
+	"github.com/weibaohui/nanobot-go/conversation/repository"
+	"github.com/weibaohui/nanobot-go/conversation/service"
+	"github.com/weibaohui/nanobot-go/internal/models"
 	"go.uber.org/zap"
 )
 
-func setupTestDeps(t *testing.T) (*database.Client, repository.EventRepository, service.ConversationService) {
+func setupTestDeps(t *testing.T) (*database.Client, repository.ConversationRecordRepository, service.ConversationService) {
 	tmpDir := t.TempDir()
 
 	dbConfig := &database.Config{
 		DataDir:      tmpDir,
-		DBName:       "events.db",
+		DBName:       "test.db",
 		MaxOpenConns: 1,
 		MaxIdleConns: 1,
 	}
@@ -38,13 +38,13 @@ func setupTestDeps(t *testing.T) (*database.Client, repository.EventRepository, 
 		t.Fatalf("初始化表结构失败: %v", err)
 	}
 
-	repo := repository.NewEventRepository(dbClient.DB())
+	repo := repository.NewConversationRecordRepository(dbClient.DB())
 	convService := service.NewConversationService(repo)
 
 	return dbClient, repo, convService
 }
 
-func createTestObserver(t *testing.T) (*SQLiteObserver, *database.Client, repository.EventRepository, service.ConversationService) {
+func createTestObserver(t *testing.T) (*SQLiteObserver, *database.Client, repository.ConversationRecordRepository, service.ConversationService) {
 	dbClient, repo, convService := setupTestDeps(t)
 	obs := NewSQLiteObserver(zap.NewNop(), nil,
 		WithDBClient(dbClient),
@@ -81,7 +81,7 @@ func TestSQLiteObserver_PromptSubmitted(t *testing.T) {
 		t.Fatalf("查询失败: %v", err)
 	}
 	if len(result) != 1 {
-		t.Fatalf("事件数量错误: got %d, want 1", len(result))
+		t.Fatalf("记录数量错误: got %d, want 1", len(result))
 	}
 	if result[0].Role != "user" {
 		t.Errorf("role 错误: got %s, want user", result[0].Role)
@@ -108,7 +108,7 @@ func TestSQLiteObserver_LLMCallEnd(t *testing.T) {
 		t.Fatalf("查询失败: %v", err)
 	}
 	if len(result) != 1 {
-		t.Fatalf("事件数量错误: got %d", len(result))
+		t.Fatalf("记录数量错误: got %d, want 1", len(result))
 	}
 	if result[0].Role != "assistant" {
 		t.Errorf("role 错误: got %s, want assistant", result[0].Role)
@@ -131,7 +131,7 @@ func TestSQLiteObserver_ToolCompleted(t *testing.T) {
 		t.Fatalf("查询失败: %v", err)
 	}
 	if len(result) != 1 {
-		t.Fatalf("事件数量错误: got %d, want 1", len(result))
+		t.Fatalf("记录数量错误: got %d, want 1", len(result))
 	}
 	if result[0].Role != "tool_result" {
 		t.Errorf("role 错误: got %s, want tool_result", result[0].Role)
@@ -175,7 +175,6 @@ func TestSQLiteObserver_Deduplication(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), "session_key", "session-1")
 
-	// 第一次插入：无 TokenUsage
 	event1 := events.NewLLMCallEndEvent("trace-1", "span-1", "",
 		&callbacks.RunInfo{Component: "LLM"},
 		&model.CallbackOutput{Message: &schema.Message{Content: "AI回复"}},
@@ -185,11 +184,10 @@ func TestSQLiteObserver_Deduplication(t *testing.T) {
 		t.Fatalf("处理事件1失败: %v", err)
 	}
 
-	// 第二次插入：有 TokenUsage
 	event2 := events.NewLLMCallEndEvent("trace-1", "span-1", "",
 		&callbacks.RunInfo{Component: "LLM"},
 		&model.CallbackOutput{
-			Message: &schema.Message{Content: "AI回复"},
+			Message:    &schema.Message{Content: "AI回复"},
 			TokenUsage: &model.TokenUsage{TotalTokens: 150},
 		},
 		100,
@@ -198,9 +196,8 @@ func TestSQLiteObserver_Deduplication(t *testing.T) {
 		t.Fatalf("处理事件2失败: %v", err)
 	}
 
-	// 验证去重：只有一条记录
 	var count int64
-	if err := dbClient.DB().Model(&models.Event{}).Where("trace_id = ?", "trace-1").Count(&count).Error; err != nil {
+	if err := dbClient.DB().Model(&models.ConversationRecord{}).Where("trace_id = ?", "trace-1").Count(&count).Error; err != nil {
 		t.Fatalf("查询失败: %v", err)
 	}
 	if count != 1 {
@@ -217,8 +214,6 @@ func TestSQLiteObserver_Filter(t *testing.T) {
 	}
 	obsFiltered := NewSQLiteObserver(zap.NewNop(), filter,
 		WithDBClient(dbClient),
-		WithDedupRepository(nil),
-		WithConversationCreator(nil),
 	)
 
 	if !obsFiltered.ShouldNotify(events.EventPromptSubmitted, "", "") {
@@ -233,7 +228,7 @@ func TestSQLiteObserver_DatabaseLocation(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbConfig := &database.Config{
 		DataDir:      filepath.Join(tmpDir, ".data"),
-		DBName:       "events.db",
+		DBName:       "test.db",
 		MaxOpenConns: 1,
 		MaxIdleConns: 1,
 	}
@@ -248,18 +243,18 @@ func TestSQLiteObserver_DatabaseLocation(t *testing.T) {
 		t.Fatalf("初始化表结构失败: %v", err)
 	}
 
-	repo := repository.NewEventRepository(dbClient.DB())
+	repo := repository.NewConversationRecordRepository(dbClient.DB())
 	convService := service.NewConversationService(repo)
 
-	_ = NewSQLiteObserver(zap.NewNop(), nil,
+	obs := NewSQLiteObserver(zap.NewNop(), nil,
 		WithDBClient(dbClient),
 		WithDedupRepository(repo),
 		WithConversationCreator(convService),
 	)
 
-	expectedPath := filepath.Join(tmpDir, ".data", "events.db")
-	if dbClient.DBPath() != expectedPath {
-		t.Errorf("数据库路径错误: got %s, want %s", dbClient.DBPath(), expectedPath)
+	expectedPath := filepath.Join(tmpDir, ".data", "test.db")
+	if obs.GetDBPath() != expectedPath {
+		t.Errorf("数据库路径错误: got %s, want %s", obs.GetDBPath(), expectedPath)
 	}
 
 	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {

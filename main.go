@@ -16,6 +16,8 @@ import (
 	"github.com/weibaohui/nanobot-go/agent/hooks"
 	hookevents "github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observers"
+	"github.com/weibaohui/nanobot-go/conversation/database"
+	"github.com/weibaohui/nanobot-go/conversation/repository"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/channels"
 	"github.com/weibaohui/nanobot-go/config"
@@ -25,7 +27,22 @@ import (
 	"github.com/weibaohui/nanobot-go/token_usage"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/weibaohui/nanobot-go/internal/models"
 )
+
+// convRepoAdapter 将 repository.ConversationRecordRepository 适配为 session.ConversationRecordRepository
+type convRepoAdapter struct {
+	repo repository.ConversationRecordRepository
+}
+
+func newConvRepoAdapter(repo repository.ConversationRecordRepository) session.ConversationRecordRepository {
+	return &convRepoAdapter{repo: repo}
+}
+
+func (a *convRepoAdapter) FindBySessionKey(ctx context.Context, sessionKey string, opts *models.QueryOptions) ([]models.ConversationRecord, error) {
+	return a.repo.FindBySessionKey(ctx, sessionKey, opts)
+}
 
 var (
 	version   = "dev"
@@ -108,7 +125,25 @@ func runGateway(cmd *cobra.Command, args []string) {
 	messageBus := bus.NewMessageBus(logger)
 
 	dataDir := filepath.Join(workspacePath, ".nanobot")
-	sessionManager := session.NewManager(cfg, logger, dataDir)
+
+	// 初始化数据库和对话记录仓库
+	var convRepo session.ConversationRecordRepository
+	if dbConfig := database.NewConfigFromConfig(cfg); dbConfig != nil {
+		dbClient, err := database.NewClient(dbConfig)
+		if err != nil {
+			logger.Error("初始化数据库失败", zap.Error(err))
+		} else {
+			if err := dbClient.InitSchema(); err != nil {
+				logger.Error("初始化数据库 schema 失败", zap.Error(err))
+				dbClient.Close()
+			} else {
+				convRepo = newConvRepoAdapter(repository.NewConversationRecordRepository(dbClient.DB()))
+				logger.Info("数据库和对话记录仓库已初始化")
+			}
+		}
+	}
+
+	sessionManager := session.NewManager(cfg, logger, dataDir, convRepo)
 	tokenUsageManager := token_usage.NewTokenUsageManager(dataDir)
 
 	// 创建统一的 Hook 系统
@@ -242,6 +277,7 @@ func runGateway(cmd *cobra.Command, args []string) {
 				logger.Error("MasterAgent 未初始化，跳过心跳处理")
 				return "", fmt.Errorf("MasterAgent not initialized")
 			}
+			// 心跳使用固定 session key "heartbeat:"，所有心跳共享一个会话
 			resp, err := agent.Process(ctx, &bus.InboundMessage{
 				Channel: "heartbeat",
 				Content: prompt,

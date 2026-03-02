@@ -10,8 +10,8 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
-	"github.com/weibaohui/nanobot-go/agent/models"
-	"github.com/weibaohui/nanobot-go/agent/repository"
+	"github.com/weibaohui/nanobot-go/internal/models"
+	"github.com/weibaohui/nanobot-go/conversation/repository"
 )
 
 // setupTestService 创建测试用的 ConversationService
@@ -20,10 +20,10 @@ func setupTestService(t *testing.T) (ConversationService, *gorm.DB) {
 	require.NoError(t, err)
 
 	// 自动迁移表结构
-	err = db.AutoMigrate(&models.Event{})
+	err = db.AutoMigrate(&models.ConversationRecord{})
 	require.NoError(t, err)
 
-	repo := repository.NewEventRepository(db)
+	repo := repository.NewConversationRecordRepository(db)
 	svc := NewConversationService(repo)
 
 	return svc, db

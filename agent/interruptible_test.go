@@ -29,7 +29,7 @@ func TestNewInterruptible(t *testing.T) {
 		ctx := context.Background()
 		logger := zap.NewNop()
 		cfg := &config.Config{}
-		sessionMgr := session.NewManager(cfg, logger, "/tmp")
+		sessionMgr := session.NewManager(cfg, logger, "/tmp", nil)
 		messageBus := bus.NewMessageBus(logger)
 
 		i, err := newInterruptible(ctx, &interruptibleConfig{
@@ -109,7 +109,7 @@ func TestNewInterruptible(t *testing.T) {
 func TestInterruptible_BuildChatModelAdapter(t *testing.T) {
 	logger := zap.NewNop()
 	cfg := &config.Config{}
-	sessionMgr := session.NewManager(cfg, logger, "/tmp")
+	sessionMgr := session.NewManager(cfg, logger, "/tmp", nil)
 
 	i := &interruptible{
 		cfg:      cfg,
@@ -280,7 +280,7 @@ func TestInterruptibleConfig(t *testing.T) {
 func TestBuildChatModelAdapter(t *testing.T) {
 	logger := zap.NewNop()
 	cfg := &config.Config{}
-	sessionMgr := session.NewManager(cfg, logger, "/tmp")
+	sessionMgr := session.NewManager(cfg, logger, "/tmp", nil)
 
 	t.Run("无技能加载器", func(t *testing.T) {
 		adapter, err := buildChatModelAdapter(logger, cfg, sessionMgr, nil, []string{"read_file"}, nil)

@@ -3,8 +3,6 @@ package agent
 import (
 	"errors"
 	"testing"
-
-	"github.com/cloudwego/eino/adk"
 )
 
 // TestSentinelErrors 测试哨兵错误定义
@@ -15,15 +13,9 @@ func TestSentinelErrors(t *testing.T) {
 		expected string
 	}{
 		{"ErrConfigNil", ErrConfigNil, "配置不能为空"},
-		{"ErrSubAgentCreate", ErrSubAgentCreate, "创建子 Agent 失败"},
-		{"ErrSupervisorInit", ErrSupervisorInit, "Supervisor 初始化失败"},
 		{"ErrMasterInit", ErrMasterInit, "Master 初始化失败"},
 		{"ErrChatModelAdapter", ErrChatModelAdapter, "创建 ChatModel 适配器失败"},
-		{"ErrPlannerCreate", ErrPlannerCreate, "创建 Planner 失败"},
-		{"ErrExecutorCreate", ErrExecutorCreate, "创建 Executor 失败"},
-		{"ErrReplannerCreate", ErrReplannerCreate, "创建 Replanner 失败"},
 		{"ErrAgentCreate", ErrAgentCreate, "创建 Agent 失败"},
-		{"ErrSupervisorCreate", ErrSupervisorCreate, "创建 Supervisor 编排失败"},
 		{"ErrMasterCreate", ErrMasterCreate, "创建 Master 编排失败"},
 		{"ErrADKRunnerNil", ErrADKRunnerNil, "ADK Runner 未初始化"},
 		{"ErrResumeFailed", ErrResumeFailed, "恢复执行失败"},
@@ -33,27 +25,6 @@ func TestSentinelErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.err.Error() != tt.expected {
 				t.Errorf("错误消息 = %q, 期望 %q", tt.err.Error(), tt.expected)
-			}
-		})
-	}
-}
-
-// TestAgentType 测试 Agent 类型常量
-func TestAgentType(t *testing.T) {
-	tests := []struct {
-		name     string
-		agentType AgentType
-		expected string
-	}{
-		{"ReAct Agent", AgentTypeReAct, "react_agent"},
-		{"Plan Agent", AgentTypePlan, "plan_agent"},
-		{"Chat Agent", AgentTypeChat, "chat_agent"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if string(tt.agentType) != tt.expected {
-				t.Errorf("AgentType = %q, 期望 %q", string(tt.agentType), tt.expected)
 			}
 		})
 	}
@@ -122,66 +93,6 @@ func TestWrapError_Chained(t *testing.T) {
 
 	if !errors.Is(secondWrap, firstWrap) {
 		t.Error("应该能通过 errors.Is 找到中间层的错误")
-	}
-}
-
-// TestAgentType_Equality 测试 AgentType 相等比较
-func TestAgentType_Equality(t *testing.T) {
-	tests := []struct {
-		name     string
-		type1    AgentType
-		type2    AgentType
-		expected bool
-	}{
-		{"相同类型", AgentTypeReAct, AgentTypeReAct, true},
-		{"不同类型", AgentTypeReAct, AgentTypePlan, false},
-		{"空类型比较", AgentType(""), AgentType(""), true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.type1 == tt.type2
-			if result != tt.expected {
-				t.Errorf("比较结果 = %v, 期望 %v", result, tt.expected)
-			}
-		})
-	}
-}
-
-// TestSubAgent_Interface 测试 SubAgent 接口方法签名
-func TestSubAgent_Interface(t *testing.T) {
-	var _ SubAgent = (*mockSubAgent)(nil)
-}
-
-type mockSubAgent struct {
-	name        string
-	description string
-	agentType   AgentType
-}
-
-func (m *mockSubAgent) Name() string            { return m.name }
-func (m *mockSubAgent) Description() string     { return m.description }
-func (m *mockSubAgent) Type() AgentType         { return m.agentType }
-func (m *mockSubAgent) GetADKAgent() adk.Agent  { return nil }
-
-// TestMockSubAgent 测试模拟 SubAgent 实现
-func TestMockSubAgent(t *testing.T) {
-	agent := &mockSubAgent{
-		name:        "test-agent",
-		description: "测试代理",
-		agentType:   AgentTypeReAct,
-	}
-
-	if agent.Name() != "test-agent" {
-		t.Errorf("Name() = %q, 期望 test-agent", agent.Name())
-	}
-
-	if agent.Description() != "测试代理" {
-		t.Errorf("Description() = %q, 期望 测试代理", agent.Description())
-	}
-
-	if agent.Type() != AgentTypeReAct {
-		t.Errorf("Type() = %q, 期望 %q", agent.Type(), AgentTypeReAct)
 	}
 }
 
