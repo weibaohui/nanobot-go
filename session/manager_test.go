@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -128,7 +129,7 @@ func TestManager_Save(t *testing.T) {
 		UpdatedAt: time.Now(),
 	}
 
-	err := manager.Save(session)
+	err := manager.Save(context.Background(), session)
 	if err != nil {
 		t.Fatalf("Save 返回错误: %v", err)
 	}
@@ -155,7 +156,7 @@ func TestManager_Delete(t *testing.T) {
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		}
-		manager.Save(session)
+		manager.Save(context.Background(), session)
 
 		result := manager.Delete("delete-test-session")
 		if !result {
@@ -193,8 +194,8 @@ func TestManager_ListSessions(t *testing.T) {
 		UpdatedAt: time.Now(),
 	}
 
-	manager.Save(session1)
-	manager.Save(session2)
+	manager.Save(context.Background(), session1)
+	manager.Save(context.Background(), session2)
 
 	sessions := manager.ListSessions()
 
@@ -284,7 +285,7 @@ func TestManager_SaveAndLoadWithAllFields(t *testing.T) {
 		UpdatedAt: now,
 	}
 
-	err := manager.Save(original)
+	err := manager.Save(context.Background(), original)
 	if err != nil {
 		t.Fatalf("Save 返回错误: %v", err)
 	}

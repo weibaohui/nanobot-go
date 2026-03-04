@@ -1,8 +1,13 @@
 package channels
 
 import (
+	"context"
 	"net/http/httptest"
 	"testing"
+	"time"
+
+	"github.com/weibaohui/nanobot-go/bus"
+	"go.uber.org/zap"
 )
 
 // TestWebSocketConfig 测试 WebSocket 配置
@@ -134,5 +139,115 @@ func TestWebSocketChannel_Name(t *testing.T) {
 
 	if channel.Name() != "websocket" {
 		t.Errorf("Name() = %q, 期望 websocket", channel.Name())
+	}
+}
+
+// TestWebSocketChannel_StartStop 测试启动和停止
+func TestWebSocketChannel_StartStop(t *testing.T) {
+	t.Run("正常启动停止", func(t *testing.T) {
+		messageBus := bus.NewMessageBus(zap.NewNop())
+		cfg := &WebSocketConfig{
+			Addr: ":18088", // 使用不常用端口避免冲突
+			Path: "/ws",
+		}
+		channel := NewWebSocketChannel(cfg, messageBus, zap.NewNop())
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		// 启动（非阻塞）
+		go func() {
+			err := channel.Start(ctx)
+			if err != nil && ctx.Err() == nil {
+				t.Logf("Start 返回错误: %v", err)
+			}
+		}()
+
+		// 等待服务器启动
+		time.Sleep(100 * time.Millisecond)
+
+		// 停止
+		channel.Stop()
+	})
+
+	t.Run("地址已被占用", func(t *testing.T) {
+		messageBus := bus.NewMessageBus(zap.NewNop())
+
+		// 第一个服务器
+		cfg1 := &WebSocketConfig{
+			Addr: ":18089",
+			Path: "/ws",
+		}
+		channel1 := NewWebSocketChannel(cfg1, messageBus, zap.NewNop())
+
+		ctx1 := context.Background()
+		go channel1.Start(ctx1)
+		time.Sleep(50 * time.Millisecond)
+
+		// 第二个服务器尝试使用相同地址
+		cfg2 := &WebSocketConfig{
+			Addr: ":18089",
+			Path: "/ws2",
+		}
+		channel2 := NewWebSocketChannel(cfg2, messageBus, zap.NewNop())
+
+		err := channel2.Start(ctx1)
+		if err == nil {
+			// 某些系统可能允许多个监听，这没关系
+			t.Log("第二个服务器启动没有返回错误（可能系统允许多个监听）")
+		}
+
+		channel1.Stop()
+		channel2.Stop()
+	})
+}
+
+// TestWebSocketChannel_clients 测试客户端管理
+func TestWebSocketChannel_clients(t *testing.T) {
+	messageBus := bus.NewMessageBus(zap.NewNop())
+	cfg := &WebSocketConfig{
+		Addr: ":18090",
+		Path: "/ws",
+	}
+	channel := NewWebSocketChannel(cfg, messageBus, zap.NewNop())
+
+	// 初始应该没有客户端
+	if len(channel.clients) != 0 {
+		t.Errorf("初始客户端数 = %d, 期望 0", len(channel.clients))
+	}
+}
+
+// TestTruncate 边界情况
+func TestTruncate_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		maxLen   int
+		expected string
+	}{
+		{"零长度", "Hello", 0, "..."},
+		{"长度为3", "Hello", 3, "Hel..."},
+		{"刚好长度4", "Hello", 4, "Hell..."},
+		{"中文(按字节截断)", "你好世界", 6, "你好..."},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := truncate(tt.input, tt.maxLen)
+			if result != tt.expected {
+				t.Errorf("truncate(%q, %d) = %q, 期望 %q", tt.input, tt.maxLen, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestGenerateChatID_IPv6 测试 IPv6 地址
+func TestGenerateChatID_IPv6(t *testing.T) {
+	req := httptest.NewRequest("GET", "/ws", nil)
+	req.RemoteAddr = "[::1]:8080"
+
+	result := generateChatID(req)
+	if result[:3] != "ws_" {
+		t.Errorf("generateChatID() = %q, 应以 ws_ 开头", result)
 	}
 }

@@ -91,3 +91,29 @@ func TestHasSuffixInsensitive(t *testing.T) {
 		})
 	}
 }
+
+// TestTruncateString 测试字符串截断
+func TestTruncateString(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		maxLen   int
+		expected string
+	}{
+		{"无需截断", "hello", 10, "hello"},
+		{"刚好等于", "hello", 5, "hello"},
+		{"需要截断", "hello world", 5, "hello..."},
+		{"空字符串", "", 5, ""},
+		{"中文截断", "你好世界测试", 4, "你好世界..."},
+		{"maxLen为0", "hello", 0, "..."},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := TruncateString(tt.input, tt.maxLen)
+			if result != tt.expected {
+				t.Errorf("TruncateString(%q, %d) = %q, 期望 %q", tt.input, tt.maxLen, result, tt.expected)
+			}
+		})
+	}
+}

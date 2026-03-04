@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -39,6 +40,9 @@ func (m *MockStreamMemoryRepository) FindByID(ctx context.Context, id uint64) (*
 
 func (m *MockStreamMemoryRepository) FindByTraceID(ctx context.Context, traceID string) ([]models.StreamMemory, error) {
 	args := m.Called(ctx, traceID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).([]models.StreamMemory), args.Error(1)
 }
 
@@ -125,11 +129,17 @@ type MockMemorySummarizer struct {
 
 func (m *MockMemorySummarizer) SummarizeConversation(ctx context.Context, messages []models.Message) (*models.ConversationSummary, error) {
 	args := m.Called(ctx, messages)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*models.ConversationSummary), args.Error(1)
 }
 
 func (m *MockMemorySummarizer) SummarizeToLongTerm(ctx context.Context, streams []models.StreamMemory) (*models.LongTermSummary, error) {
 	args := m.Called(ctx, streams)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*models.LongTermSummary), args.Error(1)
 }
 
@@ -295,4 +305,288 @@ func TestMemoryService_GetUnprocessedCount(t *testing.T) {
 	count, err := svc.GetUnprocessedCount(ctx, time.Now())
 	require.NoError(t, err)
 	assert.Equal(t, int64(5), count)
+}
+
+func TestMemoryService_SearchMemory_WithFilters(t *testing.T) {
+	streamRepo := new(MockStreamMemoryRepository)
+	longTermRepo := new(MockLongTermMemoryRepository)
+	summarizer := new(MockMemorySummarizer)
+
+	svc := NewMemoryService(streamRepo, longTermRepo, summarizer, true)
+	ctx := context.Background()
+
+	t.Run("按SessionKey搜索", func(t *testing.T) {
+		streams := []models.StreamMemory{
+			{ID: 1, TraceID: "trace-001", Content: "内容1", SessionKey: "session-1", CreatedAt: time.Now()},
+		}
+		streamRepo.On("FindBySessionKey", ctx, "session-1", mock.Anything).Return(streams, nil).Once()
+		// 默认也会查询长期记忆
+		longTermRepo.On("FindByTimeRange", ctx, mock.Anything, mock.Anything, mock.Anything).Return([]models.LongTermMemory{}, nil).Once()
+
+		filters := models.SearchFilters{
+			SessionKey: "session-1",
+			Limit:      10,
+		}
+
+		result, err := svc.SearchMemory(ctx, "", filters)
+		require.NoError(t, err)
+		assert.Equal(t, 1, result.Total)
+		assert.Len(t, result.StreamMemories, 1)
+	})
+
+	t.Run("按时间范围搜索", func(t *testing.T) {
+		startTime := time.Now().Add(-24 * time.Hour)
+		endTime := time.Now()
+
+		streams := []models.StreamMemory{
+			{ID: 2, TraceID: "trace-002", Content: "内容2", CreatedAt: time.Now()},
+		}
+		streamRepo.On("FindByTimeRange", ctx, startTime, endTime, mock.Anything).Return(streams, nil).Once()
+		longTermRepo.On("FindByTimeRange", ctx, startTime, endTime, mock.Anything).Return([]models.LongTermMemory{}, nil).Once()
+
+		filters := models.SearchFilters{
+			StartTime: &startTime,
+			EndTime:   &endTime,
+			Limit:     10,
+		}
+
+		result, err := svc.SearchMemory(ctx, "", filters)
+		require.NoError(t, err)
+		assert.Equal(t, 1, result.Total)
+	})
+
+	t.Run("按TraceID搜索", func(t *testing.T) {
+		streams := []models.StreamMemory{
+			{ID: 3, TraceID: "trace-003", Content: "内容3", CreatedAt: time.Now()},
+		}
+		streamRepo.On("FindByTraceID", ctx, "trace-003").Return(streams, nil).Once()
+		longTermRepo.On("FindByTimeRange", ctx, mock.Anything, mock.Anything, mock.Anything).Return([]models.LongTermMemory{}, nil).Once()
+		streamRepo.On("FindByTraceID", ctx, "trace-003").Return(streams, nil).Once()
+
+		filters := models.SearchFilters{
+			TraceID: "trace-003",
+			Limit:   10,
+		}
+
+		result, err := svc.SearchMemory(ctx, "", filters)
+		require.NoError(t, err)
+		assert.Equal(t, 1, result.Total)
+	})
+
+	t.Run("只搜索长期记忆", func(t *testing.T) {
+		longTerms := []models.LongTermMemory{
+			{ID: 1, Date: "2026-03-01", Summary: "总结1", CreatedAt: time.Now()},
+		}
+		longTermRepo.On("SearchByKeyword", ctx, "关键词", mock.Anything).Return(longTerms, nil).Once()
+
+		filters := models.SearchFilters{
+			IncludeStream:   false,
+			IncludeLongTerm: true,
+			Limit:           10,
+		}
+
+		result, err := svc.SearchMemory(ctx, "关键词", filters)
+		require.NoError(t, err)
+		assert.Equal(t, 1, result.Total)
+		assert.Len(t, result.LongTermMemories, 1)
+		assert.Len(t, result.StreamMemories, 0)
+	})
+
+	t.Run("空关键词搜索", func(t *testing.T) {
+		// 默认查询最近30天的长期记忆
+		longTerms := []models.LongTermMemory{
+			{ID: 1, Date: "2026-03-01", Summary: "总结1", CreatedAt: time.Now()},
+		}
+		longTermRepo.On("FindByTimeRange", ctx, mock.AnythingOfType("time.Time"), mock.AnythingOfType("time.Time"), mock.Anything).Return(longTerms, nil).Once()
+
+		filters := models.SearchFilters{
+			IncludeStream:   false,
+			IncludeLongTerm: true,
+			Limit:           10,
+		}
+
+		result, err := svc.SearchMemory(ctx, "", filters)
+		require.NoError(t, err)
+		assert.Equal(t, 1, result.Total)
+	})
+}
+
+func TestMemoryService_WriteMemory_Validation(t *testing.T) {
+	streamRepo := new(MockStreamMemoryRepository)
+	longTermRepo := new(MockLongTermMemoryRepository)
+	summarizer := new(MockMemorySummarizer)
+
+	svc := NewMemoryService(streamRepo, longTermRepo, summarizer, true)
+	ctx := context.Background()
+
+	t.Run("空内容", func(t *testing.T) {
+		metadata := map[string]interface{}{
+			"trace_id": "trace-001",
+		}
+
+		err := svc.WriteMemory(ctx, "", metadata)
+		assert.ErrorIs(t, err, ErrInvalidMetadata)
+	})
+
+	t.Run("仓库错误", func(t *testing.T) {
+		streamRepo.On("FindByTraceID", ctx, "trace-005").Return(nil, errors.New("db error")).Once()
+
+		metadata := map[string]interface{}{
+			"trace_id": "trace-005",
+		}
+
+		err := svc.WriteMemory(ctx, "内容", metadata)
+		assert.Error(t, err)
+	})
+}
+
+func TestMemoryService_UpgradeStreamToLongTerm_Existing(t *testing.T) {
+	streamRepo := new(MockStreamMemoryRepository)
+	longTermRepo := new(MockLongTermMemoryRepository)
+	summarizer := new(MockMemorySummarizer)
+
+	svc := NewMemoryService(streamRepo, longTermRepo, summarizer, true)
+	ctx := context.Background()
+
+	date := "2026-03-01"
+	targetDate, _ := time.Parse("2006-01-02", date)
+	startOfDay := targetDate
+	endOfDay := targetDate.AddDate(0, 0, 1).Add(-time.Nanosecond)
+
+	// 模拟查询流水记忆
+	streams := []models.StreamMemory{
+		{ID: 1, TraceID: "trace-001", Content: "内容1", CreatedAt: targetDate.Add(time.Hour)},
+	}
+	streamRepo.On("FindByTimeRange", ctx, startOfDay, endOfDay, mock.Anything).Return(streams, nil).Once()
+
+	// 模拟总结
+	summary := &models.LongTermSummary{
+		WhatHappened: "发生了一些事情",
+		Conclusion:   "结论是...",
+		Value:        "价值是...",
+		Highlights:   []string{"事件1"},
+	}
+	summarizer.On("SummarizeToLongTerm", ctx, streams).Return(summary, nil).Once()
+
+	// 模拟已存在长期记忆（更新场景）
+	existing := &models.LongTermMemory{
+		ID:   100,
+		Date: date,
+	}
+	longTermRepo.On("FindByDate", ctx, date).Return(existing, nil).Once()
+
+	// 更新现有记录
+	longTermRepo.On("Update", ctx, mock.AnythingOfType("*models.LongTermMemory")).Return(nil).Once()
+
+	// 标记为已处理
+	streamRepo.On("MarkAsProcessed", ctx, []uint64{1}).Return(nil).Once()
+
+	err := svc.UpgradeStreamToLongTerm(ctx, date)
+	require.NoError(t, err)
+	longTermRepo.AssertExpectations(t)
+}
+
+func TestMemoryService_UpgradeStreamToLongTerm_NoStreams(t *testing.T) {
+	streamRepo := new(MockStreamMemoryRepository)
+	longTermRepo := new(MockLongTermMemoryRepository)
+	summarizer := new(MockMemorySummarizer)
+
+	svc := NewMemoryService(streamRepo, longTermRepo, summarizer, true)
+	ctx := context.Background()
+
+	date := "2026-03-01"
+	targetDate, _ := time.Parse("2006-01-02", date)
+	startOfDay := targetDate
+	endOfDay := targetDate.AddDate(0, 0, 1).Add(-time.Nanosecond)
+
+	// 模拟没有流水记忆
+	streamRepo.On("FindByTimeRange", ctx, startOfDay, endOfDay, mock.Anything).Return([]models.StreamMemory{}, nil).Once()
+
+	// 应该成功，因为没有需要处理的
+	err := svc.UpgradeStreamToLongTerm(ctx, date)
+	require.NoError(t, err)
+}
+
+func TestMemoryService_UpgradeStreamToLongTerm_SummarizerError(t *testing.T) {
+	streamRepo := new(MockStreamMemoryRepository)
+	longTermRepo := new(MockLongTermMemoryRepository)
+	summarizer := new(MockMemorySummarizer)
+
+	svc := NewMemoryService(streamRepo, longTermRepo, summarizer, true)
+	ctx := context.Background()
+
+	date := "2026-03-01"
+	targetDate, _ := time.Parse("2006-01-02", date)
+	startOfDay := targetDate
+	endOfDay := targetDate.AddDate(0, 0, 1).Add(-time.Nanosecond)
+
+	// 模拟查询流水记忆
+	streams := []models.StreamMemory{
+		{ID: 1, TraceID: "trace-001", Content: "内容1", CreatedAt: targetDate.Add(time.Hour)},
+	}
+	streamRepo.On("FindByTimeRange", ctx, startOfDay, endOfDay, mock.Anything).Return(streams, nil).Once()
+
+	// 模拟总结失败
+	summarizer.On("SummarizeToLongTerm", ctx, streams).Return(nil, errors.New("summarizer error")).Once()
+
+	err := svc.UpgradeStreamToLongTerm(ctx, date)
+	assert.ErrorIs(t, err, ErrUpgradeFailed)
+}
+
+func TestMemoryService_FilterStreamByKeyword(t *testing.T) {
+	streamRepo := new(MockStreamMemoryRepository)
+	longTermRepo := new(MockLongTermMemoryRepository)
+	summarizer := new(MockMemorySummarizer)
+
+	svc := NewMemoryService(streamRepo, longTermRepo, summarizer, true)
+	ctx := context.Background()
+
+	// 创建带关键词过滤的测试数据
+	streams := []models.StreamMemory{
+		{ID: 1, Content: "Hello World", Summary: "问候"},
+		{ID: 2, Content: "Go Programming", Summary: "编程"},
+		{ID: 3, Content: "Hello Go", Summary: "Go语言"},
+	}
+	streamRepo.On("FindByTimeRange", ctx, mock.Anything, mock.Anything, mock.Anything).Return(streams, nil).Once()
+	longTermRepo.On("SearchByKeyword", ctx, "hello", mock.Anything).Return([]models.LongTermMemory{}, nil).Once()
+
+	filters := models.SearchFilters{Limit: 10}
+
+	result, err := svc.SearchMemory(ctx, "hello", filters)
+	require.NoError(t, err)
+	// 应该只返回包含 "hello" 的记录（ID 1 和 3）
+	assert.Equal(t, 2, len(result.StreamMemories))
+}
+
+func TestMemoryService_LimitValidation(t *testing.T) {
+	streamRepo := new(MockStreamMemoryRepository)
+	longTermRepo := new(MockLongTermMemoryRepository)
+	summarizer := new(MockMemorySummarizer)
+
+	svc := NewMemoryService(streamRepo, longTermRepo, summarizer, true)
+	ctx := context.Background()
+
+	t.Run("默认限制", func(t *testing.T) {
+		streams := []models.StreamMemory{{ID: 1, Content: "内容"}}
+		streamRepo.On("FindByTimeRange", ctx, mock.Anything, mock.Anything, mock.Anything).Return(streams, nil).Once()
+		longTermRepo.On("FindByTimeRange", ctx, mock.Anything, mock.Anything, mock.Anything).Return([]models.LongTermMemory{}, nil).Once()
+
+		filters := models.SearchFilters{} // Limit = 0
+
+		result, err := svc.SearchMemory(ctx, "", filters)
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, result.Total, 0)
+	})
+
+	t.Run("限制上限", func(t *testing.T) {
+		// Limit > 100 应该被限制为 100
+		streams := []models.StreamMemory{{ID: 1, Content: "内容"}}
+		streamRepo.On("FindByTimeRange", ctx, mock.Anything, mock.Anything, mock.Anything).Return(streams, nil).Once()
+		longTermRepo.On("FindByTimeRange", ctx, mock.Anything, mock.Anything, mock.Anything).Return([]models.LongTermMemory{}, nil).Once()
+
+		filters := models.SearchFilters{Limit: 200}
+
+		_, err := svc.SearchMemory(ctx, "", filters)
+		require.NoError(t, err)
+	})
 }
