@@ -655,4 +655,20 @@ func registerChannels(mgr *channels.Manager, cfg *config.Config, messageBus *bus
 		)
 	}
 
+	// 飞书渠道
+	if cfg.Channels.Feishu.Enabled {
+		feishuConfig := &channels.FeishuConfig{
+			AppID:             cfg.Channels.Feishu.AppID,
+			AppSecret:         cfg.Channels.Feishu.AppSecret,
+			EncryptKey:        cfg.Channels.Feishu.EncryptKey,
+			VerificationToken: cfg.Channels.Feishu.VerificationToken,
+			AllowFrom:         cfg.Channels.Feishu.AllowFrom,
+		}
+		feishu := channels.NewFeishuChannel(feishuConfig, messageBus, logger)
+		mgr.Register(feishu)
+		logger.Info("已注册飞书渠道",
+			zap.String("app_id", feishuConfig.AppID),
+		)
+	}
+
 }
