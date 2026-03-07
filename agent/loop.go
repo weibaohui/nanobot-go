@@ -91,6 +91,11 @@ func NewLoop(cfg *LoopConfig) *Loop {
 		hookCallback:        cfg.HookCallback,
 	}
 
+	// 设置工具的 HookManager，使工具执行时能触发 Hook 事件
+	if cfg.HookManager != nil {
+		loop.tools.SetHookManager(cfg.HookManager, logger)
+	}
+
 	loop.interruptManager = NewInterruptManager(cfg.MessageBus, logger)
 
 	loop.registerDefaultTools()

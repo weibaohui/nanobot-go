@@ -7,12 +7,16 @@ import (
 	"sync"
 
 	"github.com/cloudwego/eino/components/tool"
+	"github.com/weibaohui/nanobot-go/agent/hooks"
+	"go.uber.org/zap"
 )
 
 // Registry 工具注册表
 type Registry struct {
-	tools map[string]tool.BaseTool
-	mu    sync.RWMutex
+	tools       map[string]tool.BaseTool
+	mu          sync.RWMutex
+	hookManager *hooks.HookManager
+	logger      *zap.Logger
 }
 
 // NewRegistry 创建工具注册表
@@ -22,7 +26,17 @@ func NewRegistry() *Registry {
 	}
 }
 
+// SetHookManager 设置 Hook 管理器
+// 设置后，所有注册的工具将被包装以支持 Hook 事件
+func (r *Registry) SetHookManager(hookManager *hooks.HookManager, logger *zap.Logger) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.hookManager = hookManager
+	r.logger = logger
+}
+
 // Register 注册工具
+// 如果设置了 HookManager，工具将被自动包装以支持 Hook 事件
 func (r *Registry) Register(baseTool tool.BaseTool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -30,6 +44,14 @@ func (r *Registry) Register(baseTool tool.BaseTool) {
 	if name == "" {
 		return
 	}
+
+	// 如果设置了 HookManager 且工具支持 InvokableRun，包装它
+	if r.hookManager != nil {
+		if invokable, ok := baseTool.(tool.InvokableTool); ok {
+			baseTool = NewHookableTool(invokable, r.hookManager, r.logger)
+		}
+	}
+
 	r.tools[name] = baseTool
 }
 
