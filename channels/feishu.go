@@ -40,7 +40,7 @@ type FeishuChannel struct {
 	// 消息去重缓存
 	processedMsgIDs *syncMap
 
-	// 消息反应缓存: chat_id -> reactionInfo
+	// 消息反应缓存: message_id -> reactionInfo
 	reactionCache   map[string]*reactionInfo
 	reactionMu      sync.RWMutex
 
@@ -252,8 +252,8 @@ func (c *FeishuChannel) onMessageReceive(ctx context.Context, event *larkim.P2Me
 	}
 
 	// 添加反应表情表示正在处理，并保存 reaction_id
-	// 注意：使用 replyTo 作为 key，因为删除时 msg.ChatID 就是 replyTo
-	go c.addReactionAndSave(replyTo, messageID, "OnIt")
+	// 注意：使用 messageID 作为 key，支持同一聊天的多条消息
+	go c.addReactionAndSave(messageID, "OnIt")
 
 	// 检查用户白名单
 	if len(c.config.AllowFrom) > 0 {
@@ -296,8 +296,8 @@ func (c *FeishuChannel) onMessageReceive(ctx context.Context, event *larkim.P2Me
 }
 
 // addReactionAndSave 添加反应表情并保存到缓存
-func (c *FeishuChannel) addReactionAndSave(chatID, messageID, emojiType string) {
-	if c.client == nil || chatID == "" {
+func (c *FeishuChannel) addReactionAndSave(messageID, emojiType string) {
+	if c.client == nil || messageID == "" {
 		return
 	}
 
@@ -327,29 +327,32 @@ func (c *FeishuChannel) addReactionAndSave(chatID, messageID, emojiType string) 
 	// 保存 reaction_id 到缓存
 	if resp.Data != nil && resp.Data.ReactionId != nil {
 		c.reactionMu.Lock()
-		c.reactionCache[chatID] = &reactionInfo{
+		c.reactionCache[messageID] = &reactionInfo{
 			messageID:  messageID,
 			reactionID: *resp.Data.ReactionId,
 		}
 		c.reactionMu.Unlock()
 		c.logger.Debug("已保存飞书反应表情",
-			zap.String("chat_id", chatID),
+			zap.String("message_id", messageID),
 			zap.String("reaction_id", *resp.Data.ReactionId),
 		)
 	}
 }
 
 // deleteReactionFromCache 从缓存中删除反应表情
-func (c *FeishuChannel) deleteReactionFromCache(chatID string) {
-	if c.client == nil || chatID == "" {
+func (c *FeishuChannel) deleteReactionFromCache(messageID string) {
+	if c.client == nil || messageID == "" {
 		return
 	}
 
 	c.reactionMu.RLock()
-	info, exists := c.reactionCache[chatID]
+	info, exists := c.reactionCache[messageID]
 	c.reactionMu.RUnlock()
 
 	if !exists {
+		c.logger.Debug("未找到要删除的反应表情",
+			zap.String("message_id", messageID),
+		)
 		return
 	}
 
@@ -374,11 +377,11 @@ func (c *FeishuChannel) deleteReactionFromCache(chatID string) {
 
 	// 从缓存中移除
 	c.reactionMu.Lock()
-	delete(c.reactionCache, chatID)
+	delete(c.reactionCache, messageID)
 	c.reactionMu.Unlock()
 
 	c.logger.Debug("已删除飞书反应表情",
-		zap.String("chat_id", chatID),
+		zap.String("message_id", messageID),
 		zap.String("reaction_id", info.reactionID),
 	)
 }
@@ -473,7 +476,12 @@ func (c *FeishuChannel) Send(msg *bus.OutboundMessage) error {
 	)
 
 	// 发送成功后，删除"正在处理"反应表情
-	go c.deleteReactionFromCache(msg.ChatID)
+	// 从 Metadata 中获取原始消息的 message_id
+	if msg.Metadata != nil {
+		if replyToMsgID, ok := msg.Metadata["reply_to_message_id"].(string); ok && replyToMsgID != "" {
+			go c.deleteReactionFromCache(replyToMsgID)
+		}
+	}
 
 	return nil
 }

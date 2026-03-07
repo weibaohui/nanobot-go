@@ -258,7 +258,14 @@ func (l *Loop) Run(ctx context.Context) error {
 		// 处理消息
 		if err := l.processMessage(ctx, msg); err != nil {
 			l.logger.Error("处理消息失败", zap.Error(err))
-			l.bus.PublishOutbound(bus.NewOutboundMessage(msg.Channel, msg.ChatID, fmt.Sprintf("抱歉，我遇到了错误: %s", err)))
+			outMsg := bus.NewOutboundMessage(msg.Channel, msg.ChatID, fmt.Sprintf("抱歉，我遇到了错误: %s", err))
+			// 传递原始消息的 message_id
+			if msg.Metadata != nil {
+				if msgID, ok := msg.Metadata["message_id"].(string); ok {
+					outMsg.Metadata["reply_to_message_id"] = msgID
+				}
+			}
+			l.bus.PublishOutbound(outMsg)
 		}
 	}
 
@@ -308,18 +315,32 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 		}
 		// 非中断错误：如果 response 包含错误信息（由 interruptible 构造），直接发送
 		// 否则构造默认错误消息
+		outMsg := bus.NewOutboundMessage(msg.Channel, msg.ChatID, response)
 		if response != "" {
 			l.logger.Error("Master Agent 处理失败", zap.Error(err), zap.String("response", response))
-			l.bus.PublishOutbound(bus.NewOutboundMessage(msg.Channel, msg.ChatID, response))
 		} else {
 			l.logger.Error("Master Agent 处理失败", zap.Error(err))
-			l.bus.PublishOutbound(bus.NewOutboundMessage(msg.Channel, msg.ChatID, fmt.Sprintf("抱歉，处理消息时遇到错误: %v", err)))
+			outMsg.Content = fmt.Sprintf("抱歉，处理消息时遇到错误: %v", err)
 		}
+		// 传递原始消息的 message_id 用于渠道特定功能（如飞书删除反应表情）
+		if msg.Metadata != nil {
+			if msgID, ok := msg.Metadata["message_id"].(string); ok {
+				outMsg.Metadata["reply_to_message_id"] = msgID
+			}
+		}
+		l.bus.PublishOutbound(outMsg)
 		return nil
 	}
 
 	// 发布响应
-	l.bus.PublishOutbound(bus.NewOutboundMessage(msg.Channel, msg.ChatID, response))
+	outMsg := bus.NewOutboundMessage(msg.Channel, msg.ChatID, response)
+	// 传递原始消息的 message_id 用于渠道特定功能（如飞书删除反应表情）
+	if msg.Metadata != nil {
+		if msgID, ok := msg.Metadata["message_id"].(string); ok {
+			outMsg.Metadata["reply_to_message_id"] = msgID
+		}
+	}
+	l.bus.PublishOutbound(outMsg)
 	return nil
 
 }
