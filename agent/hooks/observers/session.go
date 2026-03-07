@@ -112,7 +112,7 @@ func (so *SessionObserver) cleanupExpiredMessages(sessionKey string, currentTime
 
 // handlePromptSubmitted 处理 Prompt 提交事件
 // 保存用户消息到会话
-func (so *SessionObserver) handlePromptSubmitted(_ context.Context, event events.Event) {
+func (so *SessionObserver) handlePromptSubmitted(ctx context.Context, event events.Event) {
 	e, ok := event.(*events.PromptSubmittedEvent)
 	if !ok {
 		return
@@ -134,7 +134,7 @@ func (so *SessionObserver) handlePromptSubmitted(_ context.Context, event events
 
 	sess := so.sessions.GetOrCreate(e.SessionKey)
 	sess.AddMessageWithTrace("user", e.UserInput, e.GetTraceID(), e.GetSpanID(), e.GetParentSpanID())
-	if err := so.sessions.Save(sess); err != nil {
+	if err := so.sessions.Save(ctx, sess); err != nil {
 		so.logger.Error("保存用户消息到会话失败",
 			zap.String("session_key", e.SessionKey),
 			zap.Error(err),
@@ -201,7 +201,7 @@ func (so *SessionObserver) handleLLMCallEnd(ctx context.Context, event events.Ev
 	// 只记录对话内容，不记录 TokenUsage
 	sess.AddMessageWithTrace(role, content, e.GetTraceID(), e.GetSpanID(), e.GetParentSpanID())
 
-	if err := so.sessions.Save(sess); err != nil {
+	if err := so.sessions.Save(ctx, sess); err != nil {
 		so.logger.Error("保存助手消息到会话失败",
 			zap.String("session_key", sessionKey),
 			zap.Error(err),

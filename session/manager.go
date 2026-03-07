@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -188,20 +189,38 @@ func (m *Manager) load(key string) *Session {
 }
 
 // Save 保存会话到磁盘
-func (m *Manager) Save(session *Session) error {
-
+func (m *Manager) Save(ctx context.Context, session *Session) error {
 	path := m.getSessionPath(session.Key)
 	data, err := json.MarshalIndent(session, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal session: %w", err)
 	}
 
 	m.mu.Lock()
 	m.cache[session.Key] = session
-	err = os.WriteFile(path, data, 0644)
+	// 使用带有超时的文件写入
+	err = writeFileWithContext(ctx, path, data, 0644)
 	m.mu.Unlock()
 
-	return err
+	if err != nil {
+		return fmt.Errorf("write session file: %w", err)
+	}
+	return nil
+}
+
+// writeFileWithContext 带 context 的文件写入
+func writeFileWithContext(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+	done := make(chan error, 1)
+	go func() {
+		done <- os.WriteFile(path, data, perm)
+	}()
+
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // Delete 删除会话（删除所有相关的会话文件）

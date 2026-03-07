@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -303,7 +304,10 @@ func runGateway(cmd *cobra.Command, args []string) {
 		logger.Error("启动心跳服务失败", zap.Error(err))
 	}
 
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		if err := loop.Run(ctx); err != nil {
 			logger.Error("代理循环错误", zap.Error(err))
 		}
@@ -315,6 +319,21 @@ func runGateway(cmd *cobra.Command, args []string) {
 
 	logger.Info("正在关闭...")
 	cancel()
+
+	// 等待 goroutine 完成（带超时）
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		logger.Info("代理循环已正常停止")
+	case <-time.After(5 * time.Second):
+		logger.Warn("代理循环停止超时")
+	}
+
 	cronService.Stop()
 	heartbeatService.Stop()
 	channelManager.StopAll()

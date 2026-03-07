@@ -2,6 +2,8 @@ package channels
 
 import (
 	"context"
+	"fmt"
+	"sync"
 
 	"github.com/weibaohui/nanobot-go/bus"
 )
@@ -57,6 +59,7 @@ func (c *BaseChannel) SubscribeOutbound(ctx context.Context, handler func(msg *b
 // Manager 渠道管理器
 type Manager struct {
 	channels map[string]Channel
+	mu       sync.RWMutex
 	bus      *bus.MessageBus
 }
 
@@ -70,19 +73,30 @@ func NewManager(messageBus *bus.MessageBus) *Manager {
 
 // Register 注册渠道
 func (m *Manager) Register(channel Channel) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.channels[channel.Name()] = channel
 }
 
 // Get 获取渠道
 func (m *Manager) Get(name string) Channel {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.channels[name]
 }
 
 // StartAll 启动所有渠道
 func (m *Manager) StartAll(ctx context.Context) error {
+	m.mu.RLock()
+	channels := make([]Channel, 0, len(m.channels))
 	for _, ch := range m.channels {
+		channels = append(channels, ch)
+	}
+	m.mu.RUnlock()
+
+	for _, ch := range channels {
 		if err := ch.Start(ctx); err != nil {
-			return err
+			return fmt.Errorf("start channel %s: %w", ch.Name(), err)
 		}
 	}
 	return nil
@@ -90,13 +104,22 @@ func (m *Manager) StartAll(ctx context.Context) error {
 
 // StopAll 停止所有渠道
 func (m *Manager) StopAll() {
+	m.mu.RLock()
+	channels := make([]Channel, 0, len(m.channels))
 	for _, ch := range m.channels {
+		channels = append(channels, ch)
+	}
+	m.mu.RUnlock()
+
+	for _, ch := range channels {
 		ch.Stop()
 	}
 }
 
 // List 列出所有渠道名称
 func (m *Manager) List() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	var names []string
 	for name := range m.channels {
 		names = append(names, name)

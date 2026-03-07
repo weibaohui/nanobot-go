@@ -82,9 +82,9 @@ func (co *CompressObserver) OnEvent(ctx context.Context, event hookevents.Event)
 	}
 
 	// 保存会话状态
-	if err := co.sessions.Save(sess); err != nil {
+	if err := co.sessions.Save(ctx, sess); err != nil {
 		co.logger.Error("保存压缩后的会话失败", zap.Error(err))
-		return err
+		return fmt.Errorf("save compressed session: %w", err)
 	}
 
 	co.logger.Info("对话压缩完成",

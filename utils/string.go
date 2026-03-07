@@ -18,3 +18,12 @@ func HasPrefixInsensitive(s, prefix string) bool {
 func HasSuffixInsensitive(s, suffix string) bool {
 	return strings.HasSuffix(strings.ToLower(s), strings.ToLower(suffix))
 }
+
+// TruncateString 截断字符串到指定长度（按 Unicode 字符计算），超出部分用 "..." 省略
+func TruncateString(s string, maxLen int) string {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	return string(runes[:maxLen]) + "..."
+}

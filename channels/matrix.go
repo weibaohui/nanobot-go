@@ -682,7 +682,7 @@ func NewFileSyncStore(filePath string, userID id.UserID) (*FileSyncStore, error)
 
 	// 尝试加载现有数据
 	if err := store.load(); err != nil && !os.IsNotExist(err) {
-		return nil, err
+		return nil, fmt.Errorf("load sync store: %w", err)
 	}
 
 	return store, nil
@@ -692,12 +692,12 @@ func NewFileSyncStore(filePath string, userID id.UserID) (*FileSyncStore, error)
 func (s *FileSyncStore) load() error {
 	data, err := os.ReadFile(s.filePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("read sync file: %w", err)
 	}
 
 	var sd syncData
 	if err := json.Unmarshal(data, &sd); err != nil {
-		return err
+		return fmt.Errorf("unmarshal sync data: %w", err)
 	}
 
 	s.mu.Lock()
@@ -719,13 +719,13 @@ func (s *FileSyncStore) Save() error {
 
 	data, err := json.MarshalIndent(sd, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal sync data: %w", err)
 	}
 
 	// 确保目录存在
 	dir := filepath.Dir(s.filePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return err
+		return fmt.Errorf("create sync dir: %w", err)
 	}
 
 	return os.WriteFile(s.filePath, data, 0644)

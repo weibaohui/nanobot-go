@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/weibaohui/nanobot-go/memory/models"
+	"github.com/weibaohui/nanobot-go/utils"
 )
 
 // LLMClient LLM 客户端接口
@@ -141,7 +142,7 @@ func (s *memorySummarizer) SummarizeToLongTerm(ctx context.Context, streams []mo
 		if stream.Summary != "" {
 			content.WriteString(fmt.Sprintf("总结: %s\n", stream.Summary))
 		} else {
-			content.WriteString(fmt.Sprintf("内容: %s\n", truncateString(stream.Content, 500)))
+			content.WriteString(fmt.Sprintf("内容: %s\n", utils.TruncateString(stream.Content, 500)))
 		}
 	}
 
@@ -373,10 +374,3 @@ func filterSensitiveHighlights(highlights []string) []string {
 	return filtered
 }
 
-// truncateString 截断字符串
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
-}

@@ -279,12 +279,12 @@ func (c *WebSocketChannel) sendStreamChunk(chatID string, chunk *bus.StreamChunk
 	data, err := json.Marshal(msg)
 	if err != nil {
 		c.logger.Error("序列化流式消息失败", zap.Error(err))
-		return err
+		return fmt.Errorf("marshal stream message: %w", err)
 	}
 
 	if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 		c.logger.Error("发送流式消息失败", zap.Error(err))
-		return err
+		return fmt.Errorf("write websocket message: %w", err)
 	}
 
 	return nil

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/weibaohui/nanobot-go/utils"
 )
 
 // DecodeArgs 解析 JSON 参数到结构体
@@ -124,8 +126,5 @@ func ResolvePath(path, allowedDir string) string {
 
 // TruncateString 截断字符串
 func TruncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
+	return utils.TruncateString(s, maxLen)
 }
