@@ -5,6 +5,7 @@ import (
 
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observer"
+	"github.com/weibaohui/nanobot-go/agent/hooks/trace"
 	"github.com/weibaohui/nanobot-go/token_usage"
 	"go.uber.org/zap"
 )
@@ -51,8 +52,8 @@ func (tuo *TokenUsageObserver) handleLLMCallEnd(ctx context.Context, event event
 		return
 	}
 
-	// 从 context 获取 sessionKey
-	sessionKey := getCtxSessionKey(ctx)
+	// 从 context 获取 sessionKey（使用 trace.GetSessionKey）
+	sessionKey := trace.GetSessionKey(ctx)
 	// 如果 context 中没有 sessionKey，使用 trace_id
 	if sessionKey == "" {
 		sessionKey = e.GetTraceID()

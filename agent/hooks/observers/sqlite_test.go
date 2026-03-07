@@ -11,6 +11,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observer"
+	"github.com/weibaohui/nanobot-go/agent/hooks/trace"
 	"github.com/weibaohui/nanobot-go/conversation/database"
 	"github.com/weibaohui/nanobot-go/conversation/repository"
 	"github.com/weibaohui/nanobot-go/conversation/service"
@@ -92,7 +93,7 @@ func TestSQLiteObserver_LLMCallEnd(t *testing.T) {
 	obs, dbClient, _, convService := createTestObserver(t)
 	defer dbClient.Close()
 
-	ctx := context.WithValue(context.Background(), "session_key", "session-1")
+	ctx := trace.WithSessionKey(context.Background(), "session-1")
 	event := events.NewLLMCallEndEvent("trace-1", "span-1", "",
 		&callbacks.RunInfo{Component: "LLM"},
 		&model.CallbackOutput{Message: &schema.Message{Content: "AI回复"}},
@@ -119,7 +120,7 @@ func TestSQLiteObserver_ToolCompleted(t *testing.T) {
 	obs, dbClient, _, convService := createTestObserver(t)
 	defer dbClient.Close()
 
-	ctx := context.WithValue(context.Background(), "session_key", "session-1")
+	ctx := trace.WithSessionKey(context.Background(), "session-1")
 	event := events.NewToolCompletedEvent("trace-1", "span-1", "", "read_file", "文件内容", true)
 
 	if err := obs.OnEvent(ctx, event); err != nil {
@@ -142,7 +143,7 @@ func TestSQLiteObserver_TokenUsage(t *testing.T) {
 	obs, dbClient, _, convService := createTestObserver(t)
 	defer dbClient.Close()
 
-	ctx := context.WithValue(context.Background(), "session_key", "session-1")
+	ctx := trace.WithSessionKey(context.Background(), "session-1")
 	event := events.NewLLMCallEndEvent("trace-1", "span-1", "",
 		&callbacks.RunInfo{Component: "LLM"},
 		&model.CallbackOutput{
@@ -173,7 +174,7 @@ func TestSQLiteObserver_Deduplication(t *testing.T) {
 	obs, dbClient, _, _ := createTestObserver(t)
 	defer dbClient.Close()
 
-	ctx := context.WithValue(context.Background(), "session_key", "session-1")
+	ctx := trace.WithSessionKey(context.Background(), "session-1")
 
 	event1 := events.NewLLMCallEndEvent("trace-1", "span-1", "",
 		&callbacks.RunInfo{Component: "LLM"},

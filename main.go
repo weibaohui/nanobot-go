@@ -223,10 +223,19 @@ func runGateway(cmd *cobra.Command, args []string) {
 		if !hookSystem.Enabled() {
 			return
 		}
-		
+
 		ctx := context.Background()
 		traceID := hooks.GetTraceID(ctx)
-		
+
+		// 从 data 中提取 session_key 和 channel
+		var sessionKey, channel string
+		if sk, ok := data["session_key"].(string); ok {
+			sessionKey = sk
+		}
+		if ch, ok := data["channel"].(string); ok {
+			channel = ch
+		}
+
 		// 根据事件类型创建具体的事件对象
 		switch eventType {
 		case hookevents.EventLLMCallEnd:
@@ -255,8 +264,8 @@ func runGateway(cmd *cobra.Command, args []string) {
 			if parentSpanID, ok := data["parent_span_id"].(string); ok {
 				event.ParentSpanID = parentSpanID
 			}
-			hookSystem.Dispatch(ctx, event, "", "")
-			
+			hookSystem.Dispatch(ctx, event, channel, sessionKey)
+
 		case hookevents.EventLLMCallStart:
 			// 创建 LLMCallStartEvent
 			event := &hookevents.LLMCallStartEvent{
@@ -272,8 +281,8 @@ func runGateway(cmd *cobra.Command, args []string) {
 			if parentSpanID, ok := data["parent_span_id"].(string); ok {
 				event.ParentSpanID = parentSpanID
 			}
-			hookSystem.Dispatch(ctx, event, "", "")
-			
+			hookSystem.Dispatch(ctx, event, channel, sessionKey)
+
 		default:
 			// 其他事件类型，创建 BaseEvent
 			baseEvent := &hookevents.BaseEvent{
@@ -281,7 +290,7 @@ func runGateway(cmd *cobra.Command, args []string) {
 				EventType: eventType,
 				Timestamp: time.Now(),
 			}
-			hookSystem.Dispatch(ctx, baseEvent, "", "")
+			hookSystem.Dispatch(ctx, baseEvent, channel, sessionKey)
 		}
 	}
 

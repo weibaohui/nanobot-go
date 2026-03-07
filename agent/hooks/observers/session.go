@@ -9,6 +9,7 @@ import (
 
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observer"
+	"github.com/weibaohui/nanobot-go/agent/hooks/trace"
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
 )
@@ -211,10 +212,7 @@ func (so *SessionObserver) handleLLMCallEnd(ctx context.Context, event events.Ev
 }
 
 // getCtxSessionKey 从上下文获取 sessionKey
-// 这里需要一个约定：将 sessionKey 存储在 context 中
+// 使用 trace.GetSessionKey 获取通过 trace.WithSessionKey 注入的 session key
 func getCtxSessionKey(ctx context.Context) string {
-	if sessionKey, ok := ctx.Value("session_key").(string); ok {
-		return sessionKey
-	}
-	return ""
+	return trace.GetSessionKey(ctx)
 }

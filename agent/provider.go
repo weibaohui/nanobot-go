@@ -305,6 +305,8 @@ func (a *ChatModelAdapter) triggerLLMCallStart(ctx context.Context, input []*sch
 	traceID := trace.GetTraceID(ctx)
 	spanID := trace.GetSpanID(ctx)
 	parentSpanID := trace.GetParentSpanID(ctx)
+	sessionKey := trace.GetSessionKey(ctx)
+	channel := trace.GetChannel(ctx)
 
 	// 提取工具名称列表
 	var toolNames []string
@@ -316,13 +318,15 @@ func (a *ChatModelAdapter) triggerLLMCallStart(ctx context.Context, input []*sch
 
 	// 直接构造事件数据
 	data := map[string]interface{}{
-		"event_type":   events.EventLLMCallStart,
-		"trace_id":     traceID,
-		"span_id":      spanID,
+		"event_type":     events.EventLLMCallStart,
+		"trace_id":       traceID,
+		"span_id":        spanID,
 		"parent_span_id": parentSpanID,
-		"input_count":  len(input),
-		"tool_names":   toolNames,
-		"messages":     input,
+		"session_key":    sessionKey,
+		"channel":        channel,
+		"input_count":    len(input),
+		"tool_names":     toolNames,
+		"messages":       input,
 	}
 	a.hookCallback(events.EventLLMCallStart, data)
 }
@@ -336,6 +340,8 @@ func (a *ChatModelAdapter) triggerLLMCallEnd(ctx context.Context, response *sche
 	traceID := trace.GetTraceID(ctx)
 	spanID := trace.GetSpanID(ctx)
 	parentSpanID := trace.GetParentSpanID(ctx)
+	sessionKey := trace.GetSessionKey(ctx)
+	channel := trace.GetChannel(ctx)
 
 	// 提取 Token 使用信息
 	var tokenUsage *schema.TokenUsage
@@ -352,6 +358,8 @@ func (a *ChatModelAdapter) triggerLLMCallEnd(ctx context.Context, response *sche
 		"trace_id":       traceID,
 		"span_id":        spanID,
 		"parent_span_id": parentSpanID,
+		"session_key":    sessionKey,
+		"channel":        channel,
 		"response":       response.Content,
 		"tool_calls":     toolCalls,
 		"token_usage":    tokenUsage,
@@ -368,6 +376,8 @@ func (a *ChatModelAdapter) triggerLLMCallError(ctx context.Context, err error) {
 	traceID := trace.GetTraceID(ctx)
 	spanID := trace.GetSpanID(ctx)
 	parentSpanID := trace.GetParentSpanID(ctx)
+	sessionKey := trace.GetSessionKey(ctx)
+	channel := trace.GetChannel(ctx)
 
 	// 直接构造事件数据
 	data := map[string]interface{}{
@@ -375,6 +385,8 @@ func (a *ChatModelAdapter) triggerLLMCallError(ctx context.Context, err error) {
 		"trace_id":       traceID,
 		"span_id":        spanID,
 		"parent_span_id": parentSpanID,
+		"session_key":    sessionKey,
+		"channel":        channel,
 		"error":          err.Error(),
 	}
 	a.hookCallback(events.EventLLMCallError, data)
