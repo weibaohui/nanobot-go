@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cloudwego/eino/callbacks"
+	// "github.com/cloudwego/eino/callbacks" // 已移除，事件通过 provider.go 直接触发
 	"github.com/spf13/cobra"
 	"github.com/weibaohui/nanobot-go/agent"
 	"github.com/weibaohui/nanobot-go/agent/hooks"
@@ -200,8 +200,9 @@ func runGateway(cmd *cobra.Command, args []string) {
 		logger.Info("SQLite 观察器已注册到 Hook 系统", zap.String("db_path", sqliteObserver.GetDBPath()))
 	}
 
-	// 注册 Eino Callback Handler
-	callbacks.AppendGlobalHandlers(hookSystem.EinoHandler())
+	// 注意：Eino Callback 已移除，事件通过 provider.go 直接触发
+	// 如需恢复，取消下面这行的注释：
+	// callbacks.AppendGlobalHandlers(hookSystem.EinoHandler())
 
 	cronStorePath := filepath.Join(dataDir, "cron_jobs.json")
 	cronService := cron.NewService(cronStorePath, logger)

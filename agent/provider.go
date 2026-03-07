@@ -137,6 +137,9 @@ func (a *ChatModelAdapter) Generate(ctx context.Context, input []*schema.Message
 		zap.Int("message_count", len(input)),
 	)
 
+	// 触发 LLM 调用开始事件
+	a.triggerLLMCallStart(ctx, input)
+
 	// 调试：记录输入消息
 	if a.logger != nil && len(input) > 0 {
 		for i, msg := range input {
@@ -160,6 +163,8 @@ func (a *ChatModelAdapter) Generate(ctx context.Context, input []*schema.Message
 		if a.logger != nil {
 			a.logger.Error("调用 LLM 失败", zap.Error(err))
 		}
+		// 触发 LLM 调用错误事件
+		a.triggerLLMCallError(ctx, err)
 		return nil, err
 	}
 
@@ -167,6 +172,9 @@ func (a *ChatModelAdapter) Generate(ctx context.Context, input []*schema.Message
 		zap.String("span_id", llmSpanID),
 		zap.Int("tool_calls", len(response.ToolCalls)),
 	)
+
+	// 触发 LLM 调用结束事件（包含 Token 使用）
+	a.triggerLLMCallEnd(ctx, response)
 
 	// 拦截并转换工具调用
 	a.interceptToolCalls(response)
@@ -286,6 +294,90 @@ func (a *ChatModelAdapter) triggerHook(eventType events.EventType, data map[stri
 		dataInterface[k] = v
 	}
 	a.hookCallback(eventType, dataInterface)
+}
+
+// triggerLLMCallStart 触发 LLM 调用开始事件
+func (a *ChatModelAdapter) triggerLLMCallStart(ctx context.Context, input []*schema.Message) {
+	if a.hookCallback == nil {
+		return
+	}
+
+	traceID := trace.GetTraceID(ctx)
+	spanID := trace.GetSpanID(ctx)
+	parentSpanID := trace.GetParentSpanID(ctx)
+
+	// 提取工具名称列表
+	var toolNames []string
+	for _, msg := range input {
+		for _, tc := range msg.ToolCalls {
+			toolNames = append(toolNames, tc.Function.Name)
+		}
+	}
+
+	// 直接构造事件数据
+	data := map[string]interface{}{
+		"event_type":   events.EventLLMCallStart,
+		"trace_id":     traceID,
+		"span_id":      spanID,
+		"parent_span_id": parentSpanID,
+		"input_count":  len(input),
+		"tool_names":   toolNames,
+		"messages":     input,
+	}
+	a.hookCallback(events.EventLLMCallStart, data)
+}
+
+// triggerLLMCallEnd 触发 LLM 调用结束事件
+func (a *ChatModelAdapter) triggerLLMCallEnd(ctx context.Context, response *schema.Message) {
+	if a.hookCallback == nil {
+		return
+	}
+
+	traceID := trace.GetTraceID(ctx)
+	spanID := trace.GetSpanID(ctx)
+	parentSpanID := trace.GetParentSpanID(ctx)
+
+	// 提取 Token 使用信息
+	var tokenUsage *schema.TokenUsage
+	if response.ResponseMeta != nil && response.ResponseMeta.Usage != nil {
+		tokenUsage = response.ResponseMeta.Usage
+	}
+
+	// 提取工具调用信息
+	toolCalls := response.ToolCalls
+
+	// 直接构造事件数据
+	data := map[string]interface{}{
+		"event_type":     events.EventLLMCallEnd,
+		"trace_id":       traceID,
+		"span_id":        spanID,
+		"parent_span_id": parentSpanID,
+		"response":       response.Content,
+		"tool_calls":     toolCalls,
+		"token_usage":    tokenUsage,
+	}
+	a.hookCallback(events.EventLLMCallEnd, data)
+}
+
+// triggerLLMCallError 触发 LLM 调用错误事件
+func (a *ChatModelAdapter) triggerLLMCallError(ctx context.Context, err error) {
+	if a.hookCallback == nil {
+		return
+	}
+
+	traceID := trace.GetTraceID(ctx)
+	spanID := trace.GetSpanID(ctx)
+	parentSpanID := trace.GetParentSpanID(ctx)
+
+	// 直接构造事件数据
+	data := map[string]interface{}{
+		"event_type":     events.EventLLMCallError,
+		"trace_id":       traceID,
+		"span_id":        spanID,
+		"parent_span_id": parentSpanID,
+		"error":          err.Error(),
+	}
+	a.hookCallback(events.EventLLMCallError, data)
 }
 
 // Stream produces a response as a stream
