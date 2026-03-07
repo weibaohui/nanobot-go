@@ -234,8 +234,8 @@ func (c *FeishuChannel) onMessageReceive(ctx context.Context, event *larkim.P2Me
 		return nil
 	}
 
-	// 添加反应表情表示已读
-	go c.addReaction(messageID, "THUMBSUP")
+	// 添加反应表情表示正在处理
+	go c.addReaction(messageID, "OnIt")
 
 	// 检查用户白名单
 	if len(c.config.AllowFrom) > 0 {
