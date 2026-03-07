@@ -52,7 +52,6 @@ type FeishuChannel struct {
 type reactionInfo struct {
 	messageID  string
 	reactionID string
-	timestamp  time.Time
 }
 
 // syncMap 带大小限制的有序去重缓存
@@ -152,10 +151,6 @@ func (c *FeishuChannel) Start(ctx context.Context) error {
 		}
 	})
 
-	// 启动反应缓存清理任务
-	c.bgTasks.Add(1)
-	go c.reactionCacheCleaner()
-
 	c.logger.Info("飞书渠道已启动",
 		zap.String("app_id", c.config.AppID),
 	)
@@ -190,36 +185,6 @@ func (c *FeishuChannel) runWebSocketClient() {
 		case <-time.After(5 * time.Second):
 		case <-c.ctx.Done():
 			return
-		}
-	}
-}
-
-// reactionCacheCleaner 定期清理过期的反应缓存
-func (c *FeishuChannel) reactionCacheCleaner() {
-	defer c.bgTasks.Done()
-
-	ticker := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
-
-	for c.running {
-		select {
-		case <-ticker.C:
-			c.cleanExpiredReactions()
-		case <-c.ctx.Done():
-			return
-		}
-	}
-}
-
-// cleanExpiredReactions 清理过期的反应缓存（超过 10 分钟）
-func (c *FeishuChannel) cleanExpiredReactions() {
-	c.reactionMu.Lock()
-	defer c.reactionMu.Unlock()
-
-	now := time.Now()
-	for chatID, info := range c.reactionCache {
-		if now.Sub(info.timestamp) > 10*time.Minute {
-			delete(c.reactionCache, chatID)
 		}
 	}
 }
@@ -363,7 +328,6 @@ func (c *FeishuChannel) addReactionAndSave(chatID, messageID, emojiType string) 
 		c.reactionCache[chatID] = &reactionInfo{
 			messageID:  messageID,
 			reactionID: *resp.Data.ReactionId,
-			timestamp:  time.Now(),
 		}
 		c.reactionMu.Unlock()
 		c.logger.Debug("已保存飞书反应表情",
