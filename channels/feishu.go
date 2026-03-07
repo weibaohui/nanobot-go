@@ -245,8 +245,15 @@ func (c *FeishuChannel) onMessageReceive(ctx context.Context, event *larkim.P2Me
 		return nil
 	}
 
+	// 确定回复目标
+	replyTo := chatID
+	if chatType == "p2p" {
+		replyTo = senderID
+	}
+
 	// 添加反应表情表示正在处理，并保存 reaction_id
-	go c.addReactionAndSave(chatID, messageID, "OnIt")
+	// 注意：使用 replyTo 作为 key，因为删除时 msg.ChatID 就是 replyTo
+	go c.addReactionAndSave(replyTo, messageID, "OnIt")
 
 	// 检查用户白名单
 	if len(c.config.AllowFrom) > 0 {
@@ -266,14 +273,9 @@ func (c *FeishuChannel) onMessageReceive(ctx context.Context, event *larkim.P2Me
 	c.logger.Info("收到飞书消息",
 		zap.String("sender", senderID),
 		zap.String("chat_id", chatID),
+		zap.String("reply_to", replyTo),
 		zap.String("content", content),
 	)
-
-	// 确定回复目标
-	replyTo := chatID
-	if chatType == "p2p" {
-		replyTo = senderID
-	}
 
 	// 发布消息到总线
 	c.bus.PublishInbound(&bus.InboundMessage{
