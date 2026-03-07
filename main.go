@@ -13,6 +13,7 @@ import (
 
 	// "github.com/cloudwego/eino/callbacks" // 已移除，事件通过 provider.go 直接触发
 	"github.com/cloudwego/eino/components/model"
+	"github.com/cloudwego/eino/schema"
 	"github.com/spf13/cobra"
 	"github.com/weibaohui/nanobot-go/agent"
 	"github.com/weibaohui/nanobot-go/agent/hooks"
@@ -237,9 +238,15 @@ func runGateway(cmd *cobra.Command, args []string) {
 					Timestamp: time.Now(),
 				},
 			}
-			// 从 data 中提取 TokenUsage
-			if tokenUsage, ok := data["token_usage"].(*model.TokenUsage); ok {
-				event.TokenUsage = tokenUsage
+			// 从 data 中提取 TokenUsage（schema.TokenUsage 需要转换为 model.TokenUsage）
+			if schemaUsage, ok := data["token_usage"].(*schema.TokenUsage); ok && schemaUsage != nil {
+				event.TokenUsage = &model.TokenUsage{
+					PromptTokens:            schemaUsage.PromptTokens,
+					PromptTokenDetails:      model.PromptTokenDetails(schemaUsage.PromptTokenDetails),
+					CompletionTokens:        schemaUsage.CompletionTokens,
+					TotalTokens:             schemaUsage.TotalTokens,
+					CompletionTokensDetails: model.CompletionTokensDetails(schemaUsage.CompletionTokensDetails),
+				}
 			}
 			// 从 data 中提取其他字段
 			if spanID, ok := data["span_id"].(string); ok {
