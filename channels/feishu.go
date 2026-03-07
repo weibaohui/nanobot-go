@@ -40,8 +40,19 @@ type FeishuChannel struct {
 	// 消息去重缓存
 	processedMsgIDs *syncMap
 
+	// 消息反应缓存: chat_id -> reactionInfo
+	reactionCache   map[string]*reactionInfo
+	reactionMu      sync.RWMutex
+
 	// 事件处理器
 	eventHandler *dispatcher.EventDispatcher
+}
+
+// reactionInfo 保存消息反应信息
+type reactionInfo struct {
+	messageID  string
+	reactionID string
+	timestamp  time.Time
 }
 
 // syncMap 带大小限制的有序去重缓存
@@ -105,6 +116,7 @@ func NewFeishuChannel(config *FeishuConfig, messageBus *bus.MessageBus, logger *
 		config:          config,
 		logger:          logger,
 		processedMsgIDs: newSyncMap(1000),
+		reactionCache:   make(map[string]*reactionInfo),
 	}
 }
 
@@ -140,6 +152,10 @@ func (c *FeishuChannel) Start(ctx context.Context) error {
 		}
 	})
 
+	// 启动反应缓存清理任务
+	c.bgTasks.Add(1)
+	go c.reactionCacheCleaner()
+
 	c.logger.Info("飞书渠道已启动",
 		zap.String("app_id", c.config.AppID),
 	)
@@ -174,6 +190,36 @@ func (c *FeishuChannel) runWebSocketClient() {
 		case <-time.After(5 * time.Second):
 		case <-c.ctx.Done():
 			return
+		}
+	}
+}
+
+// reactionCacheCleaner 定期清理过期的反应缓存
+func (c *FeishuChannel) reactionCacheCleaner() {
+	defer c.bgTasks.Done()
+
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for c.running {
+		select {
+		case <-ticker.C:
+			c.cleanExpiredReactions()
+		case <-c.ctx.Done():
+			return
+		}
+	}
+}
+
+// cleanExpiredReactions 清理过期的反应缓存（超过 10 分钟）
+func (c *FeishuChannel) cleanExpiredReactions() {
+	c.reactionMu.Lock()
+	defer c.reactionMu.Unlock()
+
+	now := time.Now()
+	for chatID, info := range c.reactionCache {
+		if now.Sub(info.timestamp) > 10*time.Minute {
+			delete(c.reactionCache, chatID)
 		}
 	}
 }
@@ -234,8 +280,8 @@ func (c *FeishuChannel) onMessageReceive(ctx context.Context, event *larkim.P2Me
 		return nil
 	}
 
-	// 添加反应表情表示正在处理
-	go c.addReaction(messageID, "OnIt")
+	// 添加反应表情表示正在处理，并保存 reaction_id
+	go c.addReactionAndSave(chatID, messageID, "OnIt")
 
 	// 检查用户白名单
 	if len(c.config.AllowFrom) > 0 {
@@ -282,6 +328,95 @@ func (c *FeishuChannel) onMessageReceive(ctx context.Context, event *larkim.P2Me
 	return nil
 }
 
+// addReactionAndSave 添加反应表情并保存到缓存
+func (c *FeishuChannel) addReactionAndSave(chatID, messageID, emojiType string) {
+	if c.client == nil || chatID == "" {
+		return
+	}
+
+	req := larkim.NewCreateMessageReactionReqBuilder().
+		MessageId(messageID).
+		Body(larkim.NewCreateMessageReactionReqBodyBuilder().
+			ReactionType(larkim.NewEmojiBuilder().
+				EmojiType(emojiType).
+				Build()).
+			Build()).
+		Build()
+
+	resp, err := c.client.Im.V1.MessageReaction.Create(c.ctx, req)
+	if err != nil {
+		c.logger.Debug("添加飞书反应表情失败", zap.Error(err))
+		return
+	}
+
+	if !resp.Success() {
+		c.logger.Debug("添加飞书反应表情失败",
+			zap.Int("code", resp.Code),
+			zap.String("msg", resp.Msg),
+		)
+		return
+	}
+
+	// 保存 reaction_id 到缓存
+	if resp.Data != nil && resp.Data.ReactionId != nil {
+		c.reactionMu.Lock()
+		c.reactionCache[chatID] = &reactionInfo{
+			messageID:  messageID,
+			reactionID: *resp.Data.ReactionId,
+			timestamp:  time.Now(),
+		}
+		c.reactionMu.Unlock()
+		c.logger.Debug("已保存飞书反应表情",
+			zap.String("chat_id", chatID),
+			zap.String("reaction_id", *resp.Data.ReactionId),
+		)
+	}
+}
+
+// deleteReactionFromCache 从缓存中删除反应表情
+func (c *FeishuChannel) deleteReactionFromCache(chatID string) {
+	if c.client == nil || chatID == "" {
+		return
+	}
+
+	c.reactionMu.RLock()
+	info, exists := c.reactionCache[chatID]
+	c.reactionMu.RUnlock()
+
+	if !exists {
+		return
+	}
+
+	req := larkim.NewDeleteMessageReactionReqBuilder().
+		MessageId(info.messageID).
+		ReactionId(info.reactionID).
+		Build()
+
+	resp, err := c.client.Im.V1.MessageReaction.Delete(c.ctx, req)
+	if err != nil {
+		c.logger.Debug("删除飞书反应表情失败", zap.Error(err))
+		return
+	}
+
+	if !resp.Success() {
+		c.logger.Debug("删除飞书反应表情失败",
+			zap.Int("code", resp.Code),
+			zap.String("msg", resp.Msg),
+		)
+		return
+	}
+
+	// 从缓存中移除
+	c.reactionMu.Lock()
+	delete(c.reactionCache, chatID)
+	c.reactionMu.Unlock()
+
+	c.logger.Debug("已删除飞书反应表情",
+		zap.String("chat_id", chatID),
+		zap.String("reaction_id", info.reactionID),
+	)
+}
+
 // parseMessageContent 解析消息内容
 func (c *FeishuChannel) parseMessageContent(message *larkim.EventMessage) string {
 	if message == nil || message.MessageType == nil {
@@ -313,35 +448,6 @@ func (c *FeishuChannel) parseMessageContent(message *larkim.EventMessage) string
 		return "[表情]"
 	default:
 		return fmt.Sprintf("[%s]", msgType)
-	}
-}
-
-// addReaction 添加消息反应表情
-func (c *FeishuChannel) addReaction(messageID, emojiType string) {
-	if c.client == nil {
-		return
-	}
-
-	req := larkim.NewCreateMessageReactionReqBuilder().
-		MessageId(messageID).
-		Body(larkim.NewCreateMessageReactionReqBodyBuilder().
-			ReactionType(larkim.NewEmojiBuilder().
-				EmojiType(emojiType).
-				Build()).
-			Build()).
-		Build()
-
-	resp, err := c.client.Im.V1.MessageReaction.Create(c.ctx, req)
-	if err != nil {
-		c.logger.Debug("添加飞书反应表情失败", zap.Error(err))
-		return
-	}
-
-	if !resp.Success() {
-		c.logger.Debug("添加飞书反应表情失败",
-			zap.Int("code", resp.Code),
-			zap.String("msg", resp.Msg),
-		)
 	}
 }
 
@@ -399,6 +505,10 @@ func (c *FeishuChannel) Send(msg *bus.OutboundMessage) error {
 	c.logger.Debug("飞书消息已发送",
 		zap.String("chat_id", msg.ChatID),
 	)
+
+	// 发送成功后，删除"正在处理"反应表情
+	go c.deleteReactionFromCache(msg.ChatID)
+
 	return nil
 }
 
