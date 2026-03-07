@@ -12,6 +12,7 @@ import (
 	"time"
 
 	// "github.com/cloudwego/eino/callbacks" // 已移除，事件通过 provider.go 直接触发
+	"github.com/cloudwego/eino/components/model"
 	"github.com/spf13/cobra"
 	"github.com/weibaohui/nanobot-go/agent"
 	"github.com/weibaohui/nanobot-go/agent/hooks"
@@ -218,15 +219,62 @@ func runGateway(cmd *cobra.Command, args []string) {
 
 	// 设置 Hook 回调，将 Loop 中的事件转发到 Hook 系统
 	setHookCallback := func(eventType hookevents.EventType, data map[string]interface{}) {
-		if hookSystem.Enabled() {
-			traceID := hooks.GetTraceID(context.Background())
-			// 创建 BaseEvent 并分发
+		if !hookSystem.Enabled() {
+			return
+		}
+		
+		ctx := context.Background()
+		traceID := hooks.GetTraceID(ctx)
+		
+		// 根据事件类型创建具体的事件对象
+		switch eventType {
+		case hookevents.EventLLMCallEnd:
+			// 创建 LLMCallEndEvent，包含 Token 使用信息
+			event := &hookevents.LLMCallEndEvent{
+				BaseEvent: &hookevents.BaseEvent{
+					TraceID:   traceID,
+					EventType: eventType,
+					Timestamp: time.Now(),
+				},
+			}
+			// 从 data 中提取 TokenUsage
+			if tokenUsage, ok := data["token_usage"].(*model.TokenUsage); ok {
+				event.TokenUsage = tokenUsage
+			}
+			// 从 data 中提取其他字段
+			if spanID, ok := data["span_id"].(string); ok {
+				event.SpanID = spanID
+			}
+			if parentSpanID, ok := data["parent_span_id"].(string); ok {
+				event.ParentSpanID = parentSpanID
+			}
+			hookSystem.Dispatch(ctx, event, "", "")
+			
+		case hookevents.EventLLMCallStart:
+			// 创建 LLMCallStartEvent
+			event := &hookevents.LLMCallStartEvent{
+				BaseEvent: &hookevents.BaseEvent{
+					TraceID:   traceID,
+					EventType: eventType,
+					Timestamp: time.Now(),
+				},
+			}
+			if spanID, ok := data["span_id"].(string); ok {
+				event.SpanID = spanID
+			}
+			if parentSpanID, ok := data["parent_span_id"].(string); ok {
+				event.ParentSpanID = parentSpanID
+			}
+			hookSystem.Dispatch(ctx, event, "", "")
+			
+		default:
+			// 其他事件类型，创建 BaseEvent
 			baseEvent := &hookevents.BaseEvent{
 				TraceID:   traceID,
 				EventType: eventType,
 				Timestamp: time.Now(),
 			}
-			hookSystem.Dispatch(context.Background(), baseEvent, "", "")
+			hookSystem.Dispatch(ctx, baseEvent, "", "")
 		}
 	}
 
