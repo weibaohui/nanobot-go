@@ -19,6 +19,8 @@ import (
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
+
+	hooks "github.com/weibaohui/nanobot-go/agent/hooks"
 )
 
 type TaskStatus string
@@ -53,6 +55,8 @@ type AgentTaskManagerConfig struct {
 	Sessions              *session.Manager // 会话管理器
 	// OnTaskComplete 任务完成回调，用于发送完成通知
 	OnTaskComplete func(channel, chatID, taskID string, status TaskStatus, result string)
+	// HookManager Hook 管理器，用于触发 LLM 事件
+	HookManager *hooks.HookManager
 }
 
 type AgentTaskManager struct {
@@ -72,6 +76,9 @@ type AgentTaskManager struct {
 
 	// onTaskComplete 任务完成回调
 	onTaskComplete func(channel, chatID, taskID string, status TaskStatus, result string)
+
+	// hookManager Hook 管理器
+	hookManager *hooks.HookManager
 
 	// taskCounter 任务ID计数器（0-999999循环）
 	taskCounter uint32
@@ -169,6 +176,7 @@ func NewBackgroundAgentTaskManager(cfg *AgentTaskManagerConfig) (*AgentTaskManag
 		onTaskComplete:  cfg.OnTaskComplete,
 		tasksDir:        tasksDir,
 		runningTasks:    make(map[string]*AgentTask),
+		hookManager:     cfg.HookManager,
 	}
 
 	// 加载计数器状态
