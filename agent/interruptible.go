@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
@@ -142,6 +143,61 @@ func (i *interruptible) BuildChatModelAdapter() (*ChatModelAdapter, error) {
 	// 设置 RegisteredTools
 	if len(i.registeredTools) > 0 {
 		llm.SetRegisteredTools(i.registeredTools)
+	}
+
+	// 设置 HookCallback - 将事件转发到 HookManager
+	if i.hookManager != nil {
+		hookCallback := func(eventType events.EventType, data map[string]interface{}) {
+			// 从 data 中提取 session_key 和 channel
+			var sessionKey, channel string
+			if sk, ok := data["session_key"].(string); ok {
+				sessionKey = sk
+			}
+			if ch, ok := data["channel"].(string); ok {
+				channel = ch
+			}
+
+			i.logger.Debug("BuildChatModelAdapter hookCallback: 收到事件",
+				zap.String("event_type", string(eventType)),
+				zap.String("session_key", sessionKey),
+			)
+
+			// 创建事件并分发
+			ctx := context.Background()
+			baseEvent := &events.BaseEvent{
+				TraceID:   hooks.GetTraceID(ctx),
+				EventType: eventType,
+				Timestamp: time.Now(),
+			}
+			// 根据事件类型创建具体事件
+			switch eventType {
+			case events.EventLLMCallEnd:
+				event := &events.LLMCallEndEvent{
+					BaseEvent: baseEvent,
+				}
+				// 从 data 中提取 TokenUsage
+				if tokenUsage, ok := data["token_usage"].(*schema.TokenUsage); ok && tokenUsage != nil {
+					event.TokenUsage = &model.TokenUsage{
+						PromptTokens:            tokenUsage.PromptTokens,
+						PromptTokenDetails:      model.PromptTokenDetails(tokenUsage.PromptTokenDetails),
+						CompletionTokens:        tokenUsage.CompletionTokens,
+						TotalTokens:             tokenUsage.TotalTokens,
+						CompletionTokensDetails: model.CompletionTokensDetails(tokenUsage.CompletionTokensDetails),
+					}
+				}
+				if spanID, ok := data["span_id"].(string); ok {
+					event.SpanID = spanID
+				}
+				if parentSpanID, ok := data["parent_span_id"].(string); ok {
+					event.ParentSpanID = parentSpanID
+				}
+				i.hookManager.Dispatch(ctx, event, channel, sessionKey)
+			default:
+				// 其他事件类型，直接分发 BaseEvent
+				i.hookManager.Dispatch(ctx, baseEvent, channel, sessionKey)
+			}
+		}
+		llm.SetHookCallback(hookCallback)
 	}
 
 	return llm, nil
