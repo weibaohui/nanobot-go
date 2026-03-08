@@ -146,6 +146,9 @@ func (i *interruptible) BuildChatModelAdapter() (*ChatModelAdapter, error) {
 	}
 
 	// 设置 HookCallback - 将事件转发到 HookManager
+	i.logger.Debug("BuildChatModelAdapter: 检查 hookManager",
+		zap.Bool("hookManager_nil", i.hookManager == nil),
+	)
 	if i.hookManager != nil {
 		hookCallback := func(eventType events.EventType, data map[string]interface{}) {
 			// 从 data 中提取 session_key 和 channel
@@ -198,6 +201,9 @@ func (i *interruptible) BuildChatModelAdapter() (*ChatModelAdapter, error) {
 			}
 		}
 		llm.SetHookCallback(hookCallback)
+		i.logger.Debug("BuildChatModelAdapter: hookCallback 已设置")
+	} else {
+		i.logger.Warn("BuildChatModelAdapter: hookManager 为 nil，未设置 hookCallback")
 	}
 
 	return llm, nil

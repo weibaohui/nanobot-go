@@ -28,7 +28,7 @@ help:
 	@echo "  make clean  - 清理编译输出"
 	@echo "  make help   - 显示此帮助信息"
 
-dev:
+dev: clean
 	@echo "启动开发服务器（air）..."
 	@command -v air >/dev/null 2>&1 || (echo "错误: air 未安装，请运行: go install github.com/cosmtrek/air@latest" && exit 1)
 	air

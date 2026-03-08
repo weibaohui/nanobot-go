@@ -101,6 +101,7 @@ func (a *ChatModelAdapter) SetSkillLoader(loader SkillLoader) {
 // SetHookCallback 设置 Hook 回调函数
 func (a *ChatModelAdapter) SetHookCallback(callback HookCallback) {
 	a.hookCallback = callback
+	a.logger.Debug("SetHookCallback 已调用", zap.Bool("callback_nil", callback == nil))
 }
 
 // SetRegisteredTools 设置已注册的工具名称列表
@@ -333,6 +334,9 @@ func (a *ChatModelAdapter) triggerLLMCallStart(ctx context.Context, input []*sch
 
 // triggerLLMCallEnd 触发 LLM 调用结束事件
 func (a *ChatModelAdapter) triggerLLMCallEnd(ctx context.Context, response *schema.Message) {
+	a.logger.Debug("triggerLLMCallEnd: 检查 hookCallback",
+		zap.Bool("hookCallback_nil", a.hookCallback == nil),
+	)
 	if a.hookCallback == nil {
 		a.logger.Debug("triggerLLMCallEnd: hookCallback 为 nil，跳过")
 		return
@@ -441,5 +445,6 @@ func (a *ChatModelAdapter) WithTools(tools []*schema.ToolInfo) (model.ToolCallin
 		registeredMap: a.registeredMap,
 		skillLoader:   a.skillLoader,
 		sessions:      a.sessions,
+		hookCallback:  a.hookCallback, // 复制 hookCallback
 	}, nil
 }

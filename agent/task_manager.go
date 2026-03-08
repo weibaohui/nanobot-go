@@ -402,6 +402,9 @@ func (m *AgentTaskManager) executeTask(ctx context.Context, work, channel, chatI
 	}
 
 	// 设置 HookCallback - 将事件转发到 HookManager
+	m.logger.Debug("executeTask: 检查 hookManager",
+		zap.Bool("hookManager_nil", m.hookManager == nil),
+	)
 	if m.hookManager != nil {
 		taskSessionKey := fmt.Sprintf("task_%s_%s", channel, chatID)
 		hookCallback := func(eventType events.EventType, data map[string]interface{}) {
