@@ -12,6 +12,8 @@ import (
 	"time"
 
 	// "github.com/cloudwego/eino/callbacks" // 已移除，事件通过 provider.go 直接触发
+
+	// "github.com/cloudwego/eino/callbacks" // 已移除，事件通过 provider.go 直接触发
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 	"github.com/spf13/cobra"
@@ -19,11 +21,11 @@ import (
 	"github.com/weibaohui/nanobot-go/agent/hooks"
 	hookevents "github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observers"
-	"github.com/weibaohui/nanobot-go/conversation/database"
-	"github.com/weibaohui/nanobot-go/conversation/repository"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/channels"
 	"github.com/weibaohui/nanobot-go/config"
+	"github.com/weibaohui/nanobot-go/conversation/database"
+	"github.com/weibaohui/nanobot-go/conversation/repository"
 	"github.com/weibaohui/nanobot-go/cron"
 	"github.com/weibaohui/nanobot-go/heartbeat"
 	memoryhandler "github.com/weibaohui/nanobot-go/memory/handler"
@@ -57,11 +59,6 @@ var (
 
 var (
 	debugGlobal    bool
-	agentMessage   string
-	agentSession   string
-	agentMarkdown  bool
-	agentLogs      bool
-	agentModel     string
 	agentWorkspace string
 	gatewayPort    int
 	gatewayVerbose bool
@@ -95,6 +92,18 @@ var versionCmd = &cobra.Command{
 	},
 }
 
+var memoryUpgradeCmd = &cobra.Command{
+	Use:   "memory-upgrade [date]",
+	Short: "手动触发记忆升级",
+	Long: `手动触发记忆升级任务，将流水记忆提炼为长期记忆。
+如果不指定日期，默认处理昨天的记录。
+日期格式: YYYY-MM-DD
+示例:
+  nanobot memory-upgrade           # 处理昨天
+  nanobot memory-upgrade 2026-03-07 # 处理指定日期`,
+	Run: runMemoryUpgrade,
+}
+
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&debugGlobal, "debug", "d", false, "调试模式")
 
@@ -104,6 +113,7 @@ func init() {
 	rootCmd.AddCommand(gatewayCmd)
 	rootCmd.AddCommand(onboardCmd)
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(memoryUpgradeCmd)
 }
 
 func main() {
@@ -481,6 +491,91 @@ func runGateway(cmd *cobra.Command, args []string) {
 	heartbeatService.Stop()
 	channelManager.StopAll()
 	logger.Info("已关闭")
+}
+
+// ========== Memory Upgrade 命令实现 ==========
+
+func runMemoryUpgrade(cmd *cobra.Command, args []string) {
+	logger := initLogger(debugGlobal)
+	defer logger.Sync()
+
+	// 解析日期参数
+	targetDate := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	if len(args) > 0 {
+		// 验证日期格式
+		if _, err := time.Parse("2006-01-02", args[0]); err != nil {
+			fmt.Fprintf(os.Stderr, "错误: 无效的日期格式 '%s'，请使用 YYYY-MM-DD 格式\n", args[0])
+			os.Exit(1)
+		}
+		targetDate = args[0]
+	}
+
+	cfg, _ := loadConfigAndWorkspace(logger)
+
+	if !cfg.Memory.Enabled {
+		fmt.Println("记忆模块未启用，请在配置中设置 memory.enabled = true")
+		os.Exit(1)
+	}
+
+	// 初始化数据库
+	dbConfig := database.NewConfigFromConfig(cfg)
+	if dbConfig == nil {
+		fmt.Println("错误: 数据库配置无效")
+		os.Exit(1)
+	}
+
+	dbClient, err := database.NewClient(dbConfig)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "错误: 初始化数据库失败: %v\n", err)
+		os.Exit(1)
+	}
+	defer dbClient.Close()
+
+	if err := dbClient.InitSchema(); err != nil {
+		fmt.Fprintf(os.Stderr, "错误: 初始化数据库 schema 失败: %v\n", err)
+		os.Exit(1)
+	}
+
+	// 创建记忆模块组件
+	streamRepo := memoryrepo.NewStreamMemoryRepository(dbClient.DB())
+	longTermRepo := memoryrepo.NewLongTermMemoryRepository(dbClient.DB())
+
+	// 创建 LLM 客户端
+	llmClient := memoryservice.NewSystemLLMClient(cfg, logger)
+
+	// 创建总结器
+	summarizer := memoryservice.NewMemorySummarizer(
+		llmClient,
+		cfg.Memory.Summarization.ConversationPrompt,
+		cfg.Memory.Summarization.LongTermPrompt,
+	)
+
+	// 创建记忆服务
+	memoryService := memoryservice.NewMemoryService(
+		streamRepo,
+		longTermRepo,
+		summarizer,
+		cfg.Memory.Enabled,
+	)
+
+	// 创建升级任务
+	upgradeJob := memoryjob.NewMemoryUpgradeJob(
+		memoryService,
+		logger,
+		cfg.Memory.Enabled,
+		cfg.Memory.Scheduled.TimeWindow,
+		cfg.Memory.Scheduled.Timezone,
+	)
+
+	fmt.Printf("开始执行记忆升级任务，目标日期: %s\n", targetDate)
+
+	// 执行升级
+	if err := upgradeJob.RunForDate(targetDate); err != nil {
+		fmt.Fprintf(os.Stderr, "错误: 记忆升级失败: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("✓ 记忆升级任务完成: %s\n", targetDate)
 }
 
 // ========== Onboard 命令实现 ==========
