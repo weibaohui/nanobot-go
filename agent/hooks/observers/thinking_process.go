@@ -74,14 +74,19 @@ func (o *ThinkingProcessObserver) OnEvent(ctx context.Context, event events.Even
 	sessionKey := trace.GetSessionKey(ctx)
 	channel := trace.GetChannel(ctx)
 
-	// 获取 chatID
-	chatID := o.getChatID(event, sessionKey)
+	// 获取 chatID 和 channel（优先从缓存获取完整的会话信息）
+	chatID, cachedChannel := o.getSessionInfo(event, sessionKey)
 	if chatID == "" {
 		o.logger.Debug("无法获取 ChatID，跳过思考过程推送",
 			zap.String("event_type", string(event.GetEventType())),
 			zap.String("session_key", sessionKey),
 		)
 		return nil
+	}
+
+	// 如果 context 中没有 channel，使用缓存的 channel
+	if channel == "" && cachedChannel != "" {
+		channel = cachedChannel
 	}
 
 	// 格式化消息
@@ -122,18 +127,35 @@ func (o *ThinkingProcessObserver) updateSessionCache(event events.Event) {
 			}
 			o.mu.Unlock()
 		}
+
+	case *events.PromptSubmittedEvent:
+		// Prompt 提交时也更新缓存（如果有 sessionKey）
+		if e.SessionKey != "" {
+			o.mu.RLock()
+			info, exists := o.sessionCache[e.SessionKey]
+			o.mu.RUnlock()
+			if exists {
+				o.mu.Lock()
+				o.sessionCache[e.SessionKey] = sessionInfo{
+					chatID:    info.chatID,
+					channel:   info.channel,
+					updatedAt: time.Now(),
+				}
+				o.mu.Unlock()
+			}
+		}
 	}
 }
 
-// getChatID 获取 ChatID
+// getSessionInfo 获取会话信息 (chatID, channel)
 // 优先从事件中获取，其次从缓存中通过 sessionKey 查找
-func (o *ThinkingProcessObserver) getChatID(event events.Event, sessionKey string) string {
+func (o *ThinkingProcessObserver) getSessionInfo(event events.Event, sessionKey string) (string, string) {
 	// 首先尝试从事件中直接获取
 	switch e := event.(type) {
 	case *events.MessageReceivedEvent:
-		return e.ChatID
+		return e.ChatID, e.Channel
 	case *events.MessageSentEvent:
-		return e.ChatID
+		return e.ChatID, e.Channel
 	}
 
 	// 从缓存中通过 sessionKey 查找
@@ -141,21 +163,28 @@ func (o *ThinkingProcessObserver) getChatID(event events.Event, sessionKey strin
 		o.mu.RLock()
 		info, exists := o.sessionCache[sessionKey]
 		o.mu.RUnlock()
-		if exists && time.Since(info.updatedAt) < 10*time.Minute {
-			return info.chatID
+		if exists && time.Since(info.updatedAt) < 30*time.Minute {
+			return info.chatID, info.channel
 		}
 	}
 
-	return ""
+	return "", ""
 }
 
 // shouldProcessEvent 检查是否应该处理该事件类型
 func (o *ThinkingProcessObserver) shouldProcessEvent(eventType events.EventType) bool {
-	// 如果没有配置特定事件，使用默认事件列表
+	// 默认监听所有思考和工具相关事件
 	defaultEvents := []string{
-		"tool_used",
-		"tool_completed",
-		"llm_call_end",
+		"llm_call_start",    // LLM 开始思考
+		"llm_call_end",      // LLM 思考完成
+		"llm_call_error",    // LLM 调用错误
+		"tool_used",         // 工具开始执行
+		"tool_completed",    // 工具执行完成
+		"tool_error",        // 工具执行错误
+		"tool_call",         // 工具调用
+		"component_start",   // 组件开始
+		"component_end",     // 组件完成
+		"component_error",   // 组件错误
 	}
 
 	eventStr := string(eventType)
@@ -188,8 +217,18 @@ func (o *ThinkingProcessObserver) formatMessage(event events.Event) string {
 		return o.formatToolCompleted(e)
 	case *events.ToolErrorEvent:
 		return o.formatToolError(e)
+	case *events.LLMCallStartEvent:
+		return o.formatLLMCallStart(e)
 	case *events.LLMCallEndEvent:
 		return o.formatLLMCallEnd(e)
+	case *events.LLMCallErrorEvent:
+		return o.formatLLMCallError(e)
+	case *events.ComponentStartEvent:
+		return o.formatComponentStart(e)
+	case *events.ComponentEndEvent:
+		return o.formatComponentEnd(e)
+	case *events.ComponentErrorEvent:
+		return o.formatComponentError(e)
 	default:
 		return ""
 	}
@@ -230,29 +269,46 @@ func (o *ThinkingProcessObserver) formatToolError(e *events.ToolErrorEvent) stri
 	return fmt.Sprintf("❌ **工具错误**: `%s`\n```\n%s\n```", e.ToolName, e.Error)
 }
 
+// formatLLMCallStart 格式化 LLM 调用开始事件
+// 返回空字符串，不显示"开始思考"提示，避免与最终回复重复
+func (o *ThinkingProcessObserver) formatLLMCallStart(e *events.LLMCallStartEvent) string {
+	return ""
+}
+
 // formatLLMCallEnd 格式化 LLM 调用结束事件
+// 只显示工具调用决定，不显示普通回复内容（避免与最终回复重复）
 func (o *ThinkingProcessObserver) formatLLMCallEnd(e *events.LLMCallEndEvent) string {
-	// 只在有响应内容时才发送
-	if e.ResponseContent == "" {
-		return ""
-	}
-
-	// 限制内容长度，避免发送过长消息
-	content := e.ResponseContent
-	if len(content) > 500 {
-		content = content[:500] + "..."
-	}
-
-	// 如果有工具调用，显示工具调用信息而不是响应内容
+	// 如果有工具调用，显示工具调用信息
 	if len(e.ToolCalls) > 0 {
 		var toolNames []string
 		for _, tc := range e.ToolCalls {
 			toolNames = append(toolNames, tc.Function.Name)
 		}
-		return fmt.Sprintf("🤖 **准备调用工具**: %s", strings.Join(toolNames, ", "))
+		return fmt.Sprintf("🤖 **决定调用工具**: %s", strings.Join(toolNames, ", "))
 	}
 
-	return content
+	// 普通回复内容不显示，由正常的消息回复发送
+	return ""
+}
+
+// formatLLMCallError 格式化 LLM 调用错误事件
+func (o *ThinkingProcessObserver) formatLLMCallError(e *events.LLMCallErrorEvent) string {
+	return fmt.Sprintf("❌ **AI 调用错误**: %s", e.Error)
+}
+
+// formatComponentStart 格式化组件开始事件
+func (o *ThinkingProcessObserver) formatComponentStart(e *events.ComponentStartEvent) string {
+	return fmt.Sprintf("▶️ **开始**: %s", e.Name)
+}
+
+// formatComponentEnd 格式化组件结束事件
+func (o *ThinkingProcessObserver) formatComponentEnd(e *events.ComponentEndEvent) string {
+	return fmt.Sprintf("✅ **完成**: %s (%dms)", e.Name, e.DurationMs)
+}
+
+// formatComponentError 格式化组件错误事件
+func (o *ThinkingProcessObserver) formatComponentError(e *events.ComponentErrorEvent) string {
+	return fmt.Sprintf("❌ **错误**: %s - %s", e.Name, e.Error)
 }
 
 // sendThinkingMessage 发送思考过程消息
