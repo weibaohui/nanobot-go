@@ -221,6 +221,7 @@ func (l *Loop) createBackgroundAgentTaskManager() *AgentTaskManager {
 		CheckpointStore: l.interruptManager.GetCheckpointStore(),
 		MaxIterations:   l.maxIterations,
 		Sessions:        l.sessions,
+		HookManager:     l.hookManager,
 		OnTaskComplete: func(channel, chatID, taskID string, status TaskStatus, result string) {
 			// 任务完成时发送通知消息
 			statusText := map[TaskStatus]string{
