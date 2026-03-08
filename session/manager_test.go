@@ -2,12 +2,11 @@ package session
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/weibaohui/nanobot-go/config"
+	"github.com/weibaohui/nanobot-go/internal/models"
 	"go.uber.org/zap"
 )
 
@@ -73,11 +72,6 @@ func TestNewManager(t *testing.T) {
 		t.Fatal("NewManager 返回 nil")
 	}
 
-	expectedDir := filepath.Join(tmpDir, "sessions")
-	if manager.sessionsDir != expectedDir {
-		t.Errorf("sessionsDir = %q, 期望 %q", manager.sessionsDir, expectedDir)
-	}
-
 	if manager.cache == nil {
 		t.Error("cache 不应该为 nil")
 	}
@@ -116,212 +110,6 @@ func TestManager_GetOrCreate(t *testing.T) {
 	})
 }
 
-// TestManager_Save 测试保存会话
-func TestManager_Save(t *testing.T) {
-	tmpDir := t.TempDir()
-	cfg := config.DefaultConfig()
-	manager := NewManager(cfg, zap.NewNop(), tmpDir, nil)
-
-	session := &Session{
-		Key:       "save-test-session",
-		Messages:  []Message{{Role: "user", Content: "测试消息", Timestamp: time.Now()}},
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-
-	err := manager.Save(context.Background(), session)
-	if err != nil {
-		t.Fatalf("Save 返回错误: %v", err)
-	}
-
-	loaded := manager.load("save-test-session")
-	if loaded == nil {
-		t.Fatal("加载会话失败")
-	}
-
-	if len(loaded.Messages) != 1 {
-		t.Errorf("消息数量 = %d, 期望 1", len(loaded.Messages))
-	}
-}
-
-// TestManager_Delete 测试删除会话
-func TestManager_Delete(t *testing.T) {
-	tmpDir := t.TempDir()
-	cfg := config.DefaultConfig()
-	manager := NewManager(cfg, zap.NewNop(), tmpDir, nil)
-
-	t.Run("删除存在的会话", func(t *testing.T) {
-		session := &Session{
-			Key:       "delete-test-session",
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		}
-		manager.Save(context.Background(), session)
-
-		result := manager.Delete("delete-test-session")
-		if !result {
-			t.Error("Delete 应该返回 true")
-		}
-
-		loaded := manager.load("delete-test-session")
-		if loaded != nil {
-			t.Error("删除后加载应该返回 nil")
-		}
-	})
-
-	t.Run("删除不存在的会话", func(t *testing.T) {
-		result := manager.Delete("nonexistent-session")
-		if result {
-			t.Error("删除不存在的会话应该返回 false")
-		}
-	})
-}
-
-// TestManager_ListSessions 测试列出所有会话
-func TestManager_ListSessions(t *testing.T) {
-	tmpDir := t.TempDir()
-	cfg := config.DefaultConfig()
-	manager := NewManager(cfg, zap.NewNop(), tmpDir, nil)
-
-	session1 := &Session{
-		Key:       "list-test-1",
-		CreatedAt: time.Now().Add(-1 * time.Hour),
-		UpdatedAt: time.Now().Add(-30 * time.Minute),
-	}
-	session2 := &Session{
-		Key:       "list-test-2",
-		CreatedAt: time.Now().Add(-2 * time.Hour),
-		UpdatedAt: time.Now(),
-	}
-
-	manager.Save(context.Background(), session1)
-	manager.Save(context.Background(), session2)
-
-	sessions := manager.ListSessions()
-
-	if len(sessions) != 2 {
-		t.Fatalf("会话数量 = %d, 期望 2", len(sessions))
-	}
-
-	if sessions[0]["key"] != "list-test-2" {
-		t.Errorf("第一个会话 key = %v, 期望 list-test-2 (按更新时间排序)", sessions[0]["key"])
-	}
-}
-
-// TestSafeFilename 测试安全文件名转换
-func TestSafeFilename(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{"正常字符", "normal_name", "normal_name"},
-		{"包含冒号", "test:name", "test_name"},
-		{"包含多个不安全字符", "test<>:\"/\\|?*name", "test_________name"},
-		{"前后空格", "  test  ", "test"},
-		{"空字符串", "", ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := safeFilename(tt.input)
-			if result != tt.expected {
-				t.Errorf("safeFilename(%q) = %q, 期望 %q", tt.input, result, tt.expected)
-			}
-		})
-	}
-}
-
-// TestManager_GetSessionPath 测试获取会话文件路径
-func TestManager_GetSessionPath(t *testing.T) {
-	tmpDir := t.TempDir()
-	cfg := config.DefaultConfig()
-	manager := NewManager(cfg, zap.NewNop(), tmpDir, nil)
-
-	path := manager.getSessionPath("test:session")
-
-	if !filepath.IsAbs(path) {
-		t.Errorf("路径应该是绝对路径: %q", path)
-	}
-
-	if filepath.Ext(path) != ".json" {
-		t.Errorf("文件扩展名应该是 .json, 路径: %q", path)
-	}
-
-	if filepath.Dir(path) != manager.sessionsDir {
-		t.Errorf("文件目录 = %q, 期望 %q", filepath.Dir(path), manager.sessionsDir)
-	}
-}
-
-// TestManager_LoadNonexistentSession 测试加载不存在的会话
-func TestManager_LoadNonexistentSession(t *testing.T) {
-	tmpDir := t.TempDir()
-	cfg := config.DefaultConfig()
-	manager := NewManager(cfg, zap.NewNop(), tmpDir, nil)
-
-	session := manager.load("nonexistent-session")
-	if session != nil {
-		t.Error("加载不存在的会话应该返回 nil")
-	}
-}
-
-// TestManager_SaveAndLoadWithAllFields 测试保存和加载包含所有字段的会话
-func TestManager_SaveAndLoadWithAllFields(t *testing.T) {
-	tmpDir := t.TempDir()
-	cfg := config.DefaultConfig()
-	manager := NewManager(cfg, zap.NewNop(), tmpDir, nil)
-
-	now := time.Now()
-	original := &Session{
-		Key: "full-test-session",
-		Messages: []Message{
-			{
-				Role:      "user",
-				Content:   "测试消息",
-				Timestamp: now,
-			},
-		},
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-
-	err := manager.Save(context.Background(), original)
-	if err != nil {
-		t.Fatalf("Save 返回错误: %v", err)
-	}
-
-	loaded := manager.load("full-test-session")
-	if loaded == nil {
-		t.Fatal("加载会话失败")
-	}
-
-	if loaded.Key != original.Key {
-		t.Errorf("Key = %q, 期望 %q", loaded.Key, original.Key)
-	}
-
-	if len(loaded.Messages) != 1 {
-		t.Fatalf("消息数量 = %d, 期望 1", len(loaded.Messages))
-	}
-}
-
-// TestManager_DataDirCreation 测试数据目录自动创建
-func TestManager_DataDirCreation(t *testing.T) {
-	tmpDir := t.TempDir()
-	nonexistentDir := filepath.Join(tmpDir, "nonexistent", "nested", "dir")
-
-	cfg := config.DefaultConfig()
-	manager := NewManager(cfg, zap.NewNop(), nonexistentDir, nil)
-
-	expectedDir := filepath.Join(nonexistentDir, "sessions")
-	if _, err := os.Stat(expectedDir); os.IsNotExist(err) {
-		t.Errorf("目录 %q 应该被自动创建", expectedDir)
-	}
-
-	if manager.sessionsDir != expectedDir {
-		t.Errorf("sessionsDir = %q, 期望 %q", manager.sessionsDir, expectedDir)
-	}
-}
-
 // TestSession_AddMessageWithTrace 测试添加带链路追踪信息的消息
 func TestSession_AddMessageWithTrace(t *testing.T) {
 	session := &Session{
@@ -346,5 +134,111 @@ func TestSession_AddMessageWithTrace(t *testing.T) {
 
 	if session.Messages[0].ParentSpanID != "parent-span-789" {
 		t.Errorf("ParentSpanID = %q, 期望 parent-span-789", session.Messages[0].ParentSpanID)
+	}
+}
+
+// mockConvRepo 用于测试的模拟对话记录仓库
+type mockConvRepo struct {
+	records []models.ConversationRecord
+}
+
+func (m *mockConvRepo) FindBySessionKey(ctx context.Context, sessionKey string, opts *models.QueryOptions) ([]models.ConversationRecord, error) {
+	var result []models.ConversationRecord
+	for _, r := range m.records {
+		if r.SessionKey == sessionKey {
+			result = append(result, r)
+		}
+	}
+	return result, nil
+}
+
+// TestManager_GetHistory 测试从仓库获取历史记录
+func TestManager_GetHistory(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.DefaultConfig()
+
+	// 创建模拟仓库数据
+	now := time.Now()
+	mockRepo := &mockConvRepo{
+		records: []models.ConversationRecord{
+			{
+				SessionKey: "test-session",
+				Role:       "user",
+				Content:    "你好",
+				Timestamp:  now.Add(-5 * time.Minute),
+			},
+			{
+				SessionKey: "test-session",
+				Role:       "assistant",
+				Content:    "你好！有什么可以帮助你的？",
+				Timestamp:  now.Add(-4 * time.Minute),
+			},
+		},
+	}
+
+	manager := NewManager(cfg, zap.NewNop(), tmpDir, mockRepo)
+
+	history := manager.GetHistory(context.Background(), "test-session", 10)
+
+	if len(history) != 2 {
+		t.Fatalf("历史记录数量 = %d, 期望 2", len(history))
+	}
+
+	if history[0]["role"] != "user" {
+		t.Errorf("第一条记录角色 = %v, 期望 user", history[0]["role"])
+	}
+
+	if history[1]["role"] != "assistant" {
+		t.Errorf("第二条记录角色 = %v, 期望 assistant", history[1]["role"])
+	}
+}
+
+// TestManager_GetHistory_NoRepo 测试没有仓库时返回空历史
+func TestManager_GetHistory_NoRepo(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.DefaultConfig()
+	manager := NewManager(cfg, zap.NewNop(), tmpDir, nil)
+
+	history := manager.GetHistory(context.Background(), "test-session", 10)
+
+	if history != nil {
+		t.Errorf("没有仓库时应该返回 nil, 得到 %v", history)
+	}
+}
+
+// TestManager_GetHistory_FilterByTime 测试时间过滤
+func TestManager_GetHistory_FilterByTime(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.DefaultConfig()
+
+	// 创建模拟仓库数据，包含旧记录
+	now := time.Now()
+	mockRepo := &mockConvRepo{
+		records: []models.ConversationRecord{
+			{
+				SessionKey: "test-session",
+				Role:       "user",
+				Content:    "3小时前的消息",
+				Timestamp:  now.Add(-3 * time.Hour), // 超过2小时，应该被过滤
+			},
+			{
+				SessionKey: "test-session",
+				Role:       "user",
+				Content:    "1小时前的消息",
+				Timestamp:  now.Add(-1 * time.Hour), // 在2小时内，应该保留
+			},
+		},
+	}
+
+	manager := NewManager(cfg, zap.NewNop(), tmpDir, mockRepo)
+
+	history := manager.GetHistory(context.Background(), "test-session", 10)
+
+	if len(history) != 1 {
+		t.Fatalf("历史记录数量 = %d, 期望 1 (只保留2小时内的)", len(history))
+	}
+
+	if history[0]["content"] != "1小时前的消息" {
+		t.Errorf("内容 = %v, 期望 '1小时前的消息'", history[0]["content"])
 	}
 }

@@ -170,25 +170,26 @@ func TestSQLiteObserver_TokenUsage(t *testing.T) {
 	}
 }
 
-func TestSQLiteObserver_Deduplication(t *testing.T) {
+func TestSQLiteObserver_MultipleEvents(t *testing.T) {
 	obs, dbClient, _, _ := createTestObserver(t)
 	defer dbClient.Close()
 
 	ctx := trace.WithSessionKey(context.Background(), "session-1")
 
+	// 发送两个不同的事件
 	event1 := events.NewLLMCallEndEvent("trace-1", "span-1", "",
 		&callbacks.RunInfo{Component: "LLM"},
-		&model.CallbackOutput{Message: &schema.Message{Content: "AI回复"}},
+		&model.CallbackOutput{Message: &schema.Message{Content: "AI回复1"}},
 		100,
 	)
 	if err := obs.OnEvent(ctx, event1); err != nil {
 		t.Fatalf("处理事件1失败: %v", err)
 	}
 
-	event2 := events.NewLLMCallEndEvent("trace-1", "span-1", "",
+	event2 := events.NewLLMCallEndEvent("trace-2", "span-2", "",
 		&callbacks.RunInfo{Component: "LLM"},
 		&model.CallbackOutput{
-			Message:    &schema.Message{Content: "AI回复"},
+			Message:    &schema.Message{Content: "AI回复2"},
 			TokenUsage: &model.TokenUsage{TotalTokens: 150},
 		},
 		100,
@@ -198,11 +199,12 @@ func TestSQLiteObserver_Deduplication(t *testing.T) {
 	}
 
 	var count int64
-	if err := dbClient.DB().Model(&models.ConversationRecord{}).Where("trace_id = ?", "trace-1").Count(&count).Error; err != nil {
+	if err := dbClient.DB().Model(&models.ConversationRecord{}).Count(&count).Error; err != nil {
 		t.Fatalf("查询失败: %v", err)
 	}
-	if count != 1 {
-		t.Errorf("去重失败，记录数量: got %d, want 1", count)
+	// 应该保存两条记录（没有去重）
+	if count != 2 {
+		t.Errorf("记录数量: got %d, want 2", count)
 	}
 }
 
