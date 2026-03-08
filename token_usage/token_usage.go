@@ -43,6 +43,11 @@ type TokenUsageManager struct {
 	mu         sync.RWMutex
 }
 
+// DataDir 返回数据目录路径
+func (m *TokenUsageManager) DataDir() string {
+	return m.dataDir
+}
+
 // NewTokenUsageManager 创建 Token 使用量管理器
 func NewTokenUsageManager(dataDir string) *TokenUsageManager {
 	usageDir := filepath.Join(dataDir, "token_usage")

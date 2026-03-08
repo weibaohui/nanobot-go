@@ -147,7 +147,7 @@ func runGateway(cmd *cobra.Command, args []string) {
 	}
 
 	sessionManager := session.NewManager(cfg, logger, dataDir, convRepo)
-	tokenUsageManager := token_usage.NewTokenUsageManager(dataDir)
+	tokenUsageManager := token_usage.NewTokenUsageManager(workspacePath)
 
 	// 创建统一的 Hook 系统
 	hookSystem := hooks.NewHookManager(logger, true)
@@ -248,7 +248,14 @@ func runGateway(cmd *cobra.Command, args []string) {
 				},
 			}
 			// 从 data 中提取 TokenUsage（schema.TokenUsage 需要转换为 model.TokenUsage）
-			if schemaUsage, ok := data["token_usage"].(*schema.TokenUsage); ok && schemaUsage != nil {
+			tokenUsageRaw := data["token_usage"]
+			logger.Debug("setHookCallback: 收到 EventLLMCallEnd",
+				zap.String("session_key", sessionKey),
+				zap.String("channel", channel),
+				zap.Any("token_usage_raw", tokenUsageRaw),
+				zap.Bool("token_usage_is_nil", tokenUsageRaw == nil),
+			)
+			if schemaUsage, ok := tokenUsageRaw.(*schema.TokenUsage); ok && schemaUsage != nil {
 				event.TokenUsage = &model.TokenUsage{
 					PromptTokens:            schemaUsage.PromptTokens,
 					PromptTokenDetails:      model.PromptTokenDetails(schemaUsage.PromptTokenDetails),
@@ -256,6 +263,16 @@ func runGateway(cmd *cobra.Command, args []string) {
 					TotalTokens:             schemaUsage.TotalTokens,
 					CompletionTokensDetails: model.CompletionTokensDetails(schemaUsage.CompletionTokensDetails),
 				}
+				logger.Debug("setHookCallback: TokenUsage 转换成功",
+					zap.Int("prompt_tokens", event.TokenUsage.PromptTokens),
+					zap.Int("completion_tokens", event.TokenUsage.CompletionTokens),
+					zap.Int("total_tokens", event.TokenUsage.TotalTokens),
+				)
+			} else {
+				logger.Debug("setHookCallback: TokenUsage 类型断言失败或为 nil",
+					zap.Bool("is_token_usage", ok),
+					zap.Bool("is_nil", tokenUsageRaw == nil),
+				)
 			}
 			// 从 data 中提取其他字段
 			if spanID, ok := data["span_id"].(string); ok {
@@ -264,6 +281,10 @@ func runGateway(cmd *cobra.Command, args []string) {
 			if parentSpanID, ok := data["parent_span_id"].(string); ok {
 				event.ParentSpanID = parentSpanID
 			}
+			logger.Debug("setHookCallback: 准备 Dispatch 事件",
+				zap.String("session_key", sessionKey),
+				zap.Bool("has_token_usage", event.TokenUsage != nil),
+			)
 			hookSystem.Dispatch(ctx, event, channel, sessionKey)
 
 		case hookevents.EventLLMCallStart:

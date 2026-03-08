@@ -44,19 +44,27 @@ func (tuo *TokenUsageObserver) OnEvent(ctx context.Context, event events.Event) 
 func (tuo *TokenUsageObserver) handleLLMCallEnd(ctx context.Context, event events.Event) {
 	e, ok := event.(*events.LLMCallEndEvent)
 	if !ok {
+		tuo.logger.Debug("TokenUsageObserver: 事件类型断言失败")
 		return
 	}
 
 	// 如果没有 TokenUsage 信息，跳过
 	if e.TokenUsage == nil {
+		tuo.logger.Debug("TokenUsageObserver: TokenUsage 为 nil，跳过")
 		return
 	}
 
 	// 从 context 获取 sessionKey（使用 trace.GetSessionKey）
 	sessionKey := trace.GetSessionKey(ctx)
+	tuo.logger.Debug("TokenUsageObserver: 从 context 获取 sessionKey",
+		zap.String("session_key", sessionKey),
+	)
 	// 如果 context 中没有 sessionKey，使用 trace_id
 	if sessionKey == "" {
 		sessionKey = e.GetTraceID()
+		tuo.logger.Debug("TokenUsageObserver: 使用 trace_id 作为 sessionKey",
+			zap.String("session_key", sessionKey),
+		)
 	}
 
 	record := token_usage.TokenUsageRecord{
@@ -72,6 +80,13 @@ func (tuo *TokenUsageObserver) handleLLMCallEnd(ctx context.Context, event event
 		Timestamp: event.GetTimestamp(),
 	}
 
+	tuo.logger.Debug("TokenUsageObserver: 准备添加记录",
+		zap.String("session_key", sessionKey),
+		zap.Int("prompt_tokens", record.TokenUsage.PromptTokens),
+		zap.Int("completion_tokens", record.TokenUsage.CompletionTokens),
+		zap.Int("total_tokens", record.TokenUsage.TotalTokens),
+	)
+
 	// 添加到管理器
 	if err := tuo.usageManager.AddRecord(sessionKey, record); err != nil {
 		tuo.logger.Error("添加 Token 使用记录失败",
@@ -80,6 +95,7 @@ func (tuo *TokenUsageObserver) handleLLMCallEnd(ctx context.Context, event event
 		)
 		return
 	}
+	tuo.logger.Debug("TokenUsageObserver: 添加记录成功")
 
 	// 立即保存到磁盘
 	if err := tuo.usageManager.Save(sessionKey); err != nil {
@@ -87,5 +103,10 @@ func (tuo *TokenUsageObserver) handleLLMCallEnd(ctx context.Context, event event
 			zap.String("session_key", sessionKey),
 			zap.Error(err),
 		)
+		return
 	}
+	tuo.logger.Debug("TokenUsageObserver: 保存记录成功",
+		zap.String("session_key", sessionKey),
+		zap.String("data_dir", tuo.usageManager.DataDir()),
+	)
 }

@@ -334,6 +334,7 @@ func (a *ChatModelAdapter) triggerLLMCallStart(ctx context.Context, input []*sch
 // triggerLLMCallEnd 触发 LLM 调用结束事件
 func (a *ChatModelAdapter) triggerLLMCallEnd(ctx context.Context, response *schema.Message) {
 	if a.hookCallback == nil {
+		a.logger.Debug("triggerLLMCallEnd: hookCallback 为 nil，跳过")
 		return
 	}
 
@@ -347,10 +348,25 @@ func (a *ChatModelAdapter) triggerLLMCallEnd(ctx context.Context, response *sche
 	var tokenUsage *schema.TokenUsage
 	if response.ResponseMeta != nil && response.ResponseMeta.Usage != nil {
 		tokenUsage = response.ResponseMeta.Usage
+		a.logger.Debug("triggerLLMCallEnd: 提取到 TokenUsage",
+			zap.Int("prompt_tokens", tokenUsage.PromptTokens),
+			zap.Int("completion_tokens", tokenUsage.CompletionTokens),
+			zap.Int("total_tokens", tokenUsage.TotalTokens),
+		)
+	} else {
+		a.logger.Debug("triggerLLMCallEnd: ResponseMeta 或 Usage 为 nil",
+			zap.Bool("response_meta_nil", response.ResponseMeta == nil),
+		)
 	}
 
 	// 提取工具调用信息
 	toolCalls := response.ToolCalls
+
+	a.logger.Debug("triggerLLMCallEnd: 准备调用 hookCallback",
+		zap.String("session_key", sessionKey),
+		zap.String("channel", channel),
+		zap.Bool("has_token_usage", tokenUsage != nil),
+	)
 
 	// 直接构造事件数据
 	data := map[string]interface{}{
