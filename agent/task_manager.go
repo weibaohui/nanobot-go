@@ -12,8 +12,10 @@ import (
 	"time"
 
 	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
+	"github.com/cloudwego/eino/schema"
 	tasktools "github.com/weibaohui/nanobot-go/agent/tools/task"
 	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/session"
@@ -21,6 +23,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	hooks "github.com/weibaohui/nanobot-go/agent/hooks"
+	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 )
 
 type TaskStatus string
@@ -396,6 +399,67 @@ func (m *AgentTaskManager) executeTask(ctx context.Context, work, channel, chatI
 	}
 	if len(m.registeredTools) > 0 {
 		adapter.SetRegisteredTools(m.registeredTools)
+	}
+
+	// 设置 HookCallback - 将事件转发到 HookManager
+	if m.hookManager != nil {
+		taskSessionKey := fmt.Sprintf("task_%s_%s", channel, chatID)
+		hookCallback := func(eventType events.EventType, data map[string]interface{}) {
+			// 从 data 中提取 session_key 和 channel，如果没有则使用默认值
+			var sk, ch string
+			if v, ok := data["session_key"].(string); ok && v != "" {
+				sk = v
+			} else {
+				sk = taskSessionKey
+			}
+			if v, ok := data["channel"].(string); ok && v != "" {
+				ch = v
+			} else {
+				ch = channel
+			}
+
+			m.logger.Debug("executeTask hookCallback: 收到事件",
+				zap.String("event_type", string(eventType)),
+				zap.String("session_key", sk),
+			)
+
+			// 创建事件并分发
+			ctx := context.Background()
+			traceID := hooks.GetTraceID(ctx)
+			baseEvent := &events.BaseEvent{
+				TraceID:   traceID,
+				EventType: eventType,
+				Timestamp: time.Now(),
+			}
+			// 根据事件类型创建具体事件
+			switch eventType {
+			case events.EventLLMCallEnd:
+				event := &events.LLMCallEndEvent{
+					BaseEvent: baseEvent,
+				}
+				// 从 data 中提取 TokenUsage
+				if tokenUsage, ok := data["token_usage"].(*schema.TokenUsage); ok && tokenUsage != nil {
+					event.TokenUsage = &model.TokenUsage{
+						PromptTokens:            tokenUsage.PromptTokens,
+						PromptTokenDetails:      model.PromptTokenDetails(tokenUsage.PromptTokenDetails),
+						CompletionTokens:        tokenUsage.CompletionTokens,
+						TotalTokens:             tokenUsage.TotalTokens,
+						CompletionTokensDetails: model.CompletionTokensDetails(tokenUsage.CompletionTokensDetails),
+					}
+				}
+				if spanID, ok := data["span_id"].(string); ok {
+					event.SpanID = spanID
+				}
+				if parentSpanID, ok := data["parent_span_id"].(string); ok {
+					event.ParentSpanID = parentSpanID
+				}
+				m.hookManager.Dispatch(ctx, event, ch, sk)
+			default:
+				// 其他事件类型，直接分发 BaseEvent
+				m.hookManager.Dispatch(ctx, baseEvent, ch, sk)
+			}
+		}
+		adapter.SetHookCallback(hookCallback)
 	}
 	var toolsConfig adk.ToolsConfig
 	if len(m.tools) > 0 {
