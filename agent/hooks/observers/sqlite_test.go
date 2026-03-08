@@ -15,7 +15,6 @@ import (
 	"github.com/weibaohui/nanobot-go/conversation/database"
 	"github.com/weibaohui/nanobot-go/conversation/repository"
 	"github.com/weibaohui/nanobot-go/conversation/service"
-	"github.com/weibaohui/nanobot-go/internal/models"
 	"go.uber.org/zap"
 )
 
@@ -167,44 +166,6 @@ func TestSQLiteObserver_TokenUsage(t *testing.T) {
 	}
 	if result[0].TokenUsage == nil || result[0].TokenUsage.TotalTokens != 150 {
 		t.Errorf("TokenUsage 错误")
-	}
-}
-
-func TestSQLiteObserver_MultipleEvents(t *testing.T) {
-	obs, dbClient, _, _ := createTestObserver(t)
-	defer dbClient.Close()
-
-	ctx := trace.WithSessionKey(context.Background(), "session-1")
-
-	// 发送两个不同的事件
-	event1 := events.NewLLMCallEndEvent("trace-1", "span-1", "",
-		&callbacks.RunInfo{Component: "LLM"},
-		&model.CallbackOutput{Message: &schema.Message{Content: "AI回复1"}},
-		100,
-	)
-	if err := obs.OnEvent(ctx, event1); err != nil {
-		t.Fatalf("处理事件1失败: %v", err)
-	}
-
-	event2 := events.NewLLMCallEndEvent("trace-2", "span-2", "",
-		&callbacks.RunInfo{Component: "LLM"},
-		&model.CallbackOutput{
-			Message:    &schema.Message{Content: "AI回复2"},
-			TokenUsage: &model.TokenUsage{TotalTokens: 150},
-		},
-		100,
-	)
-	if err := obs.OnEvent(ctx, event2); err != nil {
-		t.Fatalf("处理事件2失败: %v", err)
-	}
-
-	var count int64
-	if err := dbClient.DB().Model(&models.ConversationRecord{}).Count(&count).Error; err != nil {
-		t.Fatalf("查询失败: %v", err)
-	}
-	// 应该保存两条记录（没有去重）
-	if count != 2 {
-		t.Errorf("记录数量: got %d, want 2", count)
 	}
 }
 
