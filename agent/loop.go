@@ -91,12 +91,6 @@ func NewLoop(cfg *LoopConfig) *Loop {
 		hookCallback:        cfg.HookCallback,
 	}
 
-	// 调试日志：检查 hookManager 状态
-	logger.Debug("NewLoop: 检查 hookManager",
-		zap.Bool("cfg.HookManager_nil", cfg.HookManager == nil),
-		zap.Bool("loop.hookManager_nil", loop.hookManager == nil),
-	)
-
 	// 设置工具的 HookManager，使工具执行时能触发 Hook 事件
 	if cfg.HookManager != nil {
 		loop.tools.SetHookManager(cfg.HookManager, logger)
