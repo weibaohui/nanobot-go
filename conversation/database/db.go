@@ -6,12 +6,13 @@ import (
 	"path/filepath"
 	"sync"
 
-	"gorm.io/driver/sqlite"
+	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
 	"github.com/weibaohui/nanobot-go/internal/models"
 	"github.com/weibaohui/nanobot-go/config"
+	memorymodels "github.com/weibaohui/nanobot-go/memory/models"
 )
 
 // Config 数据库配置（简化版，主要配置在 config.Config 中）
@@ -122,6 +123,11 @@ func (c *Client) InitSchema() error {
 	// 自动迁移表结构
 	if err := c.db.AutoMigrate(&models.ConversationRecord{}); err != nil {
 		return fmt.Errorf("创建 conversation_records 表失败: %w", err)
+	}
+
+	// 自动迁移记忆模块表结构
+	if err := c.db.AutoMigrate(&memorymodels.StreamMemory{}, &memorymodels.LongTermMemory{}); err != nil {
+		return fmt.Errorf("创建记忆模块表失败: %w", err)
 	}
 
 	// 创建索引

@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/glebarez/sqlite"
 	"github.com/weibaohui/nanobot-go/internal/models"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
