@@ -6,6 +6,7 @@ import (
 
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observer"
+	"github.com/weibaohui/nanobot-go/agent/hooks/trace"
 	"github.com/weibaohui/nanobot-go/conversation/service"
 	"github.com/weibaohui/nanobot-go/internal/models"
 	"go.uber.org/zap"
@@ -285,4 +286,10 @@ func (o *SQLiteObserver) GetDBPath() string {
 // GetDBClient 获取数据库客户端
 func (o *SQLiteObserver) GetDBClient() DBClient {
 	return o.dbClient
+}
+
+// getCtxSessionKey 从上下文获取 sessionKey
+// 使用 trace.GetSessionKey 获取通过 trace.WithSessionKey 注入的 session key
+func getCtxSessionKey(ctx context.Context) string {
+	return trace.GetSessionKey(ctx)
 }

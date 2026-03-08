@@ -150,32 +150,10 @@ func runGateway(cmd *cobra.Command, args []string) {
 	// 创建统一的 Hook 系统
 	hookSystem := hooks.NewHookManager(logger, true)
 
-	// 注册 SessionObserver - 负责保存消息到会话
-	sessionObserver := observers.NewSessionObserver(sessionManager, logger, nil)
-	hookSystem.Register(sessionObserver)
-	logger.Info("会话观察器已注册到 Hook 系统")
-
 	// 注册 LoggingObserver
 	loggingObserver := observers.NewLoggingObserver(logger, nil)
 	hookSystem.Register(loggingObserver)
 	logger.Info("日志观察器已注册到 Hook 系统")
-
-	// 如果启用了压缩，注册 CompressObserver
-	if cfg.Compress.Enabled {
-		memory := agent.NewMemoryStore(workspacePath)
-		compressLLM, err := observers.CreateCompressLLM(cfg)
-		if err != nil {
-			logger.Error("创建压缩 LLM 失败", zap.Error(err))
-		} else {
-			compressObserver := observers.NewCompressObserver(cfg, logger, memory, compressLLM, sessionManager, nil)
-			hookSystem.Register(compressObserver)
-			logger.Info("对话压缩观察器已启用",
-				zap.Int("minMessages", cfg.Compress.MinMessages),
-				zap.Int("minTokens", cfg.Compress.MinTokens),
-				zap.Int("maxHistory", cfg.Compress.MaxHistory),
-			)
-		}
-	}
 
 	// 如果启用了思考过程推送，注册 ThinkingProcessObserver
 	if cfg.ThinkingProcess.Enabled {
