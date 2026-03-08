@@ -10,12 +10,6 @@ import (
 	"github.com/weibaohui/nanobot-go/utils"
 )
 
-// LLMClient LLM 客户端接口
-type LLMClient interface {
-	// Complete 调用 LLM 生成文本
-	Complete(ctx context.Context, prompt string, systemPrompt string) (string, error)
-}
-
 // MemorySummarizer 记忆总结器接口
 type MemorySummarizer interface {
 	// SummarizeConversation 对单条对话进行初步总结
