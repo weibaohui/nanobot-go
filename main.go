@@ -26,6 +26,10 @@ import (
 	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/cron"
 	"github.com/weibaohui/nanobot-go/heartbeat"
+	memoryhandler "github.com/weibaohui/nanobot-go/memory/handler"
+	memoryjob "github.com/weibaohui/nanobot-go/memory/job"
+	memoryrepo "github.com/weibaohui/nanobot-go/memory/repository"
+	memoryservice "github.com/weibaohui/nanobot-go/memory/service"
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -130,8 +134,10 @@ func runGateway(cmd *cobra.Command, args []string) {
 
 	// 初始化数据库和对话记录仓库
 	var convRepo session.ConversationRecordRepository
+	var dbClient *database.Client
 	if dbConfig := database.NewConfigFromConfig(cfg); dbConfig != nil {
-		dbClient, err := database.NewClient(dbConfig)
+		var err error
+		dbClient, err = database.NewClient(dbConfig)
 		if err != nil {
 			logger.Error("初始化数据库失败", zap.Error(err))
 		} else {
@@ -146,6 +152,62 @@ func runGateway(cmd *cobra.Command, args []string) {
 	}
 
 	sessionManager := session.NewManager(cfg, logger, dataDir, convRepo)
+
+	// 初始化记忆模块（如果启用）
+	var memoryService memoryservice.MemoryService
+	var memoryEventHandler *memoryhandler.MemoryEventHandler
+	var memoryUpgradeJob *memoryjob.MemoryUpgradeJob
+
+	if cfg.Memory.Enabled && dbClient != nil {
+		// 创建记忆仓库
+		streamRepo := memoryrepo.NewStreamMemoryRepository(dbClient.DB())
+		longTermRepo := memoryrepo.NewLongTermMemoryRepository(dbClient.DB())
+
+		// 创建 LLM 客户端（使用系统整体配置）
+		llmClient := memoryservice.NewSystemLLMClient(cfg, logger)
+
+		// 创建总结器
+		summarizer := memoryservice.NewMemorySummarizer(
+			llmClient,
+			cfg.Memory.Summarization.ConversationPrompt,
+			cfg.Memory.Summarization.LongTermPrompt,
+		)
+
+		// 创建记忆服务
+		memoryService = memoryservice.NewMemoryService(
+			streamRepo,
+			longTermRepo,
+			summarizer,
+			cfg.Memory.Enabled,
+		)
+
+		// 创建事件处理器
+		memoryEventHandler = memoryhandler.NewMemoryEventHandler(
+			memoryService,
+			nil, // conversationSvc 暂时为 nil，避免循环依赖
+			summarizer,
+			logger,
+			cfg.Memory.Enabled,
+		)
+		// 注意：memoryEventHandler 需要在事件总线中注册
+		// hookSystem.Register(memoryEventHandler) // 需要适配接口
+
+		// 创建定时任务
+		memoryUpgradeJob = memoryjob.NewMemoryUpgradeJob(
+			memoryService,
+			logger,
+			cfg.Memory.Scheduled.Enabled,
+			cfg.Memory.Scheduled.TimeWindow,
+			cfg.Memory.Scheduled.Timezone,
+		)
+
+		logger.Info("记忆模块已初始化",
+			zap.Bool("enabled", cfg.Memory.Enabled),
+			zap.String("summarization_model", cfg.Memory.Summarization.Model),
+		)
+	}
+	// 避免 unused 错误
+	_ = memoryEventHandler
 
 	// 创建统一的 Hook 系统
 	hookSystem := hooks.NewHookManager(logger, true)
@@ -318,6 +380,30 @@ func runGateway(cmd *cobra.Command, args []string) {
 
 	if err := cronService.Start(ctx); err != nil {
 		logger.Error("启动定时任务服务失败", zap.Error(err))
+	}
+
+	// 启动记忆升级定时任务（如果启用）
+	if cfg.Memory.Enabled && memoryUpgradeJob != nil {
+		// 启动定时器，每小时检查一次是否需要在时间窗口内执行
+		go func() {
+			ticker := time.NewTicker(1 * time.Hour)
+			defer ticker.Stop()
+
+			// 立即执行一次检查
+			memoryUpgradeJob.Run()
+
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					memoryUpgradeJob.Run()
+				}
+			}
+		}()
+		logger.Info("记忆升级定时任务已启动",
+			zap.String("time_window", cfg.Memory.Scheduled.TimeWindow),
+		)
 	}
 
 	if err := channelManager.StartAll(ctx); err != nil {

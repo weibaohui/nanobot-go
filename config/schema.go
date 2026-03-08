@@ -43,10 +43,9 @@ type MemoryConfig struct {
 }
 
 // SummarizationConfig 记忆归纳模型配置
+// 使用系统整体配置的 API Key 和 Model
 type SummarizationConfig struct {
-	Model              string  `json:"model"`              // 模型名称
-	APIKey             string  `json:"apiKey"`             // API Key
-	BaseURL            string  `json:"baseURL"`            // API Base URL
+	Model              string  `json:"model"`              // 模型名称（为空则使用系统默认模型）
 	Temperature        float64 `json:"temperature"`        // 温度参数
 	MaxTokens          int     `json:"maxTokens"`          // 最大 Token 数
 	ConversationPrompt string  `json:"conversationPrompt"` // 对话总结提示词
