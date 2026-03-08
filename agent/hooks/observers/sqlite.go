@@ -117,7 +117,6 @@ func (o *SQLiteObserver) handlePromptSubmitted(ctx context.Context, event events
 		return err
 	}
 
-	o.deduplicate(ctx, baseEvent.TraceID, "user", e.UserInput)
 	return nil
 }
 
@@ -179,7 +178,6 @@ func (o *SQLiteObserver) handleLLMCallEnd(ctx context.Context, event events.Even
 		return err
 	}
 
-	o.deduplicate(ctx, baseEvent.TraceID, role, content)
 	return nil
 }
 
