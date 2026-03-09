@@ -8,6 +8,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 	hooks "github.com/weibaohui/nanobot-go/agent/hooks"
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
+	"github.com/weibaohui/nanobot-go/agent/hooks/trace"
 	"go.uber.org/zap"
 )
 
@@ -28,8 +29,19 @@ func CreateHookCallback(hookManager *hooks.HookManager, logger *zap.Logger) Hook
 			channel = ch
 		}
 
-		// 创建事件并分发
+		// 从 data 中提取 trace 信息并设置到 context
 		ctx := context.Background()
+		if traceID, ok := data["trace_id"].(string); ok && traceID != "" {
+			ctx = hooks.WithTraceID(ctx, traceID)
+		}
+		if spanID, ok := data["span_id"].(string); ok && spanID != "" {
+			ctx = trace.WithSpanID(ctx, spanID)
+		}
+		if parentSpanID, ok := data["parent_span_id"].(string); ok && parentSpanID != "" {
+			ctx = trace.WithParentSpanID(ctx, parentSpanID)
+		}
+
+		// 创建事件并分发
 		baseEvent := &events.BaseEvent{
 			TraceID:   hooks.GetTraceID(ctx),
 			EventType: eventType,

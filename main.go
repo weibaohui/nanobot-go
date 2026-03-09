@@ -20,6 +20,7 @@ import (
 	"github.com/weibaohui/nanobot-go/agent"
 	"github.com/weibaohui/nanobot-go/agent/hooks"
 	hookevents "github.com/weibaohui/nanobot-go/agent/hooks/events"
+	"github.com/weibaohui/nanobot-go/agent/hooks/trace"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observers"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/channels"
@@ -267,8 +268,21 @@ func runGateway(cmd *cobra.Command, args []string) {
 			return
 		}
 
+		// 从 data 中提取 trace 信息并设置到 context
 		ctx := context.Background()
-		traceID := hooks.GetTraceID(ctx)
+		var traceID string
+		if tid, ok := data["trace_id"].(string); ok && tid != "" {
+			traceID = tid
+			ctx = hooks.WithTraceID(ctx, traceID)
+		} else {
+			traceID = hooks.GetTraceID(ctx)
+		}
+		if spanID, ok := data["span_id"].(string); ok && spanID != "" {
+			ctx = trace.WithSpanID(ctx, spanID)
+		}
+		if parentSpanID, ok := data["parent_span_id"].(string); ok && parentSpanID != "" {
+			ctx = trace.WithParentSpanID(ctx, parentSpanID)
+		}
 
 		// 从 data 中提取 session_key 和 channel
 		var sessionKey, channel string
