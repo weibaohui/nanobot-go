@@ -240,7 +240,7 @@ func DefaultConfig() *Config {
 				Token:      "your-access-token",
 			},
 			DingTalk: DingTalkConfig{
-				Enabled:      true,
+				Enabled:      false,
 				ClientID:     "your-client-id",
 				ClientSecret: "your-client-secret",
 			},
