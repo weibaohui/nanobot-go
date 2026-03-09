@@ -173,26 +173,24 @@ func (o *ThinkingProcessObserver) getSessionInfo(event events.Event, sessionKey 
 
 // shouldProcessEvent 检查是否应该处理该事件类型
 func (o *ThinkingProcessObserver) shouldProcessEvent(eventType events.EventType) bool {
-	// 默认监听所有思考和工具相关事件
-	defaultEvents := []string{
-		"llm_call_start",    // LLM 开始思考
-		"llm_call_end",      // LLM 思考完成
-		"llm_call_error",    // LLM 调用错误
-		"tool_used",         // 工具开始执行
-		"tool_completed",    // 工具执行完成
-		"tool_error",        // 工具执行错误
-		"tool_call",         // 工具调用
-		"component_start",   // 组件开始
-		"component_end",     // 组件完成
-		"component_error",   // 组件错误
+	// 默认监听所有思考和工具相关事件（使用常量）
+	defaultEvents := []events.EventType{
+		events.EventLLMCallStart,    // LLM 开始思考
+		events.EventLLMCallEnd,      // LLM 思考完成
+		events.EventLLMCallError,    // LLM 调用错误
+		events.EventToolUsed,        // 工具开始执行
+		events.EventToolCompleted,   // 工具执行完成
+		events.EventToolError,       // 工具执行错误
+		events.EventToolCall,        // 工具调用
+		events.EventComponentStart,  // 组件开始
+		events.EventComponentEnd,    // 组件完成
+		events.EventComponentError,  // 组件错误
 	}
-
-	eventStr := string(eventType)
 
 	// 如果配置了事件列表，使用配置的
 	if len(o.config.Events) > 0 {
 		for _, e := range o.config.Events {
-			if e == eventStr {
+			if events.EventType(e) == eventType {
 				return true
 			}
 		}
@@ -201,7 +199,7 @@ func (o *ThinkingProcessObserver) shouldProcessEvent(eventType events.EventType)
 
 	// 否则使用默认列表
 	for _, e := range defaultEvents {
-		if e == eventStr {
+		if e == eventType {
 			return true
 		}
 	}

@@ -99,6 +99,78 @@ func CreateHookCallback(hookManager *hooks.HookManager, logger *zap.Logger) Hook
 			}
 			hookManager.Dispatch(ctx, event, channel, sessionKey)
 
+		case events.EventPromptSubmitted:
+			event := &events.PromptSubmittedEvent{
+				BaseEvent: baseEvent,
+			}
+			if userInput, ok := data["user_input"].(string); ok {
+				event.UserInput = userInput
+			}
+			if messages, ok := data["messages"].([]*schema.Message); ok {
+				event.Messages = messages
+			}
+			if sessionKeyFromData, ok := data["session_key"].(string); ok {
+				event.SessionKey = sessionKeyFromData
+			}
+			hookManager.Dispatch(ctx, event, channel, sessionKey)
+
+		case events.EventToolUsed:
+			event := &events.ToolUsedEvent{
+				BaseEvent: baseEvent,
+			}
+			if spanID, ok := data["span_id"].(string); ok {
+				event.SpanID = spanID
+			}
+			if parentSpanID, ok := data["parent_span_id"].(string); ok {
+				event.ParentSpanID = parentSpanID
+			}
+			if toolName, ok := data["tool_name"].(string); ok {
+				event.ToolName = toolName
+			}
+			if toolArguments, ok := data["tool_arguments"].(string); ok {
+				event.ToolArguments = toolArguments
+			}
+			hookManager.Dispatch(ctx, event, channel, sessionKey)
+
+		case events.EventToolCompleted:
+			event := &events.ToolCompletedEvent{
+				BaseEvent: baseEvent,
+			}
+			if spanID, ok := data["span_id"].(string); ok {
+				event.SpanID = spanID
+			}
+			if parentSpanID, ok := data["parent_span_id"].(string); ok {
+				event.ParentSpanID = parentSpanID
+			}
+			if toolName, ok := data["tool_name"].(string); ok {
+				event.ToolName = toolName
+			}
+			if response, ok := data["response"].(string); ok {
+				event.Response = response
+			}
+			if success, ok := data["success"].(bool); ok {
+				event.Success = success
+			}
+			hookManager.Dispatch(ctx, event, channel, sessionKey)
+
+		case events.EventToolError:
+			event := &events.ToolErrorEvent{
+				BaseEvent: baseEvent,
+			}
+			if spanID, ok := data["span_id"].(string); ok {
+				event.SpanID = spanID
+			}
+			if parentSpanID, ok := data["parent_span_id"].(string); ok {
+				event.ParentSpanID = parentSpanID
+			}
+			if toolName, ok := data["tool_name"].(string); ok {
+				event.ToolName = toolName
+			}
+			if errMsg, ok := data["error"].(string); ok {
+				event.Error = errMsg
+			}
+			hookManager.Dispatch(ctx, event, channel, sessionKey)
+
 		default:
 			// 其他事件类型，直接分发 BaseEvent
 			hookManager.Dispatch(ctx, baseEvent, channel, sessionKey)
