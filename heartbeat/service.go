@@ -90,7 +90,13 @@ func isHeartbeatEmpty(content string) bool {
 
 	for _, line := range strings.Split(content, "\n") {
 		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "<!--") {
+		if line == "" || strings.HasPrefix(line, "<!--") {
+			continue
+		}
+		// 只跳过真正的 Markdown 标题（# 后面有空格）
+		if strings.HasPrefix(line, "# ") || strings.HasPrefix(line, "## ") ||
+			strings.HasPrefix(line, "### ") || strings.HasPrefix(line, "#### ") ||
+			strings.HasPrefix(line, "##### ") || strings.HasPrefix(line, "###### ") {
 			continue
 		}
 		// 检查跳过模式
