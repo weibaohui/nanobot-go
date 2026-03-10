@@ -81,29 +81,10 @@ type Config struct {
 	Providers       ProvidersConfig       `json:"providers"`
 	Gateway         GatewayConfig         `json:"gateway"`
 	Tools           ToolsConfig           `json:"tools"`
-	Heartbeat       HeartbeatConfig       `json:"heartbeat"`
 	Compress        CompressConfig        `json:"compress"`
 	ThinkingProcess ThinkingProcessConfig `json:"thinkingProcess"` // 思考过程配置
 	Database        DatabaseConfig        `json:"database"`        // 数据库配置
 	Memory          MemoryConfig          `json:"memory"`          // 记忆模块配置
-}
-
-// HeartbeatConfig 心跳配置
-type HeartbeatConfig struct {
-	Every       string      `json:"every,omitempty"`       // 心跳间隔，支持 "30m"/"1h" 或 cron 表达式
-	ActiveHours ActiveHours `json:"activeHours,omitempty"` // 活跃时段配置
-	Model       string      `json:"model,omitempty"`       // 心跳专用模型
-	Session     string      `json:"session,omitempty"`     // 心跳会话键
-	Target      string      `json:"target,omitempty"`      // 心跳目标: "last"/"none" 或 ChannelId
-	Prompt      string      `json:"prompt,omitempty"`      // 心跳提示词
-	AckMaxChars int         `json:"ackMaxChars,omitempty"` // 确认消息最大字符数
-}
-
-// ActiveHours 活跃时段配置
-type ActiveHours struct {
-	Start    string `json:"start,omitempty"`    // 活跃开始时间，如 "09:00"
-	End      string `json:"end,omitempty"`      // 活跃结束时间，如 "18:00"
-	Timezone string `json:"timezone,omitempty"` // 时区，如 "Asia/Shanghai"
 }
 
 // AgentsConfig 代理配置
@@ -258,10 +239,6 @@ func DefaultConfig() *Config {
 			Exec: ExecToolConfig{
 				Timeout: 60,
 			},
-		},
-		Heartbeat: HeartbeatConfig{
-			Every:       "30m",
-			ActiveHours: ActiveHours{Start: "09:00", End: "18:00"},
 		},
 		Compress: CompressConfig{
 			Enabled:     false,

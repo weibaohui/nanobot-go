@@ -26,10 +26,6 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Gateway.Port != 18790 {
 		t.Errorf("默认端口 = %d, 期望 18790", cfg.Gateway.Port)
 	}
-
-	if cfg.Heartbeat.Every != "30m" {
-		t.Errorf("默认心跳间隔 = %q, 期望 30m", cfg.Heartbeat.Every)
-	}
 }
 
 // TestLoadConfig 测试加载配置文件
@@ -304,24 +300,6 @@ func TestProviderConfig(t *testing.T) {
 
 	if provider.ExtraHeaders["X-Custom"] != "value" {
 		t.Errorf("ExtraHeaders[X-Custom] = %q, 期望 value", provider.ExtraHeaders["X-Custom"])
-	}
-}
-
-// TestHeartbeatConfig 测试心跳配置
-func TestHeartbeatConfig(t *testing.T) {
-	cfg := DefaultConfig()
-
-	// 验证默认心跳配置
-	if cfg.Heartbeat.Every != "30m" {
-		t.Errorf("默认心跳间隔 = %q, 期望 30m", cfg.Heartbeat.Every)
-	}
-
-	if cfg.Heartbeat.ActiveHours.Start != "09:00" {
-		t.Errorf("默认活跃开始时间 = %q, 期望 09:00", cfg.Heartbeat.ActiveHours.Start)
-	}
-
-	if cfg.Heartbeat.ActiveHours.End != "18:00" {
-		t.Errorf("默认活跃结束时间 = %q, 期望 18:00", cfg.Heartbeat.ActiveHours.End)
 	}
 }
 
