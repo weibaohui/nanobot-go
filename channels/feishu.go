@@ -151,21 +151,6 @@ func (c *FeishuChannel) Start(ctx context.Context) error {
 		}
 	})
 
-	// 订阅心跳消息（用于接收定时通知）
-	c.bus.SubscribeOutbound("heartbeat", func(msg *bus.OutboundMessage) error {
-		// 只处理目标为飞书格式的消息（oc_ 群聊 / on_ union_id 用户）
-		// 注意：ou_ (open_id) 是应用级别的，不能跨应用使用，会导致 "open_id cross app" 错误
-		if strings.HasPrefix(msg.ChatID, "oc_") || strings.HasPrefix(msg.ChatID, "on_") {
-			if err := c.Send(msg); err != nil {
-				c.logger.Error("发送飞书心跳消息失败", zap.Error(err))
-			}
-		} else if strings.HasPrefix(msg.ChatID, "ou_") {
-			c.logger.Warn("跳过飞书心跳消息：open_id (ou_) 不能跨应用使用，请使用 chat_id (oc_) 或 union_id (on_)",
-				zap.String("chat_id", msg.ChatID))
-		}
-		return nil
-	})
-
 	c.logger.Info("飞书渠道已启动",
 		zap.String("app_id", c.config.AppID),
 	)
@@ -456,15 +441,12 @@ func (c *FeishuChannel) Send(msg *bus.OutboundMessage) error {
 	}
 
 	// 确定 receive_id_type
-	// 支持: union_id (on_), chat_id (oc_)
-	// 注意: open_id (ou_) 是应用级别的，不能跨应用使用，会导致 "open_id cross app" 错误
+	// 支持: open_id (ou_), union_id (on_), chat_id (oc_)
 	receiveIDType := "open_id"
 	if strings.HasPrefix(msg.ChatID, "oc_") {
 		receiveIDType = "chat_id"
 	} else if strings.HasPrefix(msg.ChatID, "on_") {
 		receiveIDType = "union_id"
-	} else if strings.HasPrefix(msg.ChatID, "ou_") {
-		return fmt.Errorf("open_id (ou_) 不能跨应用使用，请使用 chat_id (oc_) 或 union_id (on_)")
 	}
 
 	// 构建卡片消息（支持 Markdown 和表格）

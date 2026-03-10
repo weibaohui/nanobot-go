@@ -28,7 +28,6 @@ import (
 	"github.com/weibaohui/nanobot-go/conversation/database"
 	"github.com/weibaohui/nanobot-go/conversation/repository"
 	"github.com/weibaohui/nanobot-go/cron"
-	"github.com/weibaohui/nanobot-go/heartbeat"
 	memoryhandler "github.com/weibaohui/nanobot-go/memory/handler"
 	memoryjob "github.com/weibaohui/nanobot-go/memory/job"
 	memoryrepo "github.com/weibaohui/nanobot-go/memory/repository"
@@ -434,42 +433,8 @@ func runGateway(cmd *cobra.Command, args []string) {
 		logger.Fatal("启动渠道失败", zap.Error(err))
 	}
 
-	// 创建并启动心跳服务
-	heartbeatService := heartbeat.NewService(
-		logger,
-		cfg,
-		workspacePath,
-		func(ctx context.Context, cfg *config.Config, prompt string, model string, session string) (string, error) {
-			agent := loop.GetMasterAgent()
-			if agent == nil {
-				logger.Error("MasterAgent 未初始化，跳过心跳处理")
-				return "", fmt.Errorf("MasterAgent not initialized")
-			}
-			// 心跳使用固定 session key "heartbeat:"，所有心跳共享一个会话
-			resp, err := agent.Process(ctx, &bus.InboundMessage{
-				Channel: "heartbeat",
-				Content: prompt,
-			})
-			if err != nil {
-				logger.Error("处理心跳消息失败", zap.Error(err))
-				return "", err
-			}
-
-			// 获取心跳目标并发送消息
-			target := cfg.Heartbeat.Target
-			if target != "" && target != "none" {
-				messageBus.PublishOutbound(&bus.OutboundMessage{
-					Channel: "heartbeat",
-					ChatID:  target,
-					Content: resp,
-				})
-			}
-			return resp, nil
-		},
-	)
-	if err := heartbeatService.Start(ctx); err != nil {
-		logger.Error("启动心跳服务失败", zap.Error(err))
-	}
+	// 心跳服务已禁用：多租户场景下每个人应使用自己的定时任务
+	// heartbeatService := (*heartbeat.Service)(nil)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -502,7 +467,7 @@ func runGateway(cmd *cobra.Command, args []string) {
 	}
 
 	cronService.Stop()
-	heartbeatService.Stop()
+	// heartbeat 服务已禁用
 	channelManager.StopAll()
 	logger.Info("已关闭")
 }
