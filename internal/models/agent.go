@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -54,8 +55,11 @@ func (a *Agent) GetAvailableSkills() []string {
 	if a.SkillsList == "" || a.SkillsList == "null" {
 		return nil
 	}
-	// TODO: 解析 JSON 数组
-	return nil
+	var skills []string
+	if err := json.Unmarshal([]byte(a.SkillsList), &skills); err != nil {
+		return nil
+	}
+	return skills
 }
 
 // GetAvailableTools 获取可用工具列表
@@ -63,6 +67,9 @@ func (a *Agent) GetAvailableTools() []string {
 	if a.ToolsList == "" || a.ToolsList == "null" {
 		return nil
 	}
-	// TODO: 解析 JSON 数组
-	return nil
+	var tools []string
+	if err := json.Unmarshal([]byte(a.ToolsList), &tools); err != nil {
+		return nil
+	}
+	return tools
 }

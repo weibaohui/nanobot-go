@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -28,6 +29,7 @@ import (
 	"github.com/weibaohui/nanobot-go/conversation/database"
 	"github.com/weibaohui/nanobot-go/conversation/repository"
 	"github.com/weibaohui/nanobot-go/cron"
+	"github.com/weibaohui/nanobot-go/internal/api"
 	memoryhandler "github.com/weibaohui/nanobot-go/memory/handler"
 	memoryjob "github.com/weibaohui/nanobot-go/memory/job"
 	memoryrepo "github.com/weibaohui/nanobot-go/memory/repository"
@@ -62,6 +64,8 @@ var (
 	agentWorkspace string
 	gatewayPort    int
 	gatewayVerbose bool
+	apiPort        int
+	apiEnabled     bool
 )
 
 var rootCmd = &cobra.Command{
@@ -109,6 +113,8 @@ func init() {
 
 	gatewayCmd.Flags().IntVarP(&gatewayPort, "port", "p", 18790, "网关端口")
 	gatewayCmd.Flags().BoolVarP(&gatewayVerbose, "verbose", "v", false, "详细输出")
+	gatewayCmd.Flags().IntVar(&apiPort, "api-port", 8081, "API 服务端口（0 表示禁用）")
+	gatewayCmd.Flags().BoolVar(&apiEnabled, "api", true, "启用管理 API")
 
 	rootCmd.AddCommand(gatewayCmd)
 	rootCmd.AddCommand(onboardCmd)
@@ -162,6 +168,29 @@ func runGateway(cmd *cobra.Command, args []string) {
 	}
 
 	sessionManager := session.NewManager(cfg, logger, dataDir, convRepo)
+
+	// 初始化 Agent 管理系统
+	var providers *api.Providers
+	var apiServer *api.Server
+	if dbClient != nil {
+		providers = api.NewProviders(dbClient.DB())
+
+		// 初始化默认数据
+		if err := providers.InitDefaultData(); err != nil {
+			logger.Error("初始化默认数据失败", zap.Error(err))
+		} else {
+			logger.Info("Agent 管理系统已初始化")
+		}
+
+		// 启动 API 服务器（如果启用）
+		if apiEnabled {
+			apiAddr := ":" + strconv.Itoa(apiPort)
+			apiServer = api.NewServer(apiAddr, providers, logger)
+			if err := apiServer.Start(); err != nil {
+				logger.Error("启动 API 服务器失败", zap.Error(err))
+			}
+		}
+	}
 
 	// 初始化记忆模块（如果启用）
 	var memoryService memoryservice.MemoryService
@@ -469,6 +498,14 @@ func runGateway(cmd *cobra.Command, args []string) {
 	cronService.Stop()
 	// heartbeat 服务已禁用
 	channelManager.StopAll()
+
+	// 停止 API 服务器
+	if apiServer != nil {
+		if err := apiServer.Stop(); err != nil {
+			logger.Error("停止 API 服务器失败", zap.Error(err))
+		}
+	}
+
 	logger.Info("已关闭")
 }
 
