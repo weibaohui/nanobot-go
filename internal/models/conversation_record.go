@@ -20,6 +20,12 @@ type ConversationRecord struct {
 	ReasoningTokens  int       `gorm:"type:integer;default:0" json:"reasoning_tokens"`
 	CachedTokens     int       `gorm:"type:integer;default:0" json:"cached_tokens"`
 	CreatedAt        time.Time `gorm:"type:datetime;default:CURRENT_TIMESTAMP" json:"created_at"`
+
+	// 新增字段：归属信息（用于多租户、多 Agent 架构）
+	UserID      *uint      `gorm:"index" json:"user_id,omitempty"`      // 用户 ID
+	AgentID     *uint      `gorm:"index" json:"agent_id,omitempty"`     // Agent ID
+	ChannelID   *uint      `gorm:"index" json:"channel_id,omitempty"`   // Channel ID
+	ChannelType string     `gorm:"type:text;index" json:"channel_type,omitempty"` // 渠道类型
 }
 
 // TableName 指定表名

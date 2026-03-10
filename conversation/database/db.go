@@ -120,7 +120,17 @@ func (c *Client) InitSchema() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// 自动迁移表结构
+	// 自动迁移用户管理相关表
+	if err := c.db.AutoMigrate(
+		&models.User{},
+		&models.Agent{},
+		&models.Channel{},
+		&models.Session{},
+	); err != nil {
+		return fmt.Errorf("创建用户管理表失败: %w", err)
+	}
+
+	// 自动迁移对话记录表
 	if err := c.db.AutoMigrate(&models.ConversationRecord{}); err != nil {
 		return fmt.Errorf("创建 conversation_records 表失败: %w", err)
 	}
@@ -132,11 +142,17 @@ func (c *Client) InitSchema() error {
 
 	// 创建索引
 	indexes := []string{
+		// 对话记录表索引
 		"CREATE INDEX IF NOT EXISTS idx_conv_records_event_type ON conversation_records(event_type);",
 		"CREATE INDEX IF NOT EXISTS idx_conv_records_session_key ON conversation_records(session_key);",
 		"CREATE INDEX IF NOT EXISTS idx_conv_records_timestamp ON conversation_records(timestamp);",
 		"CREATE INDEX IF NOT EXISTS idx_conv_records_trace_id ON conversation_records(trace_id);",
 		"CREATE INDEX IF NOT EXISTS idx_conv_records_role ON conversation_records(role);",
+		// 新增：归属信息索引
+		"CREATE INDEX IF NOT EXISTS idx_conv_records_user_id ON conversation_records(user_id);",
+		"CREATE INDEX IF NOT EXISTS idx_conv_records_agent_id ON conversation_records(agent_id);",
+		"CREATE INDEX IF NOT EXISTS idx_conv_records_channel_id ON conversation_records(channel_id);",
+		"CREATE INDEX IF NOT EXISTS idx_conv_records_channel_type ON conversation_records(channel_type);",
 	}
 
 	for _, indexSQL := range indexes {
