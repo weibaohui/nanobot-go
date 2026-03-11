@@ -12,12 +12,19 @@ import {
   message,
   Popconfirm,
   Card,
+  Grid,
+  Typography,
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { agentsApi } from '../api';
 import type { Agent, CreateAgentRequest } from '../types';
+import type { TableColumnsType } from 'antd';
+
+const { useBreakpoint } = Grid;
+const { Title } = Typography;
 
 const Agents: React.FC = () => {
+  const screens = useBreakpoint();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -86,29 +93,32 @@ const Agents: React.FC = () => {
     }
   };
 
-  const columns = [
+  const columns: TableColumnsType<Agent> = [
     {
       title: 'ID',
       dataIndex: 'id',
-      width: 60,
+      width: screens.xs ? 50 : 60,
     },
     {
       title: '名称',
       dataIndex: 'name',
-    },
-    {
-      title: '描述',
-      dataIndex: 'description',
       ellipsis: true,
     },
+    ...(screens.xs ? [] : [
+      {
+        title: '描述',
+        dataIndex: 'description',
+        ellipsis: true,
+      },
+    ] as TableColumnsType<Agent>),
     {
-      title: '模型配置',
+      title: screens.xs ? '模型' : '模型配置',
       render: (_: any, record: Agent) => (
-        <Space>
+        <Space size="small">
           <Tag color={record.model_selection_mode === 'auto' ? 'blue' : 'green'}>
             {record.model_selection_mode === 'auto' ? '自动' : '指定'}
           </Tag>
-          {record.model_selection_mode === 'specific' && (
+          {record.model_selection_mode === 'specific' && !screens.xs && (
             <span>{record.model_name || record.model_id}</span>
           )}
         </Space>
@@ -117,22 +127,23 @@ const Agents: React.FC = () => {
     {
       title: '状态',
       render: (_: any, record: Agent) => (
-        <Space>
+        <Space size="small">
           {record.is_default && <Tag color="gold">默认</Tag>}
           <Tag color={record.is_active ? 'success' : 'default'}>
-            {record.is_active ? '启用' : '禁用'}
+            {screens.xs ? '' : record.is_active ? '启用' : '禁用'}
           </Tag>
         </Space>
       ),
     },
     {
       title: '操作',
-      width: 250,
+      width: screens.xs ? 100 : 250,
       render: (_: any, record: Agent) => (
-        <Space>
+        <Space size="small" direction={screens.xs ? 'vertical' : 'horizontal'}>
           <Button
             type="text"
             icon={<EditOutlined />}
+            size={screens.xs ? 'small' : 'middle'}
             onClick={() => {
               setEditingAgent(record);
               form.setFieldsValue({
@@ -143,11 +154,11 @@ const Agents: React.FC = () => {
               setModalVisible(true);
             }}
           >
-            编辑
+            {screens.xs ? '' : '编辑'}
           </Button>
-          {!record.is_default && (
+          {!record.is_default && !screens.xs && (
             <Button type="text" onClick={() => handleSetDefault(record)}>
-              设为默认
+              默认
             </Button>
           )}
           <Popconfirm
@@ -155,8 +166,13 @@ const Agents: React.FC = () => {
             description="删除后将无法恢复，是否继续？"
             onConfirm={() => handleDelete(record.id)}
           >
-            <Button type="text" danger icon={<DeleteOutlined />}>
-              删除
+            <Button
+              type="text"
+              danger
+              icon={<DeleteOutlined />}
+              size={screens.xs ? 'small' : 'middle'}
+            >
+              {screens.xs ? '' : '删除'}
             </Button>
           </Popconfirm>
         </Space>
@@ -164,29 +180,35 @@ const Agents: React.FC = () => {
     },
   ];
 
+  const modalWidth = screens.xs ? '100%' : screens.sm ? 600 : 800;
+
   return (
     <div>
       <Card
-        title="Agent 管理"
+        title={<Title level={screens.xs ? 4 : 3} style={{ margin: 0 }}>Agent 管理</Title>}
         extra={
           <Button
             type="primary"
             icon={<PlusOutlined />}
+            size={screens.xs ? 'small' : 'middle'}
             onClick={() => {
               setEditingAgent(null);
               form.resetFields();
               setModalVisible(true);
             }}
           >
-            新建 Agent
+            {screens.xs ? '新建' : '新建 Agent'}
           </Button>
         }
+        bodyStyle={{ padding: screens.xs ? 12 : 24 }}
       >
         <Table
           rowKey="id"
           columns={columns}
           dataSource={agents}
           loading={loading}
+          scroll={{ x: screens.xs ? 400 : undefined }}
+          size={screens.xs ? 'small' : 'middle'}
         />
       </Card>
 
@@ -199,7 +221,10 @@ const Agents: React.FC = () => {
           form.resetFields();
         }}
         onOk={() => form.submit()}
-        width={800}
+        width={modalWidth}
+        style={{ top: screens.xs ? 0 : 100 }}
+        bodyStyle={{ padding: screens.xs ? 12 : 24 }}
+        destroyOnClose
       >
         <Form
           form={form}

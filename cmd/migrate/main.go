@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/weibaohui/nanobot-go/conversation/database"
+	"github.com/weibaohui/nanobot-go/internal/database"
 	"github.com/weibaohui/nanobot-go/internal/models"
 	"github.com/weibaohui/nanobot-go/internal/repository"
 	"golang.org/x/crypto/bcrypt"

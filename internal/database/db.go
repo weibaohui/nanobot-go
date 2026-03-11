@@ -10,8 +10,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"github.com/weibaohui/nanobot-go/internal/models"
 	"github.com/weibaohui/nanobot-go/config"
+	"github.com/weibaohui/nanobot-go/internal/models"
 	memorymodels "github.com/weibaohui/nanobot-go/memory/models"
 )
 
@@ -126,6 +126,7 @@ func (c *Client) InitSchema() error {
 		&models.Agent{},
 		&models.Channel{},
 		&models.Session{},
+		&models.LLMProvider{},
 	); err != nil {
 		return fmt.Errorf("创建用户管理表失败: %w", err)
 	}

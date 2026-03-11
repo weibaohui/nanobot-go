@@ -12,7 +12,7 @@ import (
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observer"
 	"github.com/weibaohui/nanobot-go/agent/hooks/trace"
-	"github.com/weibaohui/nanobot-go/conversation/database"
+	"github.com/weibaohui/nanobot-go/internal/database"
 	"github.com/weibaohui/nanobot-go/conversation/repository"
 	"github.com/weibaohui/nanobot-go/conversation/service"
 	"go.uber.org/zap"

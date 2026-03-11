@@ -1,0 +1,15 @@
+{
+  "name": "nanobot-e2e-tests",
+  "version": "1.0.0",
+  "description": "Nanobot Web 管理界面 E2E 测试",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.42.0"
+  }
+}

@@ -364,8 +364,10 @@ CREATE TABLE llm_providers (
     supported_models TEXT,                          -- 支持的模型JSON数组 [{"id": "xxx", "name": "xxx"}]
 
     -- 默认配置
+    default_model   TEXT,                           -- 默认模型ID
     is_default      BOOLEAN DEFAULT 0,              -- 是否为默认提供商
     priority        INTEGER DEFAULT 0,              -- 优先级 (数值越大优先级越高，auto模式下使用)
+    auto_merge      BOOLEAN DEFAULT 1,              -- 是否自动合并从API获取的模型列表
 
     is_active       BOOLEAN DEFAULT 1,              -- 是否启用
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -398,8 +400,10 @@ type LLMProvider struct {
     SupportedModels string    `gorm:"type:text" json:"supported_models,omitempty"` // JSON数组
 
     // 默认配置
+    DefaultModel    string    `gorm:"type:text" json:"default_model,omitempty"`  // 默认模型ID
     IsDefault       bool      `gorm:"default:false" json:"is_default"`
     Priority        int       `gorm:"default:0" json:"priority"`
+    AutoMerge       bool      `gorm:"default:true" json:"auto_merge"`            // 是否自动合并从API获取的模型列表
 
     IsActive        bool      `gorm:"default:true" json:"is_active"`
     CreatedAt       time.Time `gorm:"type:datetime;default:CURRENT_TIMESTAMP" json:"created_at"`
