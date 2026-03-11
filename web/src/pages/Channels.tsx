@@ -33,8 +33,12 @@ const Channels: React.FC = () => {
         channelsApi.list(1),
         agentsApi.list(1),
       ]);
-      setChannels(channelsRes.data?.data || []);
-      setAgents(agentsRes.data?.data || []);
+      // channelsApi.list 和 agentsApi.list 返回 ListResponse { items, total }
+      // 但 client 响应拦截器返回 response.data，所以需要调整访问路径
+      // 列表 API 返回的是 ListResponse，需要访问 .items
+      // 单个 API 返回的是直接对象，需要访问 .data
+      setChannels((channelsRes as any)?.items || []);
+      setAgents((agentsRes as any)?.items || []);
     } catch (error) {
       message.error('获取数据失败');
     } finally {

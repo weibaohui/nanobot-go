@@ -40,8 +40,9 @@ const CronJobs: React.FC = () => {
         cronApi.list(),
         channelsApi.list(1),
       ]);
-      setJobs(jobsRes.data?.data || []);
-      setChannels(channelsRes.data?.data || []);
+      // 列表 API 返回 ListResponse { items, total }
+      setJobs((jobsRes as any)?.items || []);
+      setChannels((channelsRes as any)?.items || []);
     } catch (error) {
       message.error('获取数据失败');
     } finally {

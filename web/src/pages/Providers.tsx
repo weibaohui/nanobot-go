@@ -31,7 +31,8 @@ const Providers: React.FC = () => {
     setLoading(true);
     try {
       const res = await providersApi.list();
-      setProviders(res.data?.items || []);
+      // providersApi.list 返回 ListResponse { items, total }
+      setProviders((res as any)?.items || []);
     } catch (error) {
       message.error('获取 Provider 列表失败');
     } finally {

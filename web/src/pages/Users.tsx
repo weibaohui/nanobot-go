@@ -30,7 +30,8 @@ const Users: React.FC = () => {
     setLoading(true);
     try {
       const res = await usersApi.list();
-      setUsers(res.data?.items || []);
+      // usersApi.list 返回 ListResponse { items, total }
+      setUsers((res as any)?.items || []);
     } catch (error) {
       message.error('获取用户列表失败');
     } finally {
