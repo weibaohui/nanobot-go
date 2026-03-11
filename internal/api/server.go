@@ -25,6 +25,8 @@ func NewServer(addr string, providers *Providers, logger *zap.Logger) *Server {
 		providers.AgentService,
 		providers.ChannelService,
 		providers.SessionService,
+		providers.ProviderService,
+		providers.CronJobService,
 	)
 
 	// 创建 Gin 路由

@@ -8,15 +8,17 @@ import (
 
 // Providers 包含所有的服务和仓库
 type Providers struct {
-	DB             *gorm.DB
-	UserRepo       repository.UserRepository
-	AgentRepo      repository.AgentRepository
-	ChannelRepo    repository.ChannelRepository
-	SessionRepo    repository.SessionRepository
-	UserService    service.UserService
-	AgentService   service.AgentService
-	ChannelService service.ChannelService
-	SessionService service.SessionService
+	DB               *gorm.DB
+	UserRepo         repository.UserRepository
+	AgentRepo        repository.AgentRepository
+	ChannelRepo      repository.ChannelRepository
+	SessionRepo      repository.SessionRepository
+	UserService      service.UserService
+	AgentService     service.AgentService
+	ChannelService   service.ChannelService
+	SessionService   service.SessionService
+	ProviderService  ProviderService
+	CronJobService   CronJobService
 }
 
 // NewProviders 创建所有服务和仓库
@@ -32,17 +34,21 @@ func NewProviders(db *gorm.DB) *Providers {
 	agentService := service.NewAgentService(agentRepo)
 	channelService := service.NewChannelService(channelRepo, agentRepo)
 	sessionService := service.NewSessionService(sessionRepo)
+	providerService := service.NewProviderService(db)
+	cronJobService := service.NewCronJobService(db)
 
 	return &Providers{
-		DB:             db,
-		UserRepo:       userRepo,
-		AgentRepo:      agentRepo,
-		ChannelRepo:    channelRepo,
-		SessionRepo:    sessionRepo,
-		UserService:    userService,
-		AgentService:   agentService,
-		ChannelService: channelService,
-		SessionService: sessionService,
+		DB:               db,
+		UserRepo:         userRepo,
+		AgentRepo:        agentRepo,
+		ChannelRepo:      channelRepo,
+		SessionRepo:      sessionRepo,
+		UserService:      userService,
+		AgentService:     agentService,
+		ChannelService:   channelService,
+		SessionService:   sessionService,
+		ProviderService:  providerService,
+		CronJobService:   cronJobService,
 	}
 }
 

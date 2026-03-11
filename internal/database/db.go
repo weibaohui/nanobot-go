@@ -127,6 +127,7 @@ func (c *Client) InitSchema() error {
 		&models.Channel{},
 		&models.Session{},
 		&models.LLMProvider{},
+		&models.CronJob{},
 	); err != nil {
 		return fmt.Errorf("创建用户管理表失败: %w", err)
 	}
