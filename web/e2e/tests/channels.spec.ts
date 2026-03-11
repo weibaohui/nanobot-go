@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
  * Channels 管理页面 CRUD 测试
  */
 
-test.describe('Channels 管理', () => {
+test.test('Channels 管理', () => {
   const TEST_CHANNEL_NAME = `E2E-Test-Channel-${Date.now()}`;
   const EDITED_NAME = `E2E-Edited-Channel-${Date.now()}`;
 

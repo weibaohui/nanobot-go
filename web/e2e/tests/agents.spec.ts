@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
  * Agents 管理页面 CRUD 测试
  */
 
-test.describe('Agents 管理', () => {
+test.test('Agents 管理', () => {
   const TEST_AGENT_NAME = `E2E-Test-Agent-${Date.now()}`;
   const EDITED_NAME = `E2E-Edited-Agent-${Date.now()}`;
 

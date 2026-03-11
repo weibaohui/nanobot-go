@@ -2,10 +2,9 @@ import { test, expect } from '@playwright/test';
 
 /**
  * Providers 管理页面测试
- * 注意：后端暂未实现 Providers API，仅测试页面加载
  */
 
-test.describe('Providers 管理', () => {
+test.test('Providers 管理', async ({ page }) => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/providers');
     await page.waitForSelector('.ant-card', { timeout: 10000 });

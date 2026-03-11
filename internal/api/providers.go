@@ -8,17 +8,20 @@ import (
 
 // Providers 包含所有的服务和仓库
 type Providers struct {
-	DB               *gorm.DB
-	UserRepo         repository.UserRepository
-	AgentRepo        repository.AgentRepository
-	ChannelRepo      repository.ChannelRepository
-	SessionRepo      repository.SessionRepository
-	UserService      service.UserService
-	AgentService     service.AgentService
-	ChannelService   service.ChannelService
-	SessionService   service.SessionService
-	ProviderService  ProviderService
-	CronJobService   CronJobService
+	DB                       *gorm.DB
+	UserRepo                 repository.UserRepository
+	AgentRepo                repository.AgentRepository
+	ChannelRepo              repository.ChannelRepository
+	SessionRepo              repository.SessionRepository
+	UserService              service.UserService
+	AgentService             service.AgentService
+	ChannelService           service.ChannelService
+	SessionService           service.SessionService
+	ProviderService          ProviderService
+	CronJobService          CronJobService
+	ConversationRecordService ConversationRecordService
+	StreamMemoryService      StreamMemoryService
+	LongTermMemoryService    LongTermMemoryService
 }
 
 // NewProviders 创建所有服务和仓库
@@ -36,19 +39,25 @@ func NewProviders(db *gorm.DB) *Providers {
 	sessionService := service.NewSessionService(sessionRepo)
 	providerService := service.NewProviderService(db)
 	cronJobService := service.NewCronJobService(db)
+	conversationRecordService := service.NewConversationRecordService(db)
+	streamMemoryService := service.NewStreamMemoryService(db)
+	longTermMemoryService := service.NewLongTermMemoryService(db)
 
 	return &Providers{
-		DB:               db,
-		UserRepo:         userRepo,
-		AgentRepo:        agentRepo,
-		ChannelRepo:      channelRepo,
-		SessionRepo:      sessionRepo,
-		UserService:      userService,
-		AgentService:     agentService,
-		ChannelService:   channelService,
-		SessionService:   sessionService,
-		ProviderService:  providerService,
-		CronJobService:   cronJobService,
+		DB:                       db,
+		UserRepo:                 userRepo,
+		AgentRepo:                agentRepo,
+		ChannelRepo:              channelRepo,
+		SessionRepo:              sessionRepo,
+		UserService:              userService,
+		AgentService:             agentService,
+		ChannelService:           channelService,
+		SessionService:           sessionService,
+		ProviderService:          providerService,
+		CronJobService:          cronJobService,
+		ConversationRecordService: conversationRecordService,
+		StreamMemoryService:      streamMemoryService,
+		LongTermMemoryService:    longTermMemoryService,
 	}
 }
 

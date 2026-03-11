@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
  * Users 用户管理页面 CRUD 测试
  */
 
-test.describe('Users 管理', () => {
+test.test('Users 管理', () => {
   const TEST_USERNAME = `e2etest${Date.now()}`;
   const EDITED_DISPLAY_NAME = `E2E-Edited-User-${Date.now()}`;
 

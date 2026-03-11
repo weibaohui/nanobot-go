@@ -2,10 +2,9 @@ import { test, expect } from '@playwright/test';
 
 /**
  * CronJobs 定时任务管理页面测试
- * 注意：后端暂未实现 CronJobs API，仅测试页面加载
  */
 
-test.describe('CronJobs 管理', () => {
+test.test('CronJobs 管理', async ({ page }) => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/cron');
     await page.waitForSelector('.ant-card', { timeout: 10000 });

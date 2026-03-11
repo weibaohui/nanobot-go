@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('调试测试', () => {
+test.test('调试测试', () => {
   test('捕获网络日志和错误', async ({ page }) => {
     // 捕获控制台日志
     page.on('console', msg => {
