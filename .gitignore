@@ -13,3 +13,4 @@ web/.playwright-cli/
 web/.playwright-cli/data
 /.playwright-cli/
 internal/database/data/events.db
+test-results
