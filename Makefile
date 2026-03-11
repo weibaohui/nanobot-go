@@ -1,58 +1,55 @@
-.PHONY: help dev build clean
+.PHONY: help build clean dev dev-backend dev-web test migrate
 
-# 项目名称
-PROJECT_NAME := nanobot
-
-# 交叉编译的目标平台列表
-PLATFORMS := \
-	darwin/amd64 \
-	darwin/arm64 \
-	linux/amd64 \
-	linux/arm64 \
-	windows/amd64
-
-# 编译输出目录
-OUT_DIR := bin
-
-# 构建信息
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-BUILD_TIME := $(shell date -u '+%Y-%m-%d_%H:%M:%S')
-
-# Go 编译参数
-GO_BUILD_FLAGS := -trimpath -ldflags="-s -w -X main.version=$(VERSION) -X main.buildDate=$(BUILD_TIME)"
-
+# 默认目标
 help:
-	@echo "可用的 Make 目标:"
-	@echo "  make dev    - 使用 air 进行开发（热重载）"
-	@echo "  make build  - 交叉编译到所有目标平台"
-	@echo "  make clean  - 清理编译输出"
-	@echo "  make help   - 显示此帮助信息"
+	@echo "可用的命令:"
+	@echo "  make build      - 构建后端和前端"
+	@echo "  make dev        - 同时启动后端和前端开发服务器"
+	@echo "  make dev-backend- 仅启动后端开发服务器"
+	@echo "  make dev-web    - 仅启动前端开发服务器"
+	@echo "  make clean      - 清理构建产物"
+	@echo "  make test       - 运行测试"
+	@echo "  make migrate    - 运行配置迁移工具"
 
-dev: clean
-	@echo "启动开发服务器（air）..."
-	@command -v air >/dev/null 2>&1 || (echo "错误: air 未安装，请运行: go install github.com/cosmtrek/air@latest" && exit 1)
-	air
+# 构建
+build:
+	@echo "构建后端..."
+	go build -o bin/nanobot main.go
+	@echo "构建前端..."
+	cd web && npm run build
 
-build: clean
-	@echo "开始交叉编译..."
-	@mkdir -p $(OUT_DIR)
-	@for platform in $(PLATFORMS); do \
-		GOOS=$${platform%/*} \
-		GOARCH=$${platform#*/} \
-		CGO_ENABLED=0 \
-		OUT_FILE=$(OUT_DIR)/$(PROJECT_NAME)-$${platform%/*}-$${platform#*/} ; \
-		if [ "$${platform%/*}" = "windows" ]; then \
-			OUT_FILE=$${OUT_FILE}.exe ; \
-		fi ; \
-		echo "编译: $${platform} -> $${OUT_FILE}" ; \
-		GOOS=$${platform%/*} \
-		GOARCH=$${platform#*/} \
-		CGO_ENABLED=0 \
-		go build $(GO_BUILD_FLAGS) -o $${OUT_FILE} . || exit 1 ; \
-	done
-	@echo "编译完成！输出目录: $(OUT_DIR)"
-
+# 清理
 clean:
-	@echo "清理编译输出..."
-	@rm -rf $(OUT_DIR)
-	@echo "清理完成"
+	rm -rf bin/ dist/
+	cd web && rm -rf dist/
+
+# 开发模式 - 同时启动后端和前端
+dev:
+	@echo "========================================="
+	@echo "  启动 Nanobot 开发环境"
+	@echo "========================================="
+	@echo "  后端 API: http://localhost:8081"
+	@echo "  前端界面: http://localhost:5173"
+	@echo "  按 Ctrl+C 停止所有服务"
+	@echo "========================================="
+	@(trap 'kill 0' INT; \
+		go run main.go gateway --api --api-port=8081 2>&1 | sed 's/^/[后端] /' & \
+		cd web && npm run dev 2>&1 | sed 's/^/[前端] /' & \
+		wait)
+
+# 启动后端开发服务器
+dev-backend:
+	go run main.go gateway --api --api-port=8081
+
+# 启动前端开发服务器
+dev-web:
+	cd web && npm run dev
+
+# 运行测试
+test:
+	go test ./...
+	cd web && npm test
+
+# 配置迁移
+migrate:
+	go run cmd/migrate/main.go ~/.nanobot/config.json

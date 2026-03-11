@@ -9,3 +9,4 @@ nanobot-fixed
 agent/database/data/events.db
 conversation/database/data/events.db
 coverage.out
+web/.playwright-cli/
