@@ -1,101 +1,96 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/gin-gonic/gin"
 	"github.com/weibaohui/nanobot-go/internal/service"
 )
 
 // handleSessions 处理 /api/v1/sessions
-func (h *Handler) handleSessions(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
+func (h *Handler) handleSessions(c *gin.Context) {
+	switch c.Request.Method {
 	case http.MethodGet:
-		h.listSessions(w, r)
+		h.listSessions(c)
 	case http.MethodPost:
-		h.createSession(w, r)
+		h.createSession(c)
 	default:
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "method not allowed"})
 	}
 }
 
 // handleSessionByKey 处理 /api/v1/sessions/{session_key}
-func (h *Handler) handleSessionByKey(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/api/v1/sessions/")
-	parts := strings.Split(path, "/")
-	sessionKey := parts[0]
-
+func (h *Handler) handleSessionByKey(c *gin.Context) {
+	sessionKey := c.Param("id")
 	if sessionKey == "" {
-		writeError(w, http.StatusBadRequest, "session key is required")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "session key is required"})
 		return
 	}
 
-	// 处理子路径
-	if len(parts) > 1 {
-		subPath := parts[1]
-		switch subPath {
-		case "touch":
-			h.handleSessionTouch(w, r, sessionKey)
-			return
-		case "metadata":
-			h.handleSessionMetadata(w, r, sessionKey)
-			return
-		}
+	// Check URL path for sub-routes
+	path := c.Request.URL.Path
+	if strings.Contains(path, "/touch") {
+		h.handleSessionTouch(c, sessionKey)
+		return
+	}
+	if strings.Contains(path, "/metadata") {
+		h.handleSessionMetadata(c, sessionKey)
+		return
 	}
 
-	switch r.Method {
+	switch c.Request.Method {
 	case http.MethodGet:
-		h.getSession(w, r, sessionKey)
+		h.getSession(c, sessionKey)
 	case http.MethodDelete:
-		h.deleteSession(w, r, sessionKey)
+		h.deleteSession(c, sessionKey)
 	default:
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "method not allowed"})
 	}
 }
 
 // listSessions 获取 Session 列表
-func (h *Handler) listSessions(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) listSessions(c *gin.Context) {
 	// 支持按 user_id 或 channel_id 查询
-	userIDStr := r.URL.Query().Get("user_id")
-	channelIDStr := r.URL.Query().Get("channel_id")
+	userIDStr := c.Query("user_id")
+	channelIDStr := c.Query("channel_id")
 
 	if userIDStr != "" {
 		userID, err := strconv.ParseUint(userIDStr, 10, 32)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid user_id")
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user_id"})
 			return
 		}
 		sessions, err := h.sessionService.GetUserSessions(uint(userID))
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		writeJSON(w, http.StatusOK, ListResponse{Data: sessions})
+		c.JSON(http.StatusOK, ListResponse{Items: sessions})
 		return
 	}
 
 	if channelIDStr != "" {
 		channelID, err := strconv.ParseUint(channelIDStr, 10, 32)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid channel_id")
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid channel_id"})
 			return
 		}
 		sessions, err := h.sessionService.GetChannelSessions(uint(channelID))
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		writeJSON(w, http.StatusOK, ListResponse{Data: sessions})
+		c.JSON(http.StatusOK, ListResponse{Items: sessions})
 		return
 	}
 
-	writeError(w, http.StatusBadRequest, "user_id or channel_id is required")
+	c.JSON(http.StatusBadRequest, gin.H{"error": "user_id or channel_id is required"})
 }
 
 // createSession 创建 Session
-func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) createSession(c *gin.Context) {
 	var req struct {
 		UserID     uint                   `json:"user_id"`
 		ChannelID  uint                   `json:"channel_id"`
@@ -104,13 +99,13 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 		ExternalID string                 `json:"external_id,omitempty"`
 		Metadata   map[string]interface{} `json:"metadata,omitempty"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
 	}
 
 	if req.UserID == 0 || req.ChannelID == 0 || req.SessionKey == "" {
-		writeError(w, http.StatusBadRequest, "user_id, channel_id and session_key are required")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id, channel_id and session_key are required"})
 		return
 	}
 
@@ -124,75 +119,75 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 
 	session, err := h.sessionService.CreateSession(req.UserID, sessionReq)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, session)
+	c.JSON(http.StatusCreated, session)
 }
 
 // getSession 获取 Session
-func (h *Handler) getSession(w http.ResponseWriter, r *http.Request, sessionKey string) {
+func (h *Handler) getSession(c *gin.Context, sessionKey string) {
 	session, err := h.sessionService.GetSessionByKey(sessionKey)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	if session == nil {
-		writeError(w, http.StatusNotFound, "session not found")
+		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, session)
+	c.JSON(http.StatusOK, session)
 }
 
 // deleteSession 删除 Session
-func (h *Handler) deleteSession(w http.ResponseWriter, r *http.Request, sessionKey string) {
+func (h *Handler) deleteSession(c *gin.Context, sessionKey string) {
 	if err := h.sessionService.DeleteSession(sessionKey); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, SuccessResponse{Message: "session deleted"})
+	c.JSON(http.StatusOK, SuccessResponse{Message: "session deleted"})
 }
 
 // handleSessionTouch 更新 Session 活跃时间
-func (h *Handler) handleSessionTouch(w http.ResponseWriter, r *http.Request, sessionKey string) {
-	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+func (h *Handler) handleSessionTouch(c *gin.Context, sessionKey string) {
+	if c.Request.Method != http.MethodPost {
+		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "method not allowed"})
 		return
 	}
 
 	if err := h.sessionService.TouchSession(sessionKey); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, SuccessResponse{Message: "session touched"})
+	c.JSON(http.StatusOK, SuccessResponse{Message: "session touched"})
 }
 
 // handleSessionMetadata 处理 Session 元数据
-func (h *Handler) handleSessionMetadata(w http.ResponseWriter, r *http.Request, sessionKey string) {
-	switch r.Method {
+func (h *Handler) handleSessionMetadata(c *gin.Context, sessionKey string) {
+	switch c.Request.Method {
 	case http.MethodGet:
 		metadata, err := h.sessionService.GetSessionMetadata(sessionKey)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		writeJSON(w, http.StatusOK, metadata)
+		c.JSON(http.StatusOK, metadata)
 	case http.MethodPut:
 		var metadata map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&metadata); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+		if err := c.ShouldBindJSON(&metadata); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 			return
 		}
 		if err := h.sessionService.UpdateSessionMetadata(sessionKey, metadata); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		writeJSON(w, http.StatusOK, SuccessResponse{Message: "metadata updated"})
+		c.JSON(http.StatusOK, SuccessResponse{Message: "metadata updated"})
 	default:
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "method not allowed"})
 	}
 }

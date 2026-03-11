@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
@@ -13,6 +15,7 @@ type Server struct {
 	handler *Handler
 	server  *http.Server
 	logger  *zap.Logger
+	router  *gin.Engine
 }
 
 // NewServer 创建 API 服务器
@@ -24,19 +27,30 @@ func NewServer(addr string, providers *Providers, logger *zap.Logger) *Server {
 		providers.SessionService,
 	)
 
-	mux := http.NewServeMux()
-	handler.RegisterRoutes(mux)
+	// 创建 Gin 路由
+	router := gin.Default()
+
+	// 添加 CORS 中间件
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"*"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Content-Length", "Accept-Encoding", "Authorization", "X-Requested-With"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * 3600,
+	}))
+
+	// 注册 API 路由
+	handler.RegisterRoutes(router)
 
 	// 添加健康检查端点
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok"}`))
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
 	server := &http.Server{
 		Addr:         addr,
-		Handler:      mux,
+		Handler:      router,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -46,6 +60,7 @@ func NewServer(addr string, providers *Providers, logger *zap.Logger) *Server {
 		handler: handler,
 		server:  server,
 		logger:  logger,
+		router:  router,
 	}
 }
 

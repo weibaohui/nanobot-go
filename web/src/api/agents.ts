@@ -14,7 +14,9 @@ export const agentsApi = {
 
   // 创建 Agent
   create: (userId: number, data: CreateAgentRequest) =>
-    client.post<any, ApiResponse<Agent>>('/agents', { ...data, user_id: userId }),
+    client.post<any, ApiResponse<Agent>>('/agents', data, {
+      params: { user_id: userId },
+    }),
 
   // 更新 Agent
   update: (id: number, data: UpdateAgentRequest) =>

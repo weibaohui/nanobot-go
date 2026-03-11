@@ -1,271 +1,137 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
-	"strings"
 
+	"github.com/gin-gonic/gin"
 	"github.com/weibaohui/nanobot-go/internal/service"
 )
 
 // handleAgents 处理 /api/v1/agents
-func (h *Handler) handleAgents(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
+func (h *Handler) handleAgents(c *gin.Context) {
+	switch c.Request.Method {
 	case http.MethodGet:
-		h.listAgents(w, r)
+		h.listAgents(c)
 	case http.MethodPost:
-		h.createAgent(w, r)
+		h.createAgent(c)
 	default:
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "method not allowed"})
 	}
 }
 
-// handleAgentByID 处理 /api/v1/agents/{id} 及其子路径
-func (h *Handler) handleAgentByID(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/api/v1/agents/")
-	parts := strings.Split(path, "/")
-	idStr := parts[0]
-
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid agent id")
+// handleAgentByID 处理 /api/v1/agents/{id}
+func (h *Handler) handleAgentByID(c *gin.Context) {
+	id, ok := parseID(c, "id")
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid agent id"})
 		return
 	}
 
-	// 处理子路径
-	if len(parts) > 1 {
-		subPath := parts[1]
-		switch subPath {
-		case "config":
-			h.handleAgentConfig(w, r, uint(id))
-			return
-		case "memory":
-			h.handleAgentMemory(w, r, uint(id))
-			return
-		case "skills":
-			h.handleAgentSkills(w, r, uint(id))
-			return
-		case "tools":
-			h.handleAgentTools(w, r, uint(id))
-			return
-		}
-	}
-
-	switch r.Method {
+	switch c.Request.Method {
 	case http.MethodGet:
-		h.getAgent(w, r, uint(id))
+		h.getAgent(c, uint(id))
 	case http.MethodPut:
-		h.updateAgent(w, r, uint(id))
+		h.updateAgent(c, uint(id))
 	case http.MethodDelete:
-		h.deleteAgent(w, r, uint(id))
+		h.deleteAgent(c, uint(id))
 	default:
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "method not allowed"})
 	}
 }
 
 // listAgents 获取 Agent 列表
-func (h *Handler) listAgents(w http.ResponseWriter, r *http.Request) {
-	userIDStr := r.URL.Query().Get("user_id")
+func (h *Handler) listAgents(c *gin.Context) {
+	userIDStr := c.Query("user_id")
 	if userIDStr == "" {
-		writeError(w, http.StatusBadRequest, "user_id is required")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id is required"})
 		return
 	}
 
 	userID, err := strconv.ParseUint(userIDStr, 10, 32)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid user_id")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user_id"})
 		return
 	}
 
 	agents, err := h.agentService.GetUserAgents(uint(userID))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, ListResponse{
-		Data: agents,
+	c.JSON(http.StatusOK, ListResponse{
+		Items: agents,
 	})
 }
 
 // createAgent 创建 Agent
-func (h *Handler) createAgent(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) createAgent(c *gin.Context) {
 	var req service.CreateAgentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
 	}
 
-	userIDStr := r.URL.Query().Get("user_id")
+	userIDStr := c.Query("user_id")
 	if userIDStr == "" {
-		writeError(w, http.StatusBadRequest, "user_id is required")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id is required"})
 		return
 	}
 
 	userID, err := strconv.ParseUint(userIDStr, 10, 32)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid user_id")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user_id"})
 		return
 	}
 
 	agent, err := h.agentService.CreateAgent(uint(userID), req)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, agent)
+	c.JSON(http.StatusCreated, agent)
 }
 
 // getAgent 获取 Agent
-func (h *Handler) getAgent(w http.ResponseWriter, r *http.Request, id uint) {
+func (h *Handler) getAgent(c *gin.Context, id uint) {
 	agent, err := h.agentService.GetAgent(id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	if agent == nil {
-		writeError(w, http.StatusNotFound, "agent not found")
+		c.JSON(http.StatusNotFound, gin.H{"error": "agent not found"})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, agent)
+	c.JSON(http.StatusOK, agent)
 }
 
 // updateAgent 更新 Agent
-func (h *Handler) updateAgent(w http.ResponseWriter, r *http.Request, id uint) {
+func (h *Handler) updateAgent(c *gin.Context, id uint) {
 	var req service.UpdateAgentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
 	}
 
 	agent, err := h.agentService.UpdateAgent(id, req)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, agent)
+	c.JSON(http.StatusOK, agent)
 }
 
 // deleteAgent 删除 Agent
-func (h *Handler) deleteAgent(w http.ResponseWriter, r *http.Request, id uint) {
+func (h *Handler) deleteAgent(c *gin.Context, id uint) {
 	if err := h.agentService.DeleteAgent(id); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, SuccessResponse{Message: "agent deleted"})
-}
-
-// handleAgentConfig 处理 Agent 配置
-func (h *Handler) handleAgentConfig(w http.ResponseWriter, r *http.Request, agentID uint) {
-	switch r.Method {
-	case http.MethodGet:
-		config, err := h.agentService.GetAgentConfig(agentID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		writeJSON(w, http.StatusOK, config)
-	case http.MethodPut:
-		var config service.AgentConfig
-		if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
-			return
-		}
-		if err := h.agentService.UpdateAgentConfig(agentID, &config); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		writeJSON(w, http.StatusOK, SuccessResponse{Message: "config updated"})
-	default:
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-	}
-}
-
-// handleAgentMemory 处理 Agent 记忆
-func (h *Handler) handleAgentMemory(w http.ResponseWriter, r *http.Request, agentID uint) {
-	switch r.Method {
-	case http.MethodGet:
-		memory, err := h.agentService.GetMemory(agentID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]string{"content": memory})
-	case http.MethodPut:
-		var req struct {
-			Content string `json:"content"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
-			return
-		}
-		if err := h.agentService.UpdateMemory(agentID, req.Content); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		writeJSON(w, http.StatusOK, SuccessResponse{Message: "memory updated"})
-	default:
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-	}
-}
-
-// handleAgentSkills 处理 Agent 技能
-func (h *Handler) handleAgentSkills(w http.ResponseWriter, r *http.Request, agentID uint) {
-	switch r.Method {
-	case http.MethodGet:
-		skills, err := h.agentService.GetAvailableSkills(agentID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]interface{}{"skills": skills})
-	case http.MethodPut:
-		var req struct {
-			Skills []string `json:"skills"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
-			return
-		}
-		if err := h.agentService.SetAvailableSkills(agentID, req.Skills); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		writeJSON(w, http.StatusOK, SuccessResponse{Message: "skills updated"})
-	default:
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-	}
-}
-
-// handleAgentTools 处理 Agent 工具
-func (h *Handler) handleAgentTools(w http.ResponseWriter, r *http.Request, agentID uint) {
-	switch r.Method {
-	case http.MethodGet:
-		tools, err := h.agentService.GetAvailableTools(agentID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]interface{}{"tools": tools})
-	case http.MethodPut:
-		var req struct {
-			Tools []string `json:"tools"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
-			return
-		}
-		if err := h.agentService.SetAvailableTools(agentID, req.Tools); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		writeJSON(w, http.StatusOK, SuccessResponse{Message: "tools updated"})
-	default:
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-	}
+	c.JSON(http.StatusOK, SuccessResponse{Message: "agent deleted"})
 }

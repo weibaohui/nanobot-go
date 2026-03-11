@@ -30,11 +30,11 @@ const Channels: React.FC = () => {
     setLoading(true);
     try {
       const [channelsRes, agentsRes] = await Promise.all([
-        channelsApi.list(),
-        agentsApi.list(),
+        channelsApi.list(1),
+        agentsApi.list(1),
       ]);
-      setChannels(channelsRes.data?.items || []);
-      setAgents(agentsRes.data?.items || []);
+      setChannels(channelsRes.data?.data || []);
+      setAgents(agentsRes.data?.data || []);
     } catch (error) {
       message.error('获取数据失败');
     } finally {

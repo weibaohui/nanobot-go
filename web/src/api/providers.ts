@@ -14,7 +14,9 @@ export const providersApi = {
 
   // 创建 Provider
   create: (userId: number, data: CreateProviderRequest) =>
-    client.post<any, ApiResponse<LLMProvider>>('/providers', { ...data, user_id: userId }),
+    client.post<any, ApiResponse<LLMProvider>>('/providers', data, {
+      params: { user_id: userId },
+    }),
 
   // 更新 Provider
   update: (id: number, data: UpdateProviderRequest) =>

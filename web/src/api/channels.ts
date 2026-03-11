@@ -14,7 +14,9 @@ export const channelsApi = {
 
   // 创建 Channel
   create: (userId: number, data: CreateChannelRequest) =>
-    client.post<any, ApiResponse<Channel>>('/channels', { ...data, user_id: userId }),
+    client.post<any, ApiResponse<Channel>>('/channels', data, {
+      params: { user_id: userId },
+    }),
 
   // 更新 Channel
   update: (id: number, data: UpdateChannelRequest) =>

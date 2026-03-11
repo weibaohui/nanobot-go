@@ -34,7 +34,7 @@ const Agents: React.FC = () => {
   const fetchAgents = async () => {
     setLoading(true);
     try {
-      const res = await agentsApi.list();
+      const res = await agentsApi.list(1);
       setAgents(res.data?.items || []);
     } catch (error) {
       message.error('获取 Agent 列表失败');

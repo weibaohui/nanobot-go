@@ -14,7 +14,9 @@ export const cronApi = {
 
   // 创建 Cron Job
   create: (userId: number, channelId: number, data: CreateCronJobRequest) =>
-    client.post<any, ApiResponse<CronJob>>('/cron-jobs', { ...data, user_id: userId, channel_id: channelId }),
+    client.post<any, ApiResponse<CronJob>>('/cron-jobs', data, {
+      params: { user_id: userId, channel_id: channelId },
+    }),
 
   // 更新 Cron Job
   update: (id: number, data: UpdateCronJobRequest) =>

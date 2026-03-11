@@ -38,10 +38,10 @@ const CronJobs: React.FC = () => {
     try {
       const [jobsRes, channelsRes] = await Promise.all([
         cronApi.list(),
-        channelsApi.list(),
+        channelsApi.list(1),
       ]);
-      setJobs(jobsRes.data?.items || []);
-      setChannels(channelsRes.data?.items || []);
+      setJobs(jobsRes.data?.data || []);
+      setChannels(channelsRes.data?.data || []);
     } catch (error) {
       message.error('获取数据失败');
     } finally {
