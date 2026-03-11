@@ -129,11 +129,12 @@ func (c *Client) DeleteUser(id uint) error {
 // ========== Agent API ==========
 
 // ListAgents 获取 Agent 列表
-func (c *Client) ListAgents() ([]models.Agent, error) {
+func (c *Client) ListAgents(userID uint) ([]models.Agent, error) {
 	var resp struct {
 		Data []models.Agent `json:"data"`
 	}
-	err := c.doJSON("GET", "/api/v1/agents", nil, &resp)
+	path := fmt.Sprintf("/api/v1/agents?user_id=%d", userID)
+	err := c.doJSON("GET", path, nil, &resp)
 	return resp.Data, err
 }
 
@@ -179,11 +180,12 @@ func (c *Client) UpdateAgentConfig(id uint, config map[string]interface{}) error
 // ========== Channel API ==========
 
 // ListChannels 获取 Channel 列表
-func (c *Client) ListChannels() ([]models.Channel, error) {
+func (c *Client) ListChannels(userID uint) ([]models.Channel, error) {
 	var resp struct {
 		Data []models.Channel `json:"data"`
 	}
-	err := c.doJSON("GET", "/api/v1/channels", nil, &resp)
+	path := fmt.Sprintf("/api/v1/channels?user_id=%d", userID)
+	err := c.doJSON("GET", path, nil, &resp)
 	return resp.Data, err
 }
 

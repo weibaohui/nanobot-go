@@ -88,22 +88,29 @@ type ConnectionMsg struct {
 	Error   error
 }
 
-func (a *App) setPage(page PageType) {
+func (a *App) setPage(page PageType) tea.Cmd {
 	a.currentPage = page
 	a.sidebar.SetSelected(int(page))
 
+	var initCmd tea.Cmd
 	switch page {
 	case PageDashboard:
 		a.content = NewDashboardPage(a.client)
+		initCmd = a.content.Init()
 	case PageUsers:
 		a.content = NewUserListPage(a.client)
+		initCmd = a.content.Init()
 	case PageAgents:
 		a.content = NewAgentListPage(a.client)
+		initCmd = a.content.Init()
 	case PageChannels:
 		a.content = NewChannelListPage(a.client)
+		initCmd = a.content.Init()
 	case PageSessions:
 		a.content = NewSessionListPage(a.client)
+		initCmd = a.content.Init()
 	}
+	return initCmd
 }
 
 // Update 处理消息
@@ -144,20 +151,15 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return a, nil
 		case "1":
-			a.setPage(PageDashboard)
-			return a, nil
+			return a, a.setPage(PageDashboard)
 		case "2":
-			a.setPage(PageUsers)
-			return a, nil
+			return a, a.setPage(PageUsers)
 		case "3":
-			a.setPage(PageAgents)
-			return a, nil
+			return a, a.setPage(PageAgents)
 		case "4":
-			a.setPage(PageChannels)
-			return a, nil
+			return a, a.setPage(PageChannels)
 		case "5":
-			a.setPage(PageSessions)
-			return a, nil
+			return a, a.setPage(PageSessions)
 		case "r":
 			if a.content != nil {
 				newContent, cmd := a.content.Update(RefreshMsg{})
@@ -183,8 +185,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case PageChangeMsg:
-		a.setPage(msg.Page)
-		return a, nil
+		return a, a.setPage(msg.Page)
 	}
 
 	switch a.focus {
@@ -193,7 +194,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.sidebar = newSidebar.(*Sidebar)
 		cmds = append(cmds, cmd)
 		if page, ok := a.sidebar.GetSelectedPage(); ok {
-			a.setPage(page)
+			pageCmd := a.setPage(page)
+			cmds = append(cmds, pageCmd)
 		}
 	case FocusContent:
 		if a.content != nil {

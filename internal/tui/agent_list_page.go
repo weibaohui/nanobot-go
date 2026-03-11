@@ -50,7 +50,7 @@ func (p *AgentListPage) Init() tea.Cmd {
 
 func (p *AgentListPage) loadAgents() tea.Cmd {
 	return func() tea.Msg {
-		agents, err := p.client.ListAgents()
+		agents, err := p.client.ListAgents(1) // Default admin user
 		return AgentListLoadedMsg{Agents: agents, Error: err}
 	}
 }

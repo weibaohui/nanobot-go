@@ -51,7 +51,7 @@ func (p *ChannelListPage) Init() tea.Cmd {
 
 func (p *ChannelListPage) loadChannels() tea.Cmd {
 	return func() tea.Msg {
-		channels, err := p.client.ListChannels()
+		channels, err := p.client.ListChannels(1) // Default admin user
 		return ChannelListLoadedMsg{Channels: channels, Error: err}
 	}
 }

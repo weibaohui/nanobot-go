@@ -41,9 +41,9 @@ func (p *DashboardPage) Init() tea.Cmd {
 func (p *DashboardPage) loadStats() tea.Cmd {
 	return func() tea.Msg {
 		users, _ := p.client.ListUsers()
-		agents, _ := p.client.ListAgents()
-		channels, _ := p.client.ListChannels()
-		sessions, _ := p.client.ListSessions(0)
+		agents, _ := p.client.ListAgents(1) // Default admin user
+		channels, _ := p.client.ListChannels(1)
+		sessions, _ := p.client.ListSessions(1)
 
 		return StatsLoadedMsg{
 			Stats: DashboardStats{
