@@ -5,38 +5,38 @@ import (
 	"path/filepath"
 )
 
-// getExecutableDir 获取可执行文件所在目录
-func getExecutableDir() string {
-	exePath, err := os.Executable()
+// getWorkingDir 获取当前工作目录
+func getWorkingDir() string {
+	wd, err := os.Getwd()
 	if err != nil {
 		return "."
 	}
-	return filepath.Dir(exePath)
+	return wd
 }
 
 // GetConfigPath 获取默认配置文件路径
-// 固定路径：程序所在目录/config.json
+// 固定路径：当前工作目录/config.json
 func GetConfigPath() string {
-	return filepath.Join(getExecutableDir(), "config.json")
+	return filepath.Join(getWorkingDir(), "config.json")
 }
 
 // GetDataDir 获取 nanobot 数据目录
-// 固定路径：程序所在目录/data
+// 固定路径：当前工作目录/data
 func GetDataDir() string {
-	dir := filepath.Join(getExecutableDir(), "data")
+	dir := filepath.Join(getWorkingDir(), "data")
 	os.MkdirAll(dir, 0755)
 	return dir
 }
 
 // GetWorkspacePath 获取工作区路径
-// 固定路径：程序所在目录/workspace
+// 固定路径：当前工作目录/workspace
 func GetWorkspacePath(workspace string) string {
 	if workspace != "" {
 		path := expandPath(workspace)
 		os.MkdirAll(path, 0755)
 		return path
 	}
-	path := filepath.Join(getExecutableDir(), "workspace")
+	path := filepath.Join(getWorkingDir(), "workspace")
 	os.MkdirAll(path, 0755)
 	return path
 }

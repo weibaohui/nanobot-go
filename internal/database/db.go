@@ -45,18 +45,17 @@ func NewConfigFromConfig(cfg *config.Config) *Config {
 }
 
 // DefaultConfig 返回默认配置
-// 数据目录固定为程序所在目录下的 data 文件夹
+// 数据目录固定为当前工作目录下的 data 文件夹
 func DefaultConfig() *Config {
-	// 获取可执行文件所在目录
-	exePath, err := os.Executable()
+	// 使用当前工作目录
+	wd, err := os.Getwd()
 	if err != nil {
-		// 如果获取失败，使用当前工作目录
-		exePath = "."
+		// 如果获取失败，使用相对路径
+		wd = "."
 	}
-	exeDir := filepath.Dir(exePath)
 
 	return &Config{
-		DataDir:      filepath.Join(exeDir, "data"),
+		DataDir:      filepath.Join(wd, "data"),
 		DBName:       "nanobot.db",
 		MaxOpenConns: 1,
 		MaxIdleConns: 1,

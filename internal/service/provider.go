@@ -282,11 +282,11 @@ func (s *providerService) TestConnection(ctx context.Context, id uint) (map[stri
 }
 
 // GetLLMConfig 获取用于创建 LLM 客户端的配置
-// 返回用户默认 Provider 的配置信息
+// 返回系统默认 Provider 的配置信息（不限制 user_id，模型是共用的）
 func (s *providerService) GetLLMConfig(ctx context.Context, userID uint) (*LLMConfig, error) {
 	var provider models.LLMProvider
 	if err := s.db.WithContext(ctx).
-		Where("user_id = ? AND is_default = ? AND is_active = ?", userID, true, true).
+		Where("is_default = ? AND is_active = ?", true, true).
 		First(&provider).Error; err != nil {
 		return nil, fmt.Errorf("获取默认 Provider 失败: %w", err)
 	}

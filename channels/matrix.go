@@ -19,14 +19,13 @@ import (
 )
 
 // getDefaultDataDir 获取默认数据目录
-// 返回程序所在目录下的 data 文件夹路径
+// 返回当前工作目录下的 data 文件夹路径
 func getDefaultDataDir() string {
-	exePath, err := os.Executable()
+	wd, err := os.Getwd()
 	if err != nil {
-		// 如果获取失败，使用当前工作目录
-		exePath = "."
+		return "."
 	}
-	return filepath.Join(filepath.Dir(exePath), "data")
+	return filepath.Join(wd, "data")
 }
 
 // MatrixChannel Matrix 渠道

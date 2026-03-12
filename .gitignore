@@ -19,3 +19,4 @@ internal/.nanobot/
 test-results
 web/e2e/node_modules
 web/.vite
+data/nanobot.db
