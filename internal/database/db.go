@@ -48,8 +48,8 @@ func DefaultConfig() *Config {
 	return &Config{
 		DataDir:      "./data",
 		DBName:       "events.db",
-		MaxOpenConns: 1, // SQLite 建议单连接
-		MaxIdleConns: 1,
+		MaxOpenConns: 10, // 增加连接数以支持并发读写
+		MaxIdleConns: 5,
 	}
 }
 

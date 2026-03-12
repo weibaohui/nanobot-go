@@ -79,18 +79,32 @@ func (d *Dispatcher) Dispatch(ctx context.Context, event events.Event, channel, 
 		ctx = trace.WithChannel(ctx, channel)
 	}
 
+	// 提取 trace 信息用于异步处理
+	traceID := event.GetTraceID()
+	spanID := trace.GetSpanID(ctx)
+	parentSpanID := trace.GetParentSpanID(ctx)
+
 	for _, obs := range observers {
 		if !obs.Enabled() {
 			continue
 		}
 
 		// 异步执行，避免阻塞主流程
+		// 使用 background context 避免父 context 取消导致写入失败
 		go func(o observer.Observer) {
-			if err := o.OnEvent(ctx, event); err != nil {
+			// 创建新的 context，复制必要的 trace 信息
+			bgCtx := context.Background()
+			bgCtx = trace.WithSessionKey(bgCtx, trace.GetSessionKey(ctx))
+			bgCtx = trace.WithChannel(bgCtx, trace.GetChannel(ctx))
+			bgCtx = trace.WithTraceID(bgCtx, traceID)
+			bgCtx = trace.WithSpanID(bgCtx, spanID)
+			bgCtx = trace.WithParentSpanID(bgCtx, parentSpanID)
+
+			if err := o.OnEvent(bgCtx, event); err != nil {
 				d.logger.Error("观察器处理事件失败",
 					zap.String("observer", o.Name()),
 					zap.String("event_type", string(event.GetEventType())),
-					zap.String("trace_id", event.GetTraceID()),
+					zap.String("trace_id", traceID),
 					zap.Error(err),
 				)
 			}
