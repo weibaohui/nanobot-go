@@ -17,7 +17,7 @@ import (
 
 // Config 数据库配置（简化版，主要配置在 config.Config 中）
 type Config struct {
-	DataDir      string // 数据目录完整路径（如果为空，从 config.Config 获取）
+	DataDir      string // 数据目录完整路径
 	DBName       string // 数据库文件名
 	MaxOpenConns int    // 最大打开连接数
 	MaxIdleConns int    // 最大空闲连接数
@@ -37,7 +37,6 @@ func NewConfigFromConfig(cfg *config.Config) *Config {
 	}
 
 	return &Config{
-		DataDir:      filepath.Join(cfg.GetWorkspacePath(), dataDir),
 		DBName:       cfg.Database.DBName,
 		MaxOpenConns: cfg.Database.MaxOpenConns,
 		MaxIdleConns: cfg.Database.MaxIdleConns,

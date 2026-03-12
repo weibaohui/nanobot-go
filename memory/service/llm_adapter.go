@@ -40,15 +40,12 @@ func (c *systemLLMClient) Complete(ctx context.Context, prompt string, systemPro
 	}
 
 	// 获取 API 配置
-	apiKey := c.cfg.GetAPIKey(modelName)
-	apiBase := c.cfg.GetAPIBase(modelName)
+	// TODO: 从数据库获取
+	apiKey := "改成数据库获取"
+	apiBase := "改成数据库获取"
 
 	if apiKey == "" {
 		return "", fmt.Errorf("未找到模型 %s 的 API Key", modelName)
-	}
-
-	if apiBase == "" {
-		apiBase = "https://api.openai.com/v1"
 	}
 
 	c.logger.Debug("调用 LLM 进行总结",

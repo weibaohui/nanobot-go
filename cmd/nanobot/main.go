@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strconv"
 	"sync"
 	"syscall"
@@ -24,7 +23,6 @@ import (
 	"github.com/weibaohui/nanobot-go/channels"
 	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/conversation/repository"
-	"github.com/weibaohui/nanobot-go/cron"
 	"github.com/weibaohui/nanobot-go/internal/api"
 	"github.com/weibaohui/nanobot-go/internal/database"
 	"github.com/weibaohui/nanobot-go/internal/models"
@@ -131,36 +129,7 @@ func createDefaultConfig() *config.Config {
 			},
 			MaxIterations: 15,
 		},
-		Providers: config.ProvidersConfig{
-			OpenAI: config.ProviderConfig{
-				APIKey:  os.Getenv("OPENAI_API_KEY"),
-				APIBase: os.Getenv("OPENAI_API_BASE"),
-			},
-			Anthropic: config.ProviderConfig{
-				APIKey: os.Getenv("ANTHROPIC_API_KEY"),
-			},
-			DeepSeek: config.ProviderConfig{
-				APIKey: os.Getenv("DEEPSEEK_API_KEY"),
-			},
-			OpenRouter: config.ProviderConfig{
-				APIKey: os.Getenv("OPENROUTER_API_KEY"),
-			},
-			SiliconFlow: config.ProviderConfig{
-				APIKey:  os.Getenv("SILICONFLOW_API_KEY"),
-				APIBase: "https://api.siliconflow.cn/v1",
-			},
-		},
-		Tools: config.ToolsConfig{
-			Web: config.WebToolsConfig{
-				Search: config.WebSearchConfig{
-					MaxResults: 5,
-				},
-			},
-			Exec: config.ExecToolConfig{
-				Timeout: 120,
-			},
-			RestrictToWorkspace: true,
-		},
+
 		Database: config.DatabaseConfig{
 			Enabled: true,
 			// DataDir 留空，使用 database.DefaultConfig() 中的固定路径 (程序目录/data)
@@ -176,14 +145,11 @@ func runGateway(cmd *cobra.Command, args []string) {
 
 	logger.Info("nanobot gateway 启动中",
 		zap.Int("端口", gatewayPort),
-		zap.String("工作区", cfg.GetWorkspacePath()),
 		zap.String("版本", version),
 		zap.String("构建时间", buildDate),
 	)
 
 	messageBus := bus.NewMessageBus(logger)
-
-	dataDir := filepath.Join(cfg.GetWorkspacePath(), ".nanobot")
 
 	// 初始化数据库和对话记录仓库
 	var convRepo session.ConversationRecordRepository
@@ -204,12 +170,7 @@ func runGateway(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	sessionManager := session.NewManager(cfg, logger, dataDir, convRepo)
-
-	// 设置 Provider 加载器：优先从数据库读取 LLM 配置
-	if dbClient != nil {
-		setDatabaseProviderLoader(cfg, dbClient.DB(), logger)
-	}
+	sessionManager := session.NewManager(cfg, logger, convRepo)
 
 	// 初始化 Agent 管理系统
 	var providers *api.Providers
@@ -323,16 +284,9 @@ func runGateway(cmd *cobra.Command, args []string) {
 		logger.Info("SQLite 观察器已注册到 Hook 系统", zap.String("db_path", sqliteObserver.GetDBPath()))
 	}
 
-	cronStorePath := filepath.Join(dataDir, "cron_jobs.json")
-	cronService := cron.NewService(cronStorePath, logger)
-
 	maxIter := cfg.Agents.MaxIterations
 	if maxIter <= 0 {
 		maxIter = 15
-	}
-	execTimeout := cfg.Tools.Exec.Timeout
-	if execTimeout <= 0 {
-		execTimeout = 120
 	}
 
 	// 设置 Hook 回调，将 Loop 中的事件转发到 Hook 系统
@@ -462,16 +416,13 @@ func runGateway(cmd *cobra.Command, args []string) {
 	}
 
 	loop := agent.NewLoop(&agent.LoopConfig{
-		ConfigLoader:        configLoader,
-		MessageBus:          messageBus,
-		MaxIterations:       maxIter,
-		ExecTimeout:         execTimeout,
-		RestrictToWorkspace: cfg.Tools.RestrictToWorkspace,
-		CronService:         cronService,
-		SessionManager:      sessionManager,
-		Logger:              logger,
-		HookManager:         hookSystem,
-		HookCallback:        setHookCallback,
+		ConfigLoader:   configLoader,
+		MessageBus:     messageBus,
+		MaxIterations:  maxIter,
+		SessionManager: sessionManager,
+		Logger:         logger,
+		HookManager:    hookSystem,
+		HookCallback:   setHookCallback,
 	})
 
 	ctx := context.Background()
@@ -488,10 +439,6 @@ func runGateway(cmd *cobra.Command, args []string) {
 
 	// 启动消息分发器，将出站消息分发给各渠道
 	messageBus.StartDispatcher(ctx)
-
-	if err := cronService.Start(ctx); err != nil {
-		logger.Error("启动定时任务服务失败", zap.Error(err))
-	}
 
 	// 启动记忆升级定时任务（如果启用）
 	if cfg.Memory.Enabled && memoryUpgradeJob != nil {
@@ -554,7 +501,6 @@ func runGateway(cmd *cobra.Command, args []string) {
 		logger.Warn("代理循环停止超时")
 	}
 
-	cronService.Stop()
 	// heartbeat 服务已禁用
 	channelManager.StopAll()
 
@@ -708,78 +654,8 @@ func registerChannelsFromDB(mgr *channels.Manager, db *gorm.DB, messageBus *bus.
 			mgr.Register(feishu)
 			logger.Info("已注册飞书渠道", zap.String("app_id", cfg.AppID))
 
-		case models.ChannelTypeDingTalk:
-			var cfg models.DingTalkChannelConfig
-			if err := json.Unmarshal([]byte(ch.Config), &cfg); err != nil {
-				logger.Error("解析钉钉渠道配置失败", zap.Error(err), zap.Uint("channel_id", ch.ID))
-				continue
-			}
-			dingtalkConfig := &channels.DingTalkConfig{
-				ClientID:     cfg.ClientID,
-				ClientSecret: cfg.ClientSecret,
-			}
-			dingtalk := channels.NewDingTalkChannel(dingtalkConfig, messageBus, logger)
-			mgr.Register(dingtalk)
-			logger.Info("已注册钉钉渠道")
-
-		case models.ChannelTypeMatrix:
-			var cfg models.MatrixChannelConfig
-			if err := json.Unmarshal([]byte(ch.Config), &cfg); err != nil {
-				logger.Error("解析 Matrix 渠道配置失败", zap.Error(err), zap.Uint("channel_id", ch.ID))
-				continue
-			}
-			matrixConfig := &channels.MatrixConfig{
-				Homeserver: cfg.Homeserver,
-				UserID:     cfg.UserID,
-				Token:      cfg.Token,
-			}
-			matrix := channels.NewMatrixChannel(matrixConfig, messageBus, logger)
-			mgr.Register(matrix)
-			logger.Info("已注册 Matrix 渠道", zap.String("homeserver", cfg.Homeserver), zap.String("user_id", cfg.UserID))
-
-		case models.ChannelTypeWebSocket:
-			var cfg models.WebSocketChannelConfig
-			if err := json.Unmarshal([]byte(ch.Config), &cfg); err != nil {
-				logger.Error("解析 WebSocket 渠道配置失败", zap.Error(err), zap.Uint("channel_id", ch.ID))
-				continue
-			}
-			wsConfig := &channels.WebSocketConfig{
-				Addr: cfg.Addr,
-				Path: cfg.Path,
-			}
-			ws := channels.NewWebSocketChannel(wsConfig, messageBus, logger)
-			mgr.Register(ws)
-			logger.Info("已注册 WebSocket 渠道", zap.String("addr", cfg.Addr), zap.String("path", cfg.Path))
-
 		default:
 			logger.Warn("未知渠道类型", zap.String("type", string(ch.Type)), zap.Uint("channel_id", ch.ID))
 		}
 	}
-}
-
-// setDatabaseProviderLoader 设置从数据库加载 Provider 配置的函数
-func setDatabaseProviderLoader(cfg *config.Config, db *gorm.DB, logger *zap.Logger) {
-	cfg.SetProviderLoader(func(model string) *config.ProviderConfig {
-		// 查询数据库获取默认的 Provider
-		var provider models.LLMProvider
-		if err := db.Where("is_default = ? AND is_active = ?", true, true).First(&provider).Error; err != nil {
-			logger.Warn("从数据库获取默认 Provider 失败，将使用配置文件", zap.Error(err))
-			return nil
-		}
-
-		// 获取 extra headers
-		extraHeaders := provider.GetExtraHeaders()
-
-		logger.Info("从数据库加载 Provider 配置",
-			zap.String("provider", provider.ProviderKey),
-			zap.String("model", provider.DefaultModel),
-			zap.String("api_base", provider.APIBase),
-		)
-
-		return &config.ProviderConfig{
-			APIKey:       provider.APIKey,
-			APIBase:      provider.APIBase,
-			ExtraHeaders: extraHeaders,
-		}
-	})
 }

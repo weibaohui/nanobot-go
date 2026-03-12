@@ -15,8 +15,8 @@ type Message struct {
 	Role         string    `json:"role"`
 	Content      string    `json:"content"`
 	Timestamp    time.Time `json:"timestamp"`
-	TraceID      string    `json:"trace_id,omitempty"`        // 链路追踪 ID
-	SpanID       string    `json:"span_id,omitempty"`         // 跨度 ID
+	TraceID      string    `json:"trace_id,omitempty"`       // 链路追踪 ID
+	SpanID       string    `json:"span_id,omitempty"`        // 跨度 ID
 	ParentSpanID string    `json:"parent_span_id,omitempty"` // 父跨度 ID
 }
 
@@ -72,7 +72,7 @@ type Manager struct {
 }
 
 // NewManager 创建会话管理器
-func NewManager(cfg *config.Config, logger *zap.Logger, dataDir string, convRepo ConversationRecordRepository) *Manager {
+func NewManager(cfg *config.Config, logger *zap.Logger, convRepo ConversationRecordRepository) *Manager {
 	return &Manager{
 		cfg:      cfg,
 		logger:   logger,

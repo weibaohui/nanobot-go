@@ -8,18 +8,15 @@ import (
 type ChannelType string
 
 const (
-	ChannelTypeFeishu    ChannelType = "feishu"
-	ChannelTypeDingTalk  ChannelType = "dingtalk"
-	ChannelTypeMatrix    ChannelType = "matrix"
-	ChannelTypeWebSocket ChannelType = "websocket"
+	ChannelTypeFeishu ChannelType = "feishu"
 )
 
 // Channel 渠道模型
 // 存储渠道配置信息和 Agent 绑定关系
 type Channel struct {
-	ID       uint        `gorm:"primarykey" json:"id"`
-	UserID   uint        `gorm:"not null;index" json:"user_id"`
-	AgentID  *uint       `gorm:"index" json:"agent_id"` // 可为空
+	ID      uint  `gorm:"primarykey" json:"id"`
+	UserID  uint  `gorm:"not null;index" json:"user_id"`
+	AgentID *uint `gorm:"index" json:"agent_id"` // 可为空
 
 	Name string      `gorm:"type:text;not null" json:"name"`
 	Type ChannelType `gorm:"type:text;not null" json:"type"`
@@ -33,8 +30,8 @@ type Channel struct {
 	UpdatedAt time.Time `gorm:"type:datetime;default:CURRENT_TIMESTAMP" json:"updated_at"`
 
 	// 关联
-	User    User     `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Agent   *Agent    `gorm:"foreignKey:AgentID" json:"agent,omitempty"`
+	User     User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Agent    *Agent    `gorm:"foreignKey:AgentID" json:"agent,omitempty"`
 	Sessions []Session `gorm:"foreignKey:ChannelID" json:"sessions,omitempty"`
 }
 

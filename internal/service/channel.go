@@ -307,10 +307,7 @@ func (s *channelService) SetAllowList(channelID uint, allowList []string) error 
 // isValidChannelType 验证渠道类型是否有效
 func isValidChannelType(t models.ChannelType) bool {
 	switch t {
-	case models.ChannelTypeFeishu,
-		models.ChannelTypeDingTalk,
-		models.ChannelTypeMatrix,
-		models.ChannelTypeWebSocket:
+	case models.ChannelTypeFeishu:
 		return true
 	}
 	return false
