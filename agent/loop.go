@@ -21,7 +21,6 @@ import (
 	"github.com/weibaohui/nanobot-go/agent/tools/websearch"
 	"github.com/weibaohui/nanobot-go/agent/tools/writefile"
 	"github.com/weibaohui/nanobot-go/bus"
-	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/cron"
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
@@ -30,7 +29,7 @@ import (
 // Loop 代理循环核心
 type Loop struct {
 	bus                 *bus.MessageBus
-	cfg                 *config.Config
+	configLoader        LLMConfigLoader
 	workspace           string
 	maxIterations       int
 	execTimeout         int
@@ -51,7 +50,7 @@ type Loop struct {
 
 // LoopConfig Loop 配置
 type LoopConfig struct {
-	Config              *config.Config
+	ConfigLoader        LLMConfigLoader
 	MessageBus          *bus.MessageBus
 	Workspace           string
 	MaxIterations       int
@@ -77,7 +76,7 @@ func NewLoop(cfg *LoopConfig) *Loop {
 
 	loop := &Loop{
 		bus:                 cfg.MessageBus,
-		cfg:                 cfg.Config,
+		configLoader:        cfg.ConfigLoader,
 		workspace:           cfg.Workspace,
 		maxIterations:       cfg.MaxIterations,
 		execTimeout:         cfg.ExecTimeout,
@@ -117,7 +116,7 @@ func NewLoop(cfg *LoopConfig) *Loop {
 		loop.taskManager.SetRegisteredTools(toolNames)
 	}
 
-	adapter, err := NewChatModelAdapter(logger, loop.cfg, loop.sessions)
+	adapter, err := NewChatModelAdapter(logger, loop.configLoader, loop.sessions)
 	if err != nil {
 		logger.Error("创建 Provider 适配器失败", zap.Error(err))
 		return loop
@@ -130,7 +129,7 @@ func NewLoop(cfg *LoopConfig) *Loop {
 	adkTools := loop.tools.GetToolsByNames(toolNames)
 
 	masterAgent, err := NewMasterAgent(ctx, &MasterAgentConfig{
-		Cfg:             loop.cfg,
+		ConfigLoader:    loop.configLoader,
 		Workspace:       loop.workspace,
 		Tools:           adkTools,
 		Logger:          logger,
@@ -213,7 +212,7 @@ func (l *Loop) registerTaskTools(manager tasktool.Manager) {
 // createBackgroundAgentTaskManager 创建任务管理器
 func (l *Loop) createBackgroundAgentTaskManager() *AgentTaskManager {
 	taskManager, err := NewBackgroundAgentTaskManager(&AgentTaskManagerConfig{
-		Cfg:             l.cfg,
+		ConfigLoader:    l.configLoader,
 		Workspace:       l.workspace,
 		Tools:           l.tools.GetTools(),
 		Logger:          l.logger,

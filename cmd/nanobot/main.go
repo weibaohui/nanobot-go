@@ -28,6 +28,7 @@ import (
 	"github.com/weibaohui/nanobot-go/internal/api"
 	"github.com/weibaohui/nanobot-go/internal/database"
 	"github.com/weibaohui/nanobot-go/internal/models"
+	"github.com/weibaohui/nanobot-go/internal/service"
 	memoryhandler "github.com/weibaohui/nanobot-go/memory/handler"
 	memoryjob "github.com/weibaohui/nanobot-go/memory/job"
 	memoryrepo "github.com/weibaohui/nanobot-go/memory/repository"
@@ -439,8 +440,24 @@ func runGateway(cmd *cobra.Command, args []string) {
 		}
 	}
 
+	// 创建 LLM 配置加载器
+	configLoader := func(ctx context.Context) (*agent.LLMConfig, error) {
+		providerSvc := service.NewProviderService(dbClient.DB())
+		svcConfig, err := providerSvc.GetLLMConfig(ctx, 0)
+		if err != nil {
+			return nil, fmt.Errorf("获取 LLM 配置失败: %w", err)
+		}
+		// 转换类型
+		return &agent.LLMConfig{
+			APIKey:       svcConfig.APIKey,
+			APIBase:      svcConfig.APIBase,
+			DefaultModel: svcConfig.DefaultModel,
+			ExtraHeaders: svcConfig.ExtraHeaders,
+		}, nil
+	}
+
 	loop := agent.NewLoop(&agent.LoopConfig{
-		Config:              cfg,
+		ConfigLoader:        configLoader,
 		MessageBus:          messageBus,
 		MaxIterations:       maxIter,
 		ExecTimeout:         execTimeout,

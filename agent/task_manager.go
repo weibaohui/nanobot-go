@@ -15,7 +15,6 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	tasktools "github.com/weibaohui/nanobot-go/agent/tools/task"
-	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -40,7 +39,7 @@ type TaskInfo struct {
 }
 
 type AgentTaskManagerConfig struct {
-	Cfg                   *config.Config
+	ConfigLoader          LLMConfigLoader
 	Workspace             string
 	Tools                 []tool.BaseTool
 	Logger                *zap.Logger
@@ -60,7 +59,7 @@ type AgentTaskManagerConfig struct {
 }
 
 type AgentTaskManager struct {
-	cfg             *config.Config
+	configLoader    LLMConfigLoader
 	workspace       string
 	tools           []tool.BaseTool
 	logger          *zap.Logger
@@ -161,7 +160,7 @@ func NewBackgroundAgentTaskManager(cfg *AgentTaskManagerConfig) (*AgentTaskManag
 	tasksDir := filepath.Join(cfg.Workspace, "tasks")
 
 	m := &AgentTaskManager{
-		cfg:             cfg.Cfg,
+		configLoader:    cfg.ConfigLoader,
 		workspace:       cfg.Workspace,
 		tools:           cfg.Tools,
 		logger:          logger,
@@ -387,10 +386,10 @@ func (m *AgentTaskManager) notifyComplete(task *AgentTask, result string) {
 }
 
 func (m *AgentTaskManager) executeTask(ctx context.Context, work, channel, chatID string) (string, error) {
-	adapter, err := NewChatModelAdapter(m.logger, m.cfg, m.sessions)
-	if err != nil {
-		return "", err
-	}
+	adapter, err := NewChatModelAdapter(m.logger, m.configLoader, m.sessions)
+    if err != nil {
+        return "", err
+    }
 	if m.context != nil {
 		adapter.SetSkillLoader(m.context.GetSkillsLoader().LoadSkill)
 	}

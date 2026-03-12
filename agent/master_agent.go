@@ -10,42 +10,38 @@ import (
 	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/agent/hooks"
 	"github.com/weibaohui/nanobot-go/bus"
-	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
 )
-
-const interruptErrorPrefix = "INTERRUPT:"
 
 // MasterAgent 监督者 Agent
 // 作为统一入口，根据用户输入自动路由到合适的子 Agent
 type MasterAgent struct {
 	*interruptible
-	cfg       *config.Config
-	workspace string
-	tools     []tool.BaseTool
-	logger    *zap.Logger
-	sessions  *session.Manager
-	context   *ContextBuilder
+	configLoader LLMConfigLoader
+	workspace    string
+	tools        []tool.BaseTool
+	logger       *zap.Logger
+	sessions     *session.Manager
+	context      *ContextBuilder
 
 	adkRunner *adk.Runner
 }
 
 // MasterAgentConfig Master 配置
 type MasterAgentConfig struct {
-	Cfg             *config.Config
-	Workspace       string
-	Tools           []tool.BaseTool
-	Logger          *zap.Logger
-	Sessions        *session.Manager
-	Bus             *bus.MessageBus
-	Context         *ContextBuilder // 上下文构建器
-	InterruptMgr    *InterruptManager
+	ConfigLoader   LLMConfigLoader
+	Workspace      string
+	Tools          []tool.BaseTool
+	Logger         *zap.Logger
+	Sessions       *session.Manager
+	Bus            *bus.MessageBus
+	Context        *ContextBuilder
+	InterruptMgr   *InterruptManager
 	CheckpointStore compose.CheckPointStore
-	MaxIterations   int
-	// 已注册的工具名称列表
+	MaxIterations  int
 	RegisteredTools []string
-	HookManager     *hooks.HookManager
+	HookManager    *hooks.HookManager
 }
 
 // NewMasterAgent 创建 Master Agent
@@ -59,9 +55,44 @@ func NewMasterAgent(ctx context.Context, cfg *MasterAgentConfig) (*MasterAgent, 
 		logger = zap.NewNop()
 	}
 
-	// 先创建 interruptible
-	interruptible, err := newInterruptible(ctx, &interruptibleConfig{
-		Cfg:             cfg.Cfg,
+	// 创建 ChatModelAdapter
+	llm, err := buildChatModelAdapter(logger, cfg.ConfigLoader, cfg.Sessions, cfg.Context.GetSkillsLoader().LoadSkill, cfg.RegisteredTools, CreateHookCallback(cfg.HookManager, logger))
+	if err != nil {
+		return nil, fmt.Errorf("创建 LLM 适配器失败: %w", err)
+	}
+
+	// 配置工具
+	var toolsConfig adk.ToolsConfig
+	if len(cfg.Tools) > 0 {
+		toolsConfig = adk.ToolsConfig{
+			ToolsNodeConfig: compose.ToolsNodeConfig{
+				Tools: cfg.Tools,
+			},
+		}
+	}
+
+	// 创建 ADK Agent
+	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
+		Name:          "master_agent",
+		Description:   "主 Agent，负责处理用户请求并协调工具调用",
+		Instruction:   "", // 系统提示词在 Process 中动态构建
+		Model:         llm,
+		ToolsConfig:   toolsConfig,
+		MaxIterations: cfg.MaxIterations,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("创建 ADK Agent 失败: %w", err)
+	}
+
+	// 创建 Runner
+	runner := adk.NewRunner(ctx, adk.RunnerConfig{
+		Agent:           agent,
+		CheckPointStore: cfg.CheckpointStore,
+	})
+
+	// 创建 interruptible 能力
+	interruptCfg := &interruptibleConfig{
+		ConfigLoader:    cfg.ConfigLoader,
 		Workspace:       cfg.Workspace,
 		Tools:           cfg.Tools,
 		Logger:          logger,
@@ -73,72 +104,45 @@ func NewMasterAgent(ctx context.Context, cfg *MasterAgentConfig) (*MasterAgent, 
 		MaxIterations:   cfg.MaxIterations,
 		RegisteredTools: cfg.RegisteredTools,
 		AgentType:       "master",
+		ADKAgent:        agent,
+		ADKRunner:       runner,
 		HookManager:     cfg.HookManager,
-	})
-	if err != nil {
-		return nil, err
 	}
 
-	// 初始化 MasterAgent
-	sa := &MasterAgent{
-		interruptible: interruptible,
-		cfg:           cfg.Cfg,
+	ic, err := newInterruptible(ctx, interruptCfg)
+	if err != nil {
+		return nil, fmt.Errorf("创建中断能力失败: %w", err)
+	}
+
+	master := &MasterAgent{
+		interruptible: ic,
+		configLoader:  cfg.ConfigLoader,
 		workspace:     cfg.Workspace,
 		tools:         cfg.Tools,
 		logger:        logger,
 		sessions:      cfg.Sessions,
 		context:       cfg.Context,
+		adkRunner:     runner,
 	}
 
-	// 创建 ADK Runner
-	llm, err := interruptible.BuildChatModelAdapter()
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrChatModelAdapter, err)
-	}
-
-	var toolsConfig adk.ToolsConfig
-	if len(cfg.Tools) > 0 {
-		toolsConfig = adk.ToolsConfig{
-			ToolsNodeConfig: compose.ToolsNodeConfig{
-				Tools: cfg.Tools,
-			},
-		}
-	}
-
-	masterAgent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
-		Name:        "Master",
-		Description: "主智能体",
-		Instruction: sa.context.BuildSystemPrompt(),
-		Model:       llm,
-		ToolsConfig: toolsConfig,
-		Exit:        &adk.ExitTool{},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrAgentCreate, err)
-	}
-
-	sa.adkRunner = adk.NewRunner(ctx, adk.RunnerConfig{
-		Agent:           masterAgent,
-		CheckPointStore: cfg.CheckpointStore,
-	})
-
-	// 设置 ADK Runner 到 interruptible
-	interruptible.adkRunner = sa.adkRunner
-
-	logger.Info("Master Agent 创建成功",
-		zap.String("model", cfg.Workspace),
+	logger.Info("Master Agent 初始化成功",
+		zap.String("workspace", cfg.Workspace),
+		zap.Int("max_iterations", cfg.MaxIterations),
 	)
 
-	return sa, nil
+	return master, nil
 }
 
 // Process 处理用户消息
-func (sa *MasterAgent) Process(ctx context.Context, msg *bus.InboundMessage) (string, error) {
-	return sa.interruptible.Process(ctx, msg, sa.buildMessages)
-}
+func (m *MasterAgent) Process(ctx context.Context, msg *bus.InboundMessage) (string, error) {
+	// 构建消息构建函数
+	buildMessagesFunc := func(history []*schema.Message, userInput, channel, chatID string) []*schema.Message {
+		systemPrompt := ""
+		if m.context != nil {
+			systemPrompt = m.context.BuildSystemPrompt()
+		}
+		return BuildMessageList(systemPrompt, history, userInput, channel, chatID)
+	}
 
-// buildMessages 构建消息列表
-func (sa *MasterAgent) buildMessages(history []*schema.Message, userInput, channel, chatID string) []*schema.Message {
-	// 复用公共方法构建消息列表
-	return BuildMessageList("", history, userInput, channel, chatID)
+	return m.interruptible.Process(ctx, msg, buildMessagesFunc)
 }

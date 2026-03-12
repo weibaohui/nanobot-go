@@ -14,15 +14,16 @@ import (
 	"github.com/weibaohui/nanobot-go/agent/hooks/trace"
 	"github.com/weibaohui/nanobot-go/agent/tools/askuser"
 	"github.com/weibaohui/nanobot-go/bus"
-	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
 )
 
+var interruptErrorPrefix = "INTERRUPT:"
+
 // buildChatModelAdapter 创建并配置 ChatModelAdapter
 // 将 LLM 初始化逻辑集中在此，避免遗漏必要配置
-func buildChatModelAdapter(logger *zap.Logger, cfg *config.Config, sessions *session.Manager, skillsLoader func(string) string, registeredTools []string, hookCallback func(eventType events.EventType, data map[string]interface{})) (*ChatModelAdapter, error) {
-	llm, err := NewChatModelAdapter(logger, cfg, sessions)
+func buildChatModelAdapter(logger *zap.Logger, configLoader LLMConfigLoader, sessions *session.Manager, skillsLoader func(string) string, registeredTools []string, hookCallback func(eventType events.EventType, data map[string]interface{})) (*ChatModelAdapter, error) {
+	llm, err := NewChatModelAdapter(logger, configLoader, sessions)
 	if err != nil {
 		return nil, err
 	}
@@ -48,40 +49,40 @@ func buildChatModelAdapter(logger *zap.Logger, cfg *config.Config, sessions *ses
 // interruptible 可嵌入的中断处理能力
 // 为 Agent 提供中断处理、恢复执行等通用能力
 type interruptible struct {
-	cfg              *config.Config
-	workspace        string
-	tools            []tool.BaseTool
-	logger           *zap.Logger
-	sessions         *session.Manager
-	bus              *bus.MessageBus
-	context          *ContextBuilder
-	adkRunner        *adk.Runner
-	interruptManager *InterruptManager
-	checkpointStore  compose.CheckPointStore
-	registeredTools  []string
-	maxIterations    int
-	agentType        string // "master" 或 "supervisor"
-	adkAgent         adk.Agent
-	hookManager      *hooks.HookManager
+	configLoader      LLMConfigLoader
+	workspace         string
+	tools             []tool.BaseTool
+	logger            *zap.Logger
+	sessions          *session.Manager
+	bus               *bus.MessageBus
+	context           *ContextBuilder
+	adkRunner         *adk.Runner
+	interruptManager  *InterruptManager
+	checkpointStore   compose.CheckPointStore
+	registeredTools   []string
+	maxIterations     int
+	agentType         string // "master" 或 "supervisor"
+	adkAgent          adk.Agent
+	hookManager       *hooks.HookManager
 }
 
 // interruptibleConfig 中断处理能力的配置
 type interruptibleConfig struct {
-	Cfg             *config.Config
-	Workspace       string
-	Tools           []tool.BaseTool
-	Logger          *zap.Logger
-	Sessions        *session.Manager
-	Bus             *bus.MessageBus
-	Context         *ContextBuilder
-	InterruptMgr    *InterruptManager
-	CheckpointStore compose.CheckPointStore
-	MaxIterations   int
-	RegisteredTools []string
-	AgentType       string
-	ADKAgent        adk.Agent
-	ADKRunner       *adk.Runner
-	HookManager     *hooks.HookManager
+	ConfigLoader     LLMConfigLoader
+	Workspace        string
+	Tools            []tool.BaseTool
+	Logger           *zap.Logger
+	Sessions         *session.Manager
+	Bus              *bus.MessageBus
+	Context          *ContextBuilder
+	InterruptMgr     *InterruptManager
+	CheckpointStore  compose.CheckPointStore
+	MaxIterations    int
+	RegisteredTools  []string
+	AgentType        string
+	ADKAgent         adk.Agent
+	ADKRunner        *adk.Runner
+	HookManager      *hooks.HookManager
 }
 
 // newInterruptible 创建中断处理能力
@@ -101,21 +102,21 @@ func newInterruptible(ctx context.Context, cfg *interruptibleConfig) (*interrupt
 	}
 
 	i := &interruptible{
-		cfg:              cfg.Cfg,
-		workspace:        cfg.Workspace,
-		tools:            cfg.Tools,
-		logger:           logger,
-		sessions:         cfg.Sessions,
-		bus:              cfg.Bus,
-		context:          cfg.Context,
-		adkRunner:        cfg.ADKRunner,
-		interruptManager: cfg.InterruptMgr,
-		checkpointStore:  cfg.CheckpointStore,
-		registeredTools:  cfg.RegisteredTools,
-		maxIterations:    maxIter,
-		agentType:        cfg.AgentType,
-		adkAgent:         cfg.ADKAgent,
-		hookManager:      cfg.HookManager,
+		configLoader:      cfg.ConfigLoader,
+		workspace:         cfg.Workspace,
+		tools:             cfg.Tools,
+		logger:            logger,
+		sessions:          cfg.Sessions,
+		bus:               cfg.Bus,
+		context:           cfg.Context,
+		adkRunner:         cfg.ADKRunner,
+		interruptManager:  cfg.InterruptMgr,
+		checkpointStore:   cfg.CheckpointStore,
+		registeredTools:   cfg.RegisteredTools,
+		maxIterations:     maxIter,
+		agentType:         cfg.AgentType,
+		adkAgent:          cfg.ADKAgent,
+		hookManager:       cfg.HookManager,
 	}
 
 	logger.Info(fmt.Sprintf("%s Agent 能力初始化成功", cfg.AgentType),
@@ -129,7 +130,7 @@ func newInterruptible(ctx context.Context, cfg *interruptibleConfig) (*interrupt
 // BuildChatModelAdapter 创建并配置 ChatModelAdapter
 // 将 LLM 初始化逻辑集中在此，避免遗漏必要配置
 func (i *interruptible) BuildChatModelAdapter() (*ChatModelAdapter, error) {
-	llm, err := NewChatModelAdapter(i.logger, i.cfg, i.sessions)
+	llm, err := NewChatModelAdapter(i.logger, i.configLoader, i.sessions)
 	if err != nil {
 		return nil, err
 	}

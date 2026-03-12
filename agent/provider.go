@@ -10,7 +10,6 @@ import (
 	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/trace"
-	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
 )
@@ -26,6 +25,17 @@ type SkillLoader func(name string) string
 // HookCallback Hook 回调函数类型
 // 避免循环导入，使用函数回调而不是直接依赖 Hook 系统
 type HookCallback func(eventType events.EventType, data map[string]interface{})
+
+// LLMConfig LLM 配置信息，用于创建 LLM 客户端
+type LLMConfig struct {
+	APIKey       string            `json:"api_key"`
+	APIBase      string            `json:"api_base"`
+	DefaultModel string            `json:"default_model"`
+	ExtraHeaders map[string]string `json:"extra_headers,omitempty"`
+}
+
+// LLMConfigLoader LLM 配置加载器函数类型
+type LLMConfigLoader func(ctx context.Context) (*LLMConfig, error)
 
 // ChatModelAdapter 包装 eino 的 ChatModel，添加工具调用拦截功能
 // 主要功能：
@@ -47,33 +57,29 @@ var (
 	ErrNilAPIKey       = fmt.Errorf("API Key 不能为空")
 )
 
-func createChatModelConfig(logger *zap.Logger, cfg *config.Config) (apiKey, apiBase, modelName string, err error) {
-	if cfg == nil {
-		return "", "", "", ErrNilConfig
-	}
-
-	providerCfg := cfg.GetProvider(cfg.Agents.Defaults.Model)
-	if providerCfg == nil || providerCfg.APIKey == "" {
-		logger.Warn("未找到有效的 API Key，请设置环境变量")
-		return "", "", "gpt-4o-mini", ErrNilAPIKey
-	}
-
-	apiBase = providerCfg.APIBase
-
-	return providerCfg.APIKey, apiBase, cfg.Agents.Defaults.Model, nil
-}
-
 // NewChatModelAdapter 创建 ChatModel 适配器
-func NewChatModelAdapter(logger *zap.Logger, cfg *config.Config, sessions *session.Manager) (*ChatModelAdapter, error) {
-	apiKey, apiBase, modelName, err := createChatModelConfig(logger, cfg)
+func NewChatModelAdapter(logger *zap.Logger, configLoader LLMConfigLoader, sessions *session.Manager) (*ChatModelAdapter, error) {
+	ctx := context.Background()
+
+	cfg, err := configLoader(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrNilConfig, err)
 	}
 
+	if cfg == nil || cfg.APIKey == "" {
+		logger.Warn("未找到有效的 API Key")
+		return nil, ErrNilAPIKey
+	}
+
+	modelName := cfg.DefaultModel
+	if modelName == "" {
+		modelName = "gpt-4o-mini"
+	}
+
 	chatModel, err := openai.NewChatModel(context.Background(), &openai.ChatModelConfig{
-		APIKey:  apiKey,
+		APIKey:  cfg.APIKey,
 		Model:   modelName,
-		BaseURL: apiBase,
+		BaseURL: cfg.APIBase,
 	})
 	if err != nil {
 		if logger != nil {
