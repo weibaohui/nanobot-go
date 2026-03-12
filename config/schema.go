@@ -255,8 +255,8 @@ func DefaultConfig() *Config {
 		},
 		Database: DatabaseConfig{
 			Enabled:      true,
-			DataDir:      ".data",
-			DBName:       "events.db",
+			DataDir:      ".nanobot",
+			DBName:       "nanobot.db",
 			MaxOpenConns: 1, // SQLite 建议单连接
 			MaxIdleConns: 1,
 		},

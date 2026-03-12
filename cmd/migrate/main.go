@@ -123,10 +123,10 @@ func initDatabase(cfg *OldConfig) (*gorm.DB, error) {
 		workspace = filepath.Join(home, workspace[1:])
 	}
 
-	// 数据库配置（优先使用配置文件中的设置）
+	// 数据库配置（优先使用配置文件中的设置，默认与 config/schema.go 一致）
 	dataDir := cfg.Database.DataDir
 	if dataDir == "" {
-		dataDir = ".nanobot"
+		dataDir = ".data"
 	}
 	dbName := cfg.Database.DBName
 	if dbName == "" {

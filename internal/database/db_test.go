@@ -18,8 +18,8 @@ func TestDefaultConfig(t *testing.T) {
 	config := DefaultConfig()
 
 	assert.NotNil(t, config)
-	assert.Equal(t, "./data", config.DataDir)
-	assert.Equal(t, "events.db", config.DBName)
+	assert.Equal(t, ".nanobot", config.DataDir)
+	assert.Equal(t, "nanobot.db", config.DBName)
 	assert.Equal(t, 1, config.MaxOpenConns)
 	assert.Equal(t, 1, config.MaxIdleConns)
 }
@@ -53,7 +53,7 @@ func TestNewClientWithNilConfig(t *testing.T) {
 	require.NotNil(t, client)
 	defer client.Close()
 
-	assert.Contains(t, client.DBPath(), "events.db")
+	assert.Contains(t, client.DBPath(), "nanobot.db")
 }
 
 func TestNewClientWithInvalidDataDir(t *testing.T) {

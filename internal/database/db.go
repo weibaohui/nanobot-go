@@ -46,10 +46,10 @@ func NewConfigFromConfig(cfg *config.Config) *Config {
 // DefaultConfig 返回默认配置
 func DefaultConfig() *Config {
 	return &Config{
-		DataDir:      "./data",
-		DBName:       "events.db",
-		MaxOpenConns: 10, // 增加连接数以支持并发读写
-		MaxIdleConns: 5,
+		DataDir:      ".nanobot",
+		DBName:       "nanobot.db",
+		MaxOpenConns: 1,
+		MaxIdleConns: 1,
 	}
 }
 
