@@ -3,6 +3,7 @@ package api
 import (
 	"github.com/weibaohui/nanobot-go/internal/repository"
 	"github.com/weibaohui/nanobot-go/internal/service"
+	ms "github.com/weibaohui/nanobot-go/internal/service/memory"
 	"gorm.io/gorm"
 )
 
@@ -20,8 +21,8 @@ type Providers struct {
 	ProviderService          ProviderService
 	CronJobService          CronJobService
 	ConversationRecordService ConversationRecordService
-	StreamMemoryService      StreamMemoryService
-	LongTermMemoryService    LongTermMemoryService
+	StreamMemoryService      ms.StreamMemoryService
+	LongTermMemoryService    ms.LongTermMemoryService
 }
 
 // NewProviders 创建所有服务和仓库
@@ -40,8 +41,8 @@ func NewProviders(db *gorm.DB) *Providers {
 	providerService := service.NewProviderService(db)
 	cronJobService := service.NewCronJobService(db)
 	conversationRecordService := service.NewConversationRecordService(db)
-	streamMemoryService := service.NewStreamMemoryService(db)
-	longTermMemoryService := service.NewLongTermMemoryService(db)
+	streamMemoryService := ms.NewStreamMemoryService(db)
+	longTermMemoryService := ms.NewLongTermMemoryService(db)
 
 	return &Providers{
 		DB:                       db,
