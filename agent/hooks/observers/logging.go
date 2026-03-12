@@ -148,36 +148,3 @@ func (lo *LoggingObserver) OnEvent(ctx context.Context, event events.Event) erro
 	}
 	return nil
 }
-
-// JSONLogger JSON 日志观察器
-// 将事件以 JSON 格式输出
-type JSONLogger struct {
-	*observer.BaseObserver
-	logger *zap.Logger
-}
-
-// NewJSONLogger 创建 JSON 日志观察器
-func NewJSONLogger(logger *zap.Logger, filter *observer.ObserverFilter) *JSONLogger {
-	if logger == nil {
-		logger = zap.NewNop()
-	}
-	return &JSONLogger{
-		BaseObserver: observer.NewBaseObserver("json_logger", filter),
-		logger:       logger,
-	}
-}
-
-// OnEvent 处理事件，以 JSON 格式输出
-func (jl *JSONLogger) OnEvent(ctx context.Context, event events.Event) error {
-	fields := []zap.Field{
-		zap.String("event_type", string(event.GetEventType())),
-		zap.String("trace_id", event.GetTraceID()),
-		zap.String("span_id", event.GetSpanID()),
-	}
-	if event.GetParentSpanID() != "" {
-		fields = append(fields, zap.String("parent_span_id", event.GetParentSpanID()))
-	}
-	fields = append(fields, zap.Any("event", event))
-	jl.logger.Info("[Hook-JSON]", fields...)
-	return nil
-}

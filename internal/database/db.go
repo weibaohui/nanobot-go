@@ -78,8 +78,13 @@ func NewClient(config *Config) (*Client, error) {
 	dbPath := filepath.Join(config.DataDir, config.DBName)
 
 	// 打开数据库连接
+	// 默认显示详细日志，NANOBOT_DB_LOG=0 可关闭
+	logLevel := logger.Info
+	if os.Getenv("NANOBOT_DB_LOG") == "0" {
+		logLevel = logger.Silent
+	}
 	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent), // 默认静默日志
+		Logger: logger.Default.LogMode(logLevel),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("打开数据库失败: %w", err)

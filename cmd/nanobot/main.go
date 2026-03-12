@@ -12,24 +12,21 @@ import (
 	"syscall"
 	"time"
 
-	// "github.com/cloudwego/eino/callbacks" // 已移除，事件通过 provider.go 直接触发
-
-	// "github.com/cloudwego/eino/callbacks" // 已移除，事件通过 provider.go 直接触发
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 	"github.com/spf13/cobra"
 	"github.com/weibaohui/nanobot-go/agent"
 	"github.com/weibaohui/nanobot-go/agent/hooks"
 	hookevents "github.com/weibaohui/nanobot-go/agent/hooks/events"
-	"github.com/weibaohui/nanobot-go/agent/hooks/trace"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observers"
+	"github.com/weibaohui/nanobot-go/agent/hooks/trace"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/channels"
 	"github.com/weibaohui/nanobot-go/config"
-	"github.com/weibaohui/nanobot-go/internal/database"
 	"github.com/weibaohui/nanobot-go/conversation/repository"
 	"github.com/weibaohui/nanobot-go/cron"
 	"github.com/weibaohui/nanobot-go/internal/api"
+	"github.com/weibaohui/nanobot-go/internal/database"
 	"github.com/weibaohui/nanobot-go/internal/models"
 	memoryhandler "github.com/weibaohui/nanobot-go/memory/handler"
 	memoryjob "github.com/weibaohui/nanobot-go/memory/job"
@@ -233,8 +230,6 @@ func runGateway(cmd *cobra.Command, args []string) {
 			logger,
 			cfg.Memory.Enabled,
 		)
-		// 注意：memoryEventHandler 需要在事件总线中注册
-		// hookSystem.Register(memoryEventHandler) // 需要适配接口
 
 		// 创建定时任务
 		memoryUpgradeJob = memoryjob.NewMemoryUpgradeJob(
@@ -259,7 +254,16 @@ func runGateway(cmd *cobra.Command, args []string) {
 	// 注册 LoggingObserver
 	loggingObserver := observers.NewLoggingObserver(logger, nil)
 	hookSystem.Register(loggingObserver)
-	logger.Info("日志观察器已注册到 Hook 系统")
+	logger.Info("日志观察器已注册到 Hook 系统",
+		zap.Strings("events", []string{
+			"message_received", "message_sent",
+			"prompt_submitted", "system_prompt_built",
+			"tool_call", "tool_intercepted", "tool_used", "tool_completed", "tool_error",
+			"skill_call", "skill_lookup", "skill_used",
+			"llm_call_start", "llm_call_end", "llm_call_error",
+			"component_start", "component_end", "component_error",
+		}),
+	)
 
 	// 如果启用了思考过程推送，注册 ThinkingProcessObserver
 	if cfg.ThinkingProcess.Enabled {
@@ -278,10 +282,6 @@ func runGateway(cmd *cobra.Command, args []string) {
 		hookSystem.Register(sqliteObserver)
 		logger.Info("SQLite 观察器已注册到 Hook 系统", zap.String("db_path", sqliteObserver.GetDBPath()))
 	}
-
-	// 注意：Eino Callback 已移除，事件通过 provider.go 直接触发
-	// 如需恢复，取消下面这行的注释：
-	// callbacks.AppendGlobalHandlers(hookSystem.EinoHandler())
 
 	cronStorePath := filepath.Join(dataDir, "cron_jobs.json")
 	cronService := cron.NewService(cronStorePath, logger)

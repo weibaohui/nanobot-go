@@ -77,12 +77,19 @@ func (o *ThinkingProcessObserver) OnEvent(ctx context.Context, event events.Even
 	// 获取 chatID 和 channel（优先从缓存获取完整的会话信息）
 	chatID, cachedChannel := o.getSessionInfo(event, sessionKey)
 	if chatID == "" {
-		o.logger.Debug("无法获取 ChatID，跳过思考过程推送",
+		o.logger.Info("[ThinkingProcess] 无法获取 ChatID，跳过",
 			zap.String("event_type", string(event.GetEventType())),
 			zap.String("session_key", sessionKey),
 		)
 		return nil
 	}
+
+	o.logger.Info("[ThinkingProcess] 处理事件",
+		zap.String("event_type", string(event.GetEventType())),
+		zap.String("session_key", sessionKey),
+		zap.String("chat_id", chatID),
+		zap.String("channel", channel),
+	)
 
 	// 如果 context 中没有 channel，使用缓存的 channel
 	if channel == "" && cachedChannel != "" {
@@ -314,6 +321,16 @@ func (o *ThinkingProcessObserver) sendThinkingMessage(channel, chatID, content s
 	if o.messageBus == nil {
 		return
 	}
+
+	contentPreview := content
+	if len(contentPreview) > 100 {
+		contentPreview = contentPreview[:100] + "..."
+	}
+	o.logger.Info("[ThinkingProcess] 发送思考消息",
+		zap.String("channel", channel),
+		zap.String("chat_id", chatID),
+		zap.String("content_preview", contentPreview),
+	)
 
 	// 使用 "thinking" 作为特殊 channel 标识
 	// 实际发送时使用原始 channel

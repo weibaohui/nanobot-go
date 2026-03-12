@@ -87,8 +87,10 @@ func (o *SQLiteObserver) OnEvent(ctx context.Context, event events.Event) error 
 		return o.handleLLMCallEnd(ctx, event)
 	case events.EventToolCompleted:
 		return o.handleToolCompleted(ctx, event)
+	default:
+		o.logger.Debug("未处理事件类型", zap.String("event_type", string(event.GetEventType())))
+		return nil
 	}
-	return nil
 }
 
 func (o *SQLiteObserver) handlePromptSubmitted(ctx context.Context, event events.Event) error {

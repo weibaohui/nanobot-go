@@ -191,7 +191,9 @@ func (c *FeishuChannel) runWebSocketClient() {
 
 // onMessageReceive 处理接收到的消息
 func (c *FeishuChannel) onMessageReceive(ctx context.Context, event *larkim.P2MessageReceiveV1) error {
+	c.logger.Info("飞书回调触发")
 	if event == nil || event.Event == nil {
+		c.logger.Info("飞书事件为空")
 		return nil
 	}
 
@@ -200,13 +202,14 @@ func (c *FeishuChannel) onMessageReceive(ctx context.Context, event *larkim.P2Me
 	sender := ev.Sender
 
 	if message == nil || sender == nil {
+		c.logger.Info("飞书消息或发送者为空")
 		return nil
 	}
 
 	// 消息去重检查
 	messageID := *message.MessageId
 	if !c.processedMsgIDs.add(messageID) {
-		c.logger.Debug("飞书消息重复，忽略", zap.String("message_id", messageID))
+		c.logger.Info("飞书消息重复，忽略", zap.String("message_id", messageID))
 		return nil
 	}
 

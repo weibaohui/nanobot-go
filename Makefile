@@ -36,8 +36,8 @@ dev:
 	@echo "  按 Ctrl+C 停止所有服务"
 	@echo "========================================="
 	@(trap 'kill 0' INT; \
-		go run ./cmd/nanobot gateway --api --api-port=8081 2>&1 | sed 's/^/[后端] /' & \
-		cd web && npm run dev 2>&1 | sed 's/^/[前端] /' & \
+		air 2>&1 & \
+		cd web && npm run dev 2>&1 & \
 		wait)
 
 # 启动后端开发服务器
