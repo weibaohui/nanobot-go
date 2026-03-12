@@ -62,7 +62,8 @@ func (c *Channel) Start(ctx context.Context) error {
 		c.config.VerificationToken,
 		c.config.EncryptKey,
 	).OnP2MessageReceiveV1(handler.onMessageReceive).
-		OnP2MessageReactionCreatedV1(handler.onReactionCreated)
+		OnP2MessageReactionCreatedV1(handler.onReactionCreated).
+		OnP2MessageReactionDeletedV1(handler.onReactionDeleted)
 
 	// 创建 WebSocket 客户端
 	c.wsClient = ws.NewClient(c.config.AppID, c.config.AppSecret,

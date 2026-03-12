@@ -143,7 +143,25 @@ func (h *messageHandler) onReactionCreated(ctx context.Context, event *larkim.P2
 		if ev.ReactionType != nil && ev.ReactionType.EmojiType != nil {
 			emojiType = *ev.ReactionType.EmojiType
 		}
-		c.logger.Debug("收到飞书表情反应事件",
+		c.logger.Debug("收到飞书表情反应创建事件",
+			zap.String("message_id", *ev.MessageId),
+			zap.String("emoji", emojiType),
+		)
+	}
+	return nil
+}
+
+// onReactionDeleted 处理消息表情反应删除事件（仅记录日志，不处理业务逻辑）
+func (h *messageHandler) onReactionDeleted(ctx context.Context, event *larkim.P2MessageReactionDeletedV1) error {
+	c := h.channel
+	// 忽略表情反应删除事件，仅记录调试日志
+	if event != nil && event.Event != nil {
+		ev := event.Event
+		emojiType := ""
+		if ev.ReactionType != nil && ev.ReactionType.EmojiType != nil {
+			emojiType = *ev.ReactionType.EmojiType
+		}
+		c.logger.Debug("收到飞书表情反应删除事件",
 			zap.String("message_id", *ev.MessageId),
 			zap.String("emoji", emojiType),
 		)
