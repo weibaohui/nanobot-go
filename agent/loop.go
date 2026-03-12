@@ -330,10 +330,15 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 			l.logger.Error("Master Agent 处理失败", zap.Error(err))
 			outMsg.Content = fmt.Sprintf("抱歉，处理消息时遇到错误: %v", err)
 		}
-		// 传递原始消息的 message_id 用于渠道特定功能（如飞书删除反应表情）
+		// 传递原始消息的 metadata 用于渠道特定功能
 		if msg.Metadata != nil {
+			// 复制 message_id 用于删除反应表情等功能
 			if msgID, ok := msg.Metadata["message_id"].(string); ok {
 				outMsg.Metadata["reply_to_message_id"] = msgID
+			}
+			// 复制 app_id 用于飞书多渠道路由
+			if appID, ok := msg.Metadata["app_id"].(string); ok {
+				outMsg.Metadata["app_id"] = appID
 			}
 		}
 		l.bus.PublishOutbound(outMsg)
@@ -342,10 +347,15 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 
 	// 发布响应
 	outMsg := bus.NewOutboundMessage(msg.Channel, msg.ChatID, response)
-	// 传递原始消息的 message_id 用于渠道特定功能（如飞书删除反应表情）
+	// 传递原始消息的 metadata 用于渠道特定功能
 	if msg.Metadata != nil {
+		// 复制 message_id 用于删除反应表情等功能
 		if msgID, ok := msg.Metadata["message_id"].(string); ok {
 			outMsg.Metadata["reply_to_message_id"] = msgID
+		}
+		// 复制 app_id 用于飞书多渠道路由
+		if appID, ok := msg.Metadata["app_id"].(string); ok {
+			outMsg.Metadata["app_id"] = appID
 		}
 	}
 	l.bus.PublishOutbound(outMsg)

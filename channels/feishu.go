@@ -110,8 +110,13 @@ func NewFeishuChannel(config *FeishuConfig, messageBus *bus.MessageBus, logger *
 	if logger == nil {
 		logger = zap.NewNop()
 	}
+	// 使用 app_id 作为渠道名称的一部分，确保唯一性
+	channelName := "feishu"
+	if config.AppID != "" {
+		channelName = fmt.Sprintf("feishu_%s", config.AppID)
+	}
 	return &FeishuChannel{
-		BaseChannel:     NewBaseChannel("feishu", messageBus),
+		BaseChannel:     NewBaseChannel(channelName, messageBus),
 		config:          config,
 		logger:          logger,
 		processedMsgIDs: newSyncMap(1000),
@@ -136,7 +141,8 @@ func (c *FeishuChannel) Start(ctx context.Context) error {
 	c.eventHandler = dispatcher.NewEventDispatcher(
 		c.config.VerificationToken,
 		c.config.EncryptKey,
-	).OnP2MessageReceiveV1(c.onMessageReceive)
+	).OnP2MessageReceiveV1(c.onMessageReceive).
+		OnP2MessageReactionCreatedV1(c.onReactionCreated)
 
 	// 创建 WebSocket 客户端
 	c.wsClient = ws.NewClient(c.config.AppID, c.config.AppSecret,
@@ -145,10 +151,23 @@ func (c *FeishuChannel) Start(ctx context.Context) error {
 	)
 
 	// 订阅出站消息
-	c.SubscribeOutbound(ctx, func(msg *bus.OutboundMessage) {
+	// 使用固定 "feishu" 作为订阅 key，因为消息中的 Channel 字段是 "feishu"
+	// 使用 app_id 过滤，确保只处理属于当前渠道的消息
+	c.bus.SubscribeOutbound("feishu", func(msg *bus.OutboundMessage) error {
+		// 检查消息是否属于当前渠道（通过 app_id 匹配）
+		if msg.Metadata != nil {
+			if targetAppID, ok := msg.Metadata["app_id"].(string); ok && targetAppID != "" {
+				if targetAppID != c.config.AppID {
+					// 消息属于其他飞书渠道，跳过
+					return nil
+				}
+			}
+		}
 		if err := c.Send(msg); err != nil {
 			c.logger.Error("发送飞书消息失败", zap.Error(err))
+			return err
 		}
+		return nil
 	})
 
 	c.logger.Info("飞书渠道已启动",
@@ -281,6 +300,7 @@ func (c *FeishuChannel) onMessageReceive(ctx context.Context, event *larkim.P2Me
 	)
 
 	// 发布消息到总线
+	// 在 Metadata 中记录 app_id，用于后续消息路由
 	c.bus.PublishInbound(&bus.InboundMessage{
 		Channel:   "feishu",
 		ChatID:    replyTo,
@@ -292,9 +312,27 @@ func (c *FeishuChannel) onMessageReceive(ctx context.Context, event *larkim.P2Me
 			"chat_type":  chatType,
 			"msg_type":   msgType,
 			"chat_id":    chatID,
+			"app_id":     c.config.AppID, // 记录 app_id 用于消息路由
 		},
 	})
 
+	return nil
+}
+
+// onReactionCreated 处理消息表情反应事件（仅记录日志，不处理业务逻辑）
+func (c *FeishuChannel) onReactionCreated(ctx context.Context, event *larkim.P2MessageReactionCreatedV1) error {
+	// 忽略表情反应事件，仅记录调试日志
+	if event != nil && event.Event != nil {
+		ev := event.Event
+		emojiType := ""
+		if ev.ReactionType != nil && ev.ReactionType.EmojiType != nil {
+			emojiType = *ev.ReactionType.EmojiType
+		}
+		c.logger.Debug("收到飞书表情反应事件",
+			zap.String("message_id", *ev.MessageId),
+			zap.String("emoji", emojiType),
+		)
+	}
 	return nil
 }
 
