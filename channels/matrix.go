@@ -18,6 +18,17 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
+// getDefaultDataDir 获取默认数据目录
+// 返回程序所在目录下的 data 文件夹路径
+func getDefaultDataDir() string {
+	exePath, err := os.Executable()
+	if err != nil {
+		// 如果获取失败，使用当前工作目录
+		exePath = "."
+	}
+	return filepath.Join(filepath.Dir(exePath), "data")
+}
+
 // MatrixChannel Matrix 渠道
 // 使用 mautrix/go SDK 连接 Matrix 服务器
 type MatrixChannel struct {
@@ -181,13 +192,13 @@ func (c *MatrixChannel) Start(ctx context.Context) error {
 }
 
 // getStorePath 获取存储路径
+// 优先使用配置的 DataDir，如果为空则使用固定路径 (程序目录/data)
 func (c *MatrixChannel) getStorePath() string {
 	if c.config.DataDir != "" {
 		return filepath.Join(c.config.DataDir, "matrix_sync.json")
 	}
-	// 默认使用 ~/.nanobot/matrix_sync.json
-	homeDir, _ := os.UserHomeDir()
-	return filepath.Join(homeDir, ".nanobot", "matrix_sync.json")
+	// 使用固定路径：程序所在目录下的 data 文件夹
+	return filepath.Join(getDefaultDataDir(), "matrix_sync.json")
 }
 
 // runSync 运行 Matrix 同步

@@ -1,48 +1,58 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
 	"github.com/cloudwego/eino/schema"
-	"github.com/weibaohui/nanobot-go/config"
 	"go.uber.org/zap"
 )
 
-// TestCreateChatModelConfig 测试创建聊天模型配置
-func TestCreateChatModelConfig(t *testing.T) {
-	t.Run("配置为空", func(t *testing.T) {
-		logger := zap.NewNop()
-		apiKey, apiBase, modelName, err := createChatModelConfig(logger, nil)
+// mockConfigLoaderForProvider 创建一个模拟的 LLMConfigLoader 用于测试
+func mockConfigLoaderForProvider(apiKey string) LLMConfigLoader {
+	return func(ctx context.Context) (*LLMConfig, error) {
+		if apiKey == "" {
+			return nil, ErrNilAPIKey
+		}
+		return &LLMConfig{
+			APIKey:       apiKey,
+			APIBase:      "https://api.test.com",
+			DefaultModel: "gpt-4o-mini",
+		}, nil
+	}
+}
 
-		if err != ErrNilConfig {
-			t.Errorf("createChatModelConfig() error = %v, 期望 %v", err, ErrNilConfig)
+// TestNewChatModelAdapter 测试创建 ChatModelAdapter
+func TestNewChatModelAdapter(t *testing.T) {
+	t.Run("配置加载器返回错误", func(t *testing.T) {
+		logger := zap.NewNop()
+		loader := func(ctx context.Context) (*LLMConfig, error) {
+			return nil, ErrNilConfig
 		}
-		if apiKey != "" {
-			t.Errorf("createChatModelConfig() apiKey = %q, 期望空", apiKey)
+		adapter, err := NewChatModelAdapter(logger, loader, nil)
+
+		if err == nil {
+			t.Error("NewChatModelAdapter() 应该返回错误")
 		}
-		if apiBase != "" {
-			t.Errorf("createChatModelConfig() apiBase = %q, 期望空", apiBase)
-		}
-		if modelName != "" {
-			t.Errorf("createChatModelConfig() modelName = %q, 期望空", modelName)
+		if adapter != nil {
+			t.Error("NewChatModelAdapter() 应该返回 nil adapter")
 		}
 	})
 
 	t.Run("配置无APIKey", func(t *testing.T) {
 		logger := zap.NewNop()
-		cfg := &config.Config{}
+		loader := func(ctx context.Context) (*LLMConfig, error) {
+			return &LLMConfig{}, nil
+		}
 
-		apiKey, _, modelName, err := createChatModelConfig(logger, cfg)
+		adapter, err := NewChatModelAdapter(logger, loader, nil)
 
 		if err != ErrNilAPIKey {
-			t.Errorf("createChatModelConfig() error = %v, 期望 %v", err, ErrNilAPIKey)
+			t.Errorf("NewChatModelAdapter() error = %v, 期望 %v", err, ErrNilAPIKey)
 		}
-		if apiKey != "" {
-			t.Errorf("createChatModelConfig() apiKey = %q, 期望空", apiKey)
-		}
-		if modelName != "gpt-4o-mini" {
-			t.Errorf("createChatModelConfig() modelName = %q, 期望 gpt-4o-mini", modelName)
+		if adapter != nil {
+			t.Error("NewChatModelAdapter() 应该返回 nil adapter")
 		}
 	})
 }

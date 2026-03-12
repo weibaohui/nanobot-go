@@ -13,8 +13,9 @@ func TestGetConfigPath(t *testing.T) {
 		t.Error("GetConfigPath() 返回空路径")
 	}
 
-	home, _ := os.UserHomeDir()
-	expected := filepath.Join(home, ".nanobot", "config.json")
+	// 新行为：使用程序所在目录下的 config.json
+	exeDir := getExecutableDir()
+	expected := filepath.Join(exeDir, "config.json")
 	if path != expected {
 		t.Errorf("GetConfigPath() = %q, 期望 %q", path, expected)
 	}
@@ -27,8 +28,9 @@ func TestGetDataDir(t *testing.T) {
 		t.Error("GetDataDir() 返回空路径")
 	}
 
-	home, _ := os.UserHomeDir()
-	expected := filepath.Join(home, ".nanobot")
+	// 新行为：使用程序所在目录下的 data 文件夹
+	exeDir := getExecutableDir()
+	expected := filepath.Join(exeDir, "data")
 	if dir != expected {
 		t.Errorf("GetDataDir() = %q, 期望 %q", dir, expected)
 	}
@@ -50,8 +52,9 @@ func TestGetWorkspacePath(t *testing.T) {
 			name:      "空工作区使用默认路径",
 			workspace: "",
 			checkFunc: func(t *testing.T, path string) {
-				home, _ := os.UserHomeDir()
-				expected := filepath.Join(home, ".nanobot", "workspace")
+				// 新行为：使用程序所在目录下的 workspace 文件夹
+				exeDir := getExecutableDir()
+				expected := filepath.Join(exeDir, "workspace")
 				if path != expected {
 					t.Errorf("路径 = %q, 期望 %q", path, expected)
 				}
@@ -99,8 +102,9 @@ func TestGetSessionsPath(t *testing.T) {
 		t.Error("GetSessionsPath() 返回空路径")
 	}
 
-	home, _ := os.UserHomeDir()
-	expected := filepath.Join(home, ".nanobot", "sessions")
+	// 新行为：使用程序所在目录下的 data/sessions 文件夹
+	exeDir := getExecutableDir()
+	expected := filepath.Join(exeDir, "data", "sessions")
 	if path != expected {
 		t.Errorf("GetSessionsPath() = %q, 期望 %q", path, expected)
 	}
@@ -108,11 +112,10 @@ func TestGetSessionsPath(t *testing.T) {
 
 // TestGetMemoryPath 测试获取内存目录
 func TestGetMemoryPath(t *testing.T) {
-	workspace := "/tmp/test_memory_workspace"
-	defer os.RemoveAll(workspace)
-
-	path := GetMemoryPath(workspace)
-	expected := filepath.Join(workspace, "memory")
+	// 新行为：忽略 workspace 参数，使用固定路径 <executable_dir>/data/memory
+	path := GetMemoryPath("/tmp/test_memory_workspace")
+	exeDir := getExecutableDir()
+	expected := filepath.Join(exeDir, "data", "memory")
 	if path != expected {
 		t.Errorf("GetMemoryPath() = %q, 期望 %q", path, expected)
 	}

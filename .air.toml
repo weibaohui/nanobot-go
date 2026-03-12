@@ -2,7 +2,7 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-pre_cmd = ["rm -rf tmp"]
+pre_cmd = ["rm -rf tmp/nanobot"]
 cmd = "go build -o ./tmp/nanobot ./cmd/nanobot/"
 include_ext = ["go"]
 exclude_dir = ["tmp", "vendor","bin","web"]

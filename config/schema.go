@@ -230,7 +230,7 @@ func DefaultConfig() *Config {
 		},
 		Database: DatabaseConfig{
 			Enabled:      true,
-			DataDir:      ".nanobot",
+			DataDir:      "", // 空字符串表示使用固定路径 (程序目录/data)
 			DBName:       "nanobot.db",
 			MaxOpenConns: 1, // SQLite 建议单连接
 			MaxIdleConns: 1,
@@ -389,8 +389,12 @@ func (c *Config) GetAPIBase(model string) string {
 }
 
 // GetDatabaseDataDir 获取数据库数据目录的完整路径
-// 数据目录位于 workspace 下的 Database.DataDir 子目录
+// 如果 Database.DataDir 为空，返回空字符串，由 database 包使用固定路径
+// 如果 Database.DataDir 不为空，返回 workspace 下的子目录路径
 func (c *Config) GetDatabaseDataDir() string {
+	if c.Database.DataDir == "" {
+		return ""
+	}
 	workspacePath := c.GetWorkspacePath()
 	return filepath.Join(workspacePath, c.Database.DataDir)
 }

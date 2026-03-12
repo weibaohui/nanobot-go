@@ -163,8 +163,8 @@ func createDefaultConfig() *config.Config {
 		},
 		Database: config.DatabaseConfig{
 			Enabled: true,
-			DataDir: ".nanobot",
-			DBName:  "nanobot.db",
+			// DataDir 留空，使用 database.DefaultConfig() 中的固定路径 (程序目录/data)
+			DBName: "nanobot.db",
 		},
 	}
 }

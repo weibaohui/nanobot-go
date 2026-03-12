@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"testing"
 
 	"github.com/weibaohui/nanobot-go/bus"
@@ -8,6 +9,17 @@ import (
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
 )
+
+// mockLLMConfigLoader 创建一个模拟的 LLMConfigLoader 用于测试
+func mockLLMConfigLoaderForLoop() LLMConfigLoader {
+	return func(ctx context.Context) (*LLMConfig, error) {
+		return &LLMConfig{
+			APIKey:       "test-api-key",
+			APIBase:      "https://api.test.com",
+			DefaultModel: "gpt-4o-mini",
+		}, nil
+	}
+}
 
 // TestNewLoop 测试创建代理循环
 func TestNewLoop(t *testing.T) {
@@ -25,7 +37,7 @@ func TestNewLoop(t *testing.T) {
 		sessionMgr := session.NewManager(cfg, logger, "/tmp", nil)
 
 		loop := NewLoop(&LoopConfig{
-			Config:         cfg,
+			ConfigLoader:   mockLLMConfigLoaderForLoop(),
 			MessageBus:     messageBus,
 			Workspace:      "/tmp/workspace",
 			MaxIterations:  10,
@@ -64,14 +76,13 @@ func TestNewLoop(t *testing.T) {
 	})
 
 	t.Run("无logger使用默认", func(t *testing.T) {
-		cfg := &config.Config{}
 		logger := zap.NewNop()
 		messageBus := bus.NewMessageBus(logger)
 
 		loop := NewLoop(&LoopConfig{
-			Config:     cfg,
-			MessageBus: messageBus,
-			Workspace:  "/tmp/workspace",
+			ConfigLoader: mockLLMConfigLoaderForLoop(),
+			MessageBus:   messageBus,
+			Workspace:    "/tmp/workspace",
 		})
 
 		if loop == nil {
@@ -86,15 +97,14 @@ func TestNewLoop(t *testing.T) {
 
 // TestLoop_Stop 测试停止代理循环
 func TestLoop_Stop(t *testing.T) {
-	cfg := &config.Config{}
 	logger := zap.NewNop()
 	messageBus := bus.NewMessageBus(logger)
 
 	loop := NewLoop(&LoopConfig{
-		Config:     cfg,
-		MessageBus: messageBus,
-		Workspace:  "/tmp/workspace",
-		Logger:     logger,
+		ConfigLoader: mockLLMConfigLoaderForLoop(),
+		MessageBus:   messageBus,
+		Workspace:    "/tmp/workspace",
+		Logger:       logger,
 	})
 
 	if loop == nil {
@@ -114,15 +124,14 @@ func TestLoop_Stop(t *testing.T) {
 
 // TestLoop_GetMasterAgent 测试获取 Master Agent
 func TestLoop_GetMasterAgent(t *testing.T) {
-	cfg := &config.Config{}
 	logger := zap.NewNop()
 	messageBus := bus.NewMessageBus(logger)
 
 	loop := NewLoop(&LoopConfig{
-		Config:     cfg,
-		MessageBus: messageBus,
-		Workspace:  "/tmp/workspace",
-		Logger:     logger,
+		ConfigLoader: mockLLMConfigLoaderForLoop(),
+		MessageBus:   messageBus,
+		Workspace:    "/tmp/workspace",
+		Logger:       logger,
 	})
 
 	if loop == nil {
@@ -137,7 +146,7 @@ func TestLoop_GetMasterAgent(t *testing.T) {
 func TestLoopConfig(t *testing.T) {
 	logger := zap.NewNop()
 	cfg := &LoopConfig{
-		Config:              &config.Config{},
+		ConfigLoader:        mockLLMConfigLoaderForLoop(),
 		MessageBus:          bus.NewMessageBus(logger),
 		Workspace:           "/test/workspace",
 		MaxIterations:       20,

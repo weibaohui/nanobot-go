@@ -11,6 +11,17 @@ import (
 	"go.uber.org/zap"
 )
 
+// mockLLMConfigLoader 创建一个模拟的 LLMConfigLoader 用于测试
+func mockLLMConfigLoader() LLMConfigLoader {
+	return func(ctx context.Context) (*LLMConfig, error) {
+		return &LLMConfig{
+			APIKey:       "test-api-key",
+			APIBase:      "https://api.test.com",
+			DefaultModel: "gpt-4o-mini",
+		}, nil
+	}
+}
+
 // TestNewInterruptible 测试创建中断处理能力
 func TestNewInterruptible(t *testing.T) {
 	t.Run("配置为空返回错误", func(t *testing.T) {
@@ -33,7 +44,7 @@ func TestNewInterruptible(t *testing.T) {
 		messageBus := bus.NewMessageBus(logger)
 
 		i, err := newInterruptible(ctx, &interruptibleConfig{
-			Cfg:           cfg,
+			ConfigLoader:  mockLLMConfigLoader(),
 			Workspace:     "/tmp/workspace",
 			Logger:        logger,
 			Sessions:      sessionMgr,
@@ -64,11 +75,10 @@ func TestNewInterruptible(t *testing.T) {
 
 	t.Run("无logger使用默认", func(t *testing.T) {
 		ctx := context.Background()
-		cfg := &config.Config{}
 
 		i, err := newInterruptible(ctx, &interruptibleConfig{
-			Cfg:       cfg,
-			Workspace: "/tmp/workspace",
+			ConfigLoader: mockLLMConfigLoader(),
+			Workspace:    "/tmp/workspace",
 		})
 
 		if err != nil {
@@ -85,11 +95,10 @@ func TestNewInterruptible(t *testing.T) {
 
 	t.Run("默认MaxIterations", func(t *testing.T) {
 		ctx := context.Background()
-		cfg := &config.Config{}
 
 		i, err := newInterruptible(ctx, &interruptibleConfig{
-			Cfg:       cfg,
-			Workspace: "/tmp/workspace",
+			ConfigLoader: mockLLMConfigLoader(),
+			Workspace:    "/tmp/workspace",
 		})
 
 		if err != nil {
@@ -112,9 +121,9 @@ func TestInterruptible_BuildChatModelAdapter(t *testing.T) {
 	sessionMgr := session.NewManager(cfg, logger, "/tmp", nil)
 
 	i := &interruptible{
-		cfg:      cfg,
-		logger:   logger,
-		sessions: sessionMgr,
+		configLoader: mockLLMConfigLoader(),
+		logger:       logger,
+		sessions:     sessionMgr,
 		registeredTools: []string{"read_file", "write_file"},
 	}
 
@@ -279,8 +288,8 @@ func TestInterruptibleConfig(t *testing.T) {
 // TestBuildChatModelAdapter 测试包级别的构建函数
 func TestBuildChatModelAdapter(t *testing.T) {
 	logger := zap.NewNop()
-	cfg := &config.Config{}
-	sessionMgr := session.NewManager(cfg, logger, "/tmp", nil)
+	cfg := mockLLMConfigLoader()
+	sessionMgr := session.NewManager(&config.Config{}, logger, "/tmp", nil)
 
 	t.Run("无技能加载器", func(t *testing.T) {
 		adapter, err := buildChatModelAdapter(logger, cfg, sessionMgr, nil, []string{"read_file"}, nil)

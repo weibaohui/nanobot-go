@@ -18,7 +18,8 @@ func TestDefaultConfig(t *testing.T) {
 	config := DefaultConfig()
 
 	assert.NotNil(t, config)
-	assert.Equal(t, ".nanobot", config.DataDir)
+	// 新行为：使用程序所在目录下的 data 文件夹
+	assert.Contains(t, config.DataDir, "data")
 	assert.Equal(t, "nanobot.db", config.DBName)
 	assert.Equal(t, 1, config.MaxOpenConns)
 	assert.Equal(t, 1, config.MaxIdleConns)

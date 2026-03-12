@@ -119,7 +119,6 @@ func TestMatrixChannel_getStorePath(t *testing.T) {
 	})
 
 	t.Run("使用默认路径", func(t *testing.T) {
-		homeDir, _ := os.UserHomeDir()
 		config := &MatrixConfig{
 			Homeserver: "https://example.com",
 			UserID:     "@test:example.com",
@@ -129,7 +128,8 @@ func TestMatrixChannel_getStorePath(t *testing.T) {
 		channel := NewMatrixChannel(config, messageBus, zap.NewNop())
 
 		path := channel.getStorePath()
-		expected := filepath.Join(homeDir, ".nanobot", "matrix_sync.json")
+		// 新行为：使用程序所在目录下的 data 文件夹
+		expected := filepath.Join(getDefaultDataDir(), "matrix_sync.json")
 		if path != expected {
 			t.Errorf("getStorePath() = %q, 期望 %q", path, expected)
 		}

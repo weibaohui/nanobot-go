@@ -5,34 +5,44 @@ import (
 	"path/filepath"
 )
 
+// getExecutableDir 获取可执行文件所在目录
+func getExecutableDir() string {
+	exePath, err := os.Executable()
+	if err != nil {
+		return "."
+	}
+	return filepath.Dir(exePath)
+}
+
 // GetConfigPath 获取默认配置文件路径
+// 固定路径：程序所在目录/config.json
 func GetConfigPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".nanobot", "config.json")
+	return filepath.Join(getExecutableDir(), "config.json")
 }
 
 // GetDataDir 获取 nanobot 数据目录
+// 固定路径：程序所在目录/data
 func GetDataDir() string {
-	home, _ := os.UserHomeDir()
-	dir := filepath.Join(home, ".nanobot")
+	dir := filepath.Join(getExecutableDir(), "data")
 	os.MkdirAll(dir, 0755)
 	return dir
 }
 
 // GetWorkspacePath 获取工作区路径
+// 固定路径：程序所在目录/workspace
 func GetWorkspacePath(workspace string) string {
 	if workspace != "" {
 		path := expandPath(workspace)
 		os.MkdirAll(path, 0755)
 		return path
 	}
-	home, _ := os.UserHomeDir()
-	path := filepath.Join(home, ".nanobot", "workspace")
+	path := filepath.Join(getExecutableDir(), "workspace")
 	os.MkdirAll(path, 0755)
 	return path
 }
 
 // GetSessionsPath 获取会话存储目录
+// 固定路径：程序所在目录/data/sessions
 func GetSessionsPath() string {
 	dir := filepath.Join(GetDataDir(), "sessions")
 	os.MkdirAll(dir, 0755)
@@ -40,9 +50,9 @@ func GetSessionsPath() string {
 }
 
 // GetMemoryPath 获取内存目录
+// 固定路径：程序所在目录/data/memory
 func GetMemoryPath(workspace string) string {
-	ws := GetWorkspacePath(workspace)
-	dir := filepath.Join(ws, "memory")
+	dir := filepath.Join(GetDataDir(), "memory")
 	os.MkdirAll(dir, 0755)
 	return dir
 }

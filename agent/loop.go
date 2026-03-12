@@ -310,6 +310,9 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 	}
 
 	// 使用 Master Agent 处理消息（包括中断恢复和正常处理）
+	if l.masterAgent == nil {
+		return fmt.Errorf("Master Agent 未初始化，无法处理消息")
+	}
 	l.logger.Info("使用 Master Agent 处理消息")
 	response, err := l.masterAgent.Process(ctx, msg)
 

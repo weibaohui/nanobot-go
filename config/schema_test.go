@@ -23,8 +23,9 @@ func TestDefaultConfig(t *testing.T) {
 		t.Errorf("默认模型 = %q, 期望 anthropic/claude-opus-4-5", cfg.Agents.Defaults.Model)
 	}
 
-	if cfg.Gateway.Port != 18790 {
-		t.Errorf("默认端口 = %d, 期望 18790", cfg.Gateway.Port)
+	// 新行为：默认端口为 0（未设置），由应用程序在启动时设置默认值
+	if cfg.Gateway.Port != 0 {
+		t.Errorf("默认端口 = %d, 期望 0（未设置）", cfg.Gateway.Port)
 	}
 }
 

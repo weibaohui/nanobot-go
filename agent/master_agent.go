@@ -55,8 +55,17 @@ func NewMasterAgent(ctx context.Context, cfg *MasterAgentConfig) (*MasterAgent, 
 		logger = zap.NewNop()
 	}
 
+	// 检查必要配置
+	if cfg.Context == nil {
+		return nil, fmt.Errorf("Context 不能为空")
+	}
+
 	// 创建 ChatModelAdapter
-	llm, err := buildChatModelAdapter(logger, cfg.ConfigLoader, cfg.Sessions, cfg.Context.GetSkillsLoader().LoadSkill, cfg.RegisteredTools, CreateHookCallback(cfg.HookManager, logger))
+	var skillLoader func(string) string
+	if cfg.Context != nil && cfg.Context.GetSkillsLoader() != nil {
+		skillLoader = cfg.Context.GetSkillsLoader().LoadSkill
+	}
+	llm, err := buildChatModelAdapter(logger, cfg.ConfigLoader, cfg.Sessions, skillLoader, cfg.RegisteredTools, CreateHookCallback(cfg.HookManager, logger))
 	if err != nil {
 		return nil, fmt.Errorf("创建 LLM 适配器失败: %w", err)
 	}
@@ -135,6 +144,13 @@ func NewMasterAgent(ctx context.Context, cfg *MasterAgentConfig) (*MasterAgent, 
 
 // Process 处理用户消息
 func (m *MasterAgent) Process(ctx context.Context, msg *bus.InboundMessage) (string, error) {
+	if m == nil {
+		return "", fmt.Errorf("MasterAgent 未初始化")
+	}
+	if m.interruptible == nil {
+		return "", fmt.Errorf("MasterAgent 中断能力未初始化")
+	}
+
 	// 构建消息构建函数
 	buildMessagesFunc := func(history []*schema.Message, userInput, channel, chatID string) []*schema.Message {
 		systemPrompt := ""

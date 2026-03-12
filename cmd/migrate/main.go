@@ -107,43 +107,12 @@ func loadOldConfig(path string) (*OldConfig, error) {
 }
 
 // initDatabase 初始化数据库连接
-// 优先使用配置文件中的数据库设置，如果没有则使用默认值
+// 使用固定路径：程序所在目录下的 data 文件夹
 func initDatabase(cfg *OldConfig) (*gorm.DB, error) {
-	// 获取 workspace 路径
-	workspace := cfg.Agents.Defaults.Workspace
-	if workspace == "" {
-		workspace = "~/.nanobot/workspace"
-	}
-	// 展开 ~ 为家目录
-	if workspace[0] == '~' {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, err
-		}
-		workspace = filepath.Join(home, workspace[1:])
-	}
+	// 使用 DefaultConfig 获取固定的数据库路径
+	dbCfg := database.DefaultConfig()
 
-	// 数据库配置（优先使用配置文件中的设置，默认与 config/schema.go 一致）
-	dataDir := cfg.Database.DataDir
-	if dataDir == "" {
-		dataDir = ".data"
-	}
-	dbName := cfg.Database.DBName
-	if dbName == "" {
-		dbName = "nanobot.db"
-	}
-
-	// 构建完整的数据目录路径（workspace + dataDir）
-	fullDataDir := filepath.Join(workspace, dataDir)
-
-	fmt.Printf("数据库路径: %s/%s\n", fullDataDir, dbName)
-
-	dbCfg := &database.Config{
-		DataDir:      fullDataDir,
-		DBName:       dbName,
-		MaxOpenConns: 1,
-		MaxIdleConns: 1,
-	}
+	fmt.Printf("数据库路径: %s/%s\n", dbCfg.DataDir, dbCfg.DBName)
 
 	client, err := database.NewClient(dbCfg)
 	if err != nil {

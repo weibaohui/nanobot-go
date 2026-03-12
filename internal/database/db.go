@@ -24,15 +24,16 @@ type Config struct {
 }
 
 // NewConfigFromConfig 从全局配置创建数据库配置
+// 如果 cfg.Database.DataDir 为空，使用 DefaultConfig() 的固定路径 (程序目录/data)
 func NewConfigFromConfig(cfg *config.Config) *Config {
 	if cfg == nil || !cfg.Database.Enabled {
 		return nil
 	}
 
-	// 如果 DataDir 为空，使用 workspace 下的数据库目录
+	// 如果 DataDir 为空，使用 DefaultConfig 的固定路径
 	dataDir := cfg.Database.DataDir
 	if dataDir == "" {
-		dataDir = ".data"
+		return DefaultConfig()
 	}
 
 	return &Config{
@@ -44,9 +45,18 @@ func NewConfigFromConfig(cfg *config.Config) *Config {
 }
 
 // DefaultConfig 返回默认配置
+// 数据目录固定为程序所在目录下的 data 文件夹
 func DefaultConfig() *Config {
+	// 获取可执行文件所在目录
+	exePath, err := os.Executable()
+	if err != nil {
+		// 如果获取失败，使用当前工作目录
+		exePath = "."
+	}
+	exeDir := filepath.Dir(exePath)
+
 	return &Config{
-		DataDir:      ".nanobot",
+		DataDir:      filepath.Join(exeDir, "data"),
 		DBName:       "nanobot.db",
 		MaxOpenConns: 1,
 		MaxIdleConns: 1,
