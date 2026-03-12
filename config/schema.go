@@ -220,32 +220,7 @@ func DefaultConfig() *Config {
 			Enabled: true,
 			Events:  []string{"tool_used", "tool_completed"},
 		},
-		Channels: ChannelsConfig{
-			Matrix: MatrixConfig{
-				Homeserver: "https://matrix.example.com",
-				UserID:     "@nanobot:example.com",
-				Token:      "your-access-token",
-			},
-			DingTalk: DingTalkConfig{
-				Enabled:      false,
-				ClientID:     "your-client-id",
-				ClientSecret: "your-client-secret",
-			},
-		},
-		Gateway: GatewayConfig{
-			Host: "0.0.0.0",
-			Port: 18790,
-		},
-		Tools: ToolsConfig{
-			Web: WebToolsConfig{
-				Search: WebSearchConfig{
-					MaxResults: 5,
-				},
-			},
-			Exec: ExecToolConfig{
-				Timeout: 60,
-			},
-		},
+
 		Compress: CompressConfig{
 			Enabled:     false,
 			MinMessages: 20,

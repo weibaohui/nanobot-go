@@ -59,9 +59,6 @@ func createChatModelConfig(logger *zap.Logger, cfg *config.Config) (apiKey, apiB
 	}
 
 	apiBase = providerCfg.APIBase
-	if apiBase == "" {
-		apiBase = "https://api.openai.com/v1"
-	}
 
 	return providerCfg.APIKey, apiBase, cfg.Agents.Defaults.Model, nil
 }

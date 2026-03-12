@@ -78,13 +78,6 @@ var gatewayCmd = &cobra.Command{
 	Run:   runGateway,
 }
 
-var onboardCmd = &cobra.Command{
-	Use:   "onboard",
-	Short: "初始化配置",
-	Long:  `初始化 nanobot 配置和工作区。`,
-	Run:   runOnboard,
-}
-
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "显示版本",
@@ -114,7 +107,6 @@ func init() {
 	gatewayCmd.Flags().BoolVar(&apiEnabled, "api", true, "启用管理 API")
 
 	rootCmd.AddCommand(gatewayCmd)
-	rootCmd.AddCommand(onboardCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(memoryUpgradeCmd)
 }
@@ -128,22 +120,64 @@ func main() {
 
 // ========== Gateway 命令实现 ==========
 
+func createDefaultConfig() *config.Config {
+	return &config.Config{
+		Agents: config.AgentsConfig{
+			Defaults: config.AgentDefaults{
+				Model:       "",
+				MaxTokens:   4096,
+				Temperature: 0.7,
+			},
+			MaxIterations: 15,
+		},
+		Providers: config.ProvidersConfig{
+			OpenAI: config.ProviderConfig{
+				APIKey:  os.Getenv("OPENAI_API_KEY"),
+				APIBase: os.Getenv("OPENAI_API_BASE"),
+			},
+			Anthropic: config.ProviderConfig{
+				APIKey: os.Getenv("ANTHROPIC_API_KEY"),
+			},
+			DeepSeek: config.ProviderConfig{
+				APIKey: os.Getenv("DEEPSEEK_API_KEY"),
+			},
+			OpenRouter: config.ProviderConfig{
+				APIKey: os.Getenv("OPENROUTER_API_KEY"),
+			},
+			SiliconFlow: config.ProviderConfig{
+				APIKey:  os.Getenv("SILICONFLOW_API_KEY"),
+				APIBase: "https://api.siliconflow.cn/v1",
+			},
+		},
+		Tools: config.ToolsConfig{
+			Web: config.WebToolsConfig{
+				Search: config.WebSearchConfig{
+					MaxResults: 5,
+				},
+			},
+			Exec: config.ExecToolConfig{
+				Timeout: 120,
+			},
+			RestrictToWorkspace: true,
+		},
+	}
+}
 func runGateway(cmd *cobra.Command, args []string) {
 	logger := initLogger(debugGlobal || gatewayVerbose)
 	defer logger.Sync()
 
-	cfg, workspacePath := loadConfigAndWorkspace(logger)
+	cfg := createDefaultConfig()
 
 	logger.Info("nanobot gateway 启动中",
 		zap.Int("端口", gatewayPort),
-		zap.String("工作区", workspacePath),
+		zap.String("工作区", cfg.GetWorkspacePath()),
 		zap.String("版本", version),
 		zap.String("构建时间", buildDate),
 	)
 
 	messageBus := bus.NewMessageBus(logger)
 
-	dataDir := filepath.Join(workspacePath, ".nanobot")
+	dataDir := filepath.Join(cfg.GetWorkspacePath(), ".nanobot")
 
 	// 初始化数据库和对话记录仓库
 	var convRepo session.ConversationRecordRepository
@@ -408,7 +442,6 @@ func runGateway(cmd *cobra.Command, args []string) {
 	loop := agent.NewLoop(&agent.LoopConfig{
 		Config:              cfg,
 		MessageBus:          messageBus,
-		Workspace:           workspacePath,
 		MaxIterations:       maxIter,
 		ExecTimeout:         execTimeout,
 		RestrictToWorkspace: cfg.Tools.RestrictToWorkspace,
@@ -423,11 +456,10 @@ func runGateway(cmd *cobra.Command, args []string) {
 
 	channelManager := channels.NewManager(messageBus)
 
-	cliChannel := channels.NewCLIChannel(messageBus, "default", logger)
-	channelManager.Register(cliChannel)
-
-	// 注册配置中启用的渠道
-	registerChannels(channelManager, cfg, messageBus, logger)
+	// 从数据库注册启用的渠道
+	if dbClient != nil {
+		registerChannelsFromDB(channelManager, dbClient.DB(), messageBus, logger)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -531,7 +563,7 @@ func runMemoryUpgrade(cmd *cobra.Command, args []string) {
 		targetDate = args[0]
 	}
 
-	cfg, _ := loadConfigAndWorkspace(logger)
+	cfg := createDefaultConfig()
 
 	if !cfg.Memory.Enabled {
 		fmt.Println("记忆模块未启用，请在配置中设置 memory.enabled = true")
@@ -599,135 +631,6 @@ func runMemoryUpgrade(cmd *cobra.Command, args []string) {
 	fmt.Printf("✓ 记忆升级任务完成: %s\n", targetDate)
 }
 
-// ========== Onboard 命令实现 ==========
-
-func runOnboard(cmd *cobra.Command, args []string) {
-	logger := initLogger(debugGlobal)
-	defer logger.Sync()
-
-	homeDir, _ := os.UserHomeDir()
-	configDir := filepath.Join(homeDir, ".nanobot")
-	configPath := filepath.Join(configDir, "config.json")
-	workspacePath := filepath.Join(configDir, "workspace")
-
-	os.MkdirAll(configDir, 0755)
-
-	if _, err := os.Stat(configPath); err == nil {
-		fmt.Printf("配置已存在于 %s\n", configPath)
-		fmt.Print("是否覆盖? (y/N): ")
-		var confirm string
-		fmt.Scanln(&confirm)
-		if confirm != "y" && confirm != "Y" {
-			fmt.Println("已取消")
-			return
-		}
-	}
-
-	cfg := createDefaultConfig()
-	cfg.Agents.Defaults.Workspace = workspacePath
-
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "序列化配置失败: %s\n", err)
-		os.Exit(1)
-	}
-	os.WriteFile(configPath, data, 0644)
-	fmt.Printf("✓ 创建配置: %s\n", configPath)
-
-	os.MkdirAll(workspacePath, 0755)
-	fmt.Printf("✓ 创建工作区: %s\n", workspacePath)
-
-	createWorkspaceTemplates(workspacePath)
-
-	fmt.Println()
-	fmt.Println("🐈 nanobot 已准备就绪!")
-	fmt.Println()
-	fmt.Println("下一步:")
-	fmt.Println("  1. 在 ~/.nanobot/config.json 中添加 API Key")
-	fmt.Println("     获取: https://openrouter.ai/keys")
-	fmt.Println("  2. 聊天: nanobot agent -m \"你好!\"")
-}
-
-func createWorkspaceTemplates(workspace string) {
-	templates := map[string]string{
-		"AGENTS.md": `# 代理指令
-
-你是一个有帮助的 AI 助手。保持简洁、准确和友好。
-
-## 指南
-
-- 在采取行动前解释你在做什么
-- 当请求不明确时请求澄清
-- 使用工具帮助完成任务
-- 在内存文件中记住重要信息
-`,
-		"SOUL.md": `# 灵魂
-
-我是 nanobot，一个轻量级的 AI 助手。
-
-## 个性
-
-- 有帮助且友好
-- 简洁明了
-- 好奇且渴望学习
-
-## 价值观
-
-- 准确性优于速度
-- 用户隐私和安全
-- 行动透明
-`,
-		"USER.md": `# 用户
-
-用户信息放在这里。
-
-## 偏好
-
-- 沟通风格: (随意/正式)
-- 时区: (你的时区)
-- 语言: (你的首选语言)
-`,
-	}
-
-	for filename, content := range templates {
-		filePath := filepath.Join(workspace, filename)
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			os.WriteFile(filePath, []byte(content), 0644)
-			fmt.Printf("  创建 %s\n", filename)
-		}
-	}
-
-	memoryDir := filepath.Join(workspace, "memory")
-	os.MkdirAll(memoryDir, 0755)
-
-	memoryFile := filepath.Join(memoryDir, "MEMORY.md")
-	if _, err := os.Stat(memoryFile); os.IsNotExist(err) {
-		memoryContent := `# 长期内存
-
-此文件存储跨会话持久化的重要信息。
-
-## 用户信息
-
-(关于用户的重要事实)
-
-## 偏好
-
-(随时间学习的用户偏好)
-
-## 重要笔记
-
-(需要记住的事情)
-`
-		os.WriteFile(memoryFile, []byte(memoryContent), 0644)
-		fmt.Println("  创建 memory/MEMORY.md")
-	}
-
-	skillsDir := filepath.Join(workspace, "skills")
-	os.MkdirAll(skillsDir, 0755)
-}
-
-// ========== 辅助函数 ==========
-
 func initLogger(debug bool) *zap.Logger {
 	encoderConfig := zapcore.EncoderConfig{
 		TimeKey:        "time",
@@ -757,179 +660,79 @@ func initLogger(debug bool) *zap.Logger {
 	return zap.New(core, zap.AddCaller())
 }
 
-func loadConfigAndWorkspace(logger *zap.Logger) (*config.Config, string) {
-	workspace := agentWorkspace
-	if workspace == "" {
-		workspace = "."
+// registerChannelsFromDB 从数据库读取渠道配置并注册
+func registerChannelsFromDB(mgr *channels.Manager, db *gorm.DB, messageBus *bus.MessageBus, logger *zap.Logger) {
+	var channelList []models.Channel
+	if err := db.Where("is_active = ?", true).Find(&channelList).Error; err != nil {
+		logger.Error("从数据库读取渠道配置失败", zap.Error(err))
+		return
 	}
 
-	workspacePath, err := filepath.Abs(workspace)
-	if err != nil {
-		logger.Fatal("解析工作区路径失败", zap.Error(err))
-	}
-
-	cfg, err := loadConfig("", workspacePath)
-	if err != nil {
-		logger.Fatal("加载配置失败", zap.Error(err))
-	}
-
-	// 如果配置文件中指定了 workspace 且命令行未指定，使用配置中的路径
-	if agentWorkspace == "" && cfg.Agents.Defaults.Workspace != "" {
-		workspacePath = config.GetWorkspacePath(cfg.Agents.Defaults.Workspace)
-	}
-
-	return cfg, workspacePath
-}
-
-func loadConfig(configPath, workspace string) (*config.Config, error) {
-	path := configPath
-	if path == "" {
-		// 获取用户主目录
-		homeDir, _ := os.UserHomeDir()
-
-		defaultPaths := []string{
-			filepath.Join(workspace, "nanobot.json"),
-			filepath.Join(workspace, "config.json"),
-			filepath.Join(workspace, "config", "nanobot.json"),
-			filepath.Join(workspace, ".nanobot", "config.json"),
-		}
-
-		// 添加用户主目录下的配置路径
-		if homeDir != "" {
-			defaultPaths = append(defaultPaths, filepath.Join(homeDir, ".nanobot", "config.json"))
-		}
-
-		for _, p := range defaultPaths {
-			if _, err := os.Stat(p); err == nil {
-				path = p
-				break
+	for _, ch := range channelList {
+		switch ch.Type {
+		case models.ChannelTypeFeishu:
+			var cfg models.FeishuChannelConfig
+			if err := json.Unmarshal([]byte(ch.Config), &cfg); err != nil {
+				logger.Error("解析飞书渠道配置失败", zap.Error(err), zap.Uint("channel_id", ch.ID))
+				continue
 			}
+			feishuConfig := &channels.FeishuConfig{
+				AppID:             cfg.AppID,
+				AppSecret:         cfg.AppSecret,
+				EncryptKey:        cfg.EncryptKey,
+				VerificationToken: cfg.VerificationToken,
+			}
+			feishu := channels.NewFeishuChannel(feishuConfig, messageBus, logger)
+			mgr.Register(feishu)
+			logger.Info("已注册飞书渠道", zap.String("app_id", cfg.AppID))
+
+		case models.ChannelTypeDingTalk:
+			var cfg models.DingTalkChannelConfig
+			if err := json.Unmarshal([]byte(ch.Config), &cfg); err != nil {
+				logger.Error("解析钉钉渠道配置失败", zap.Error(err), zap.Uint("channel_id", ch.ID))
+				continue
+			}
+			dingtalkConfig := &channels.DingTalkConfig{
+				ClientID:     cfg.ClientID,
+				ClientSecret: cfg.ClientSecret,
+			}
+			dingtalk := channels.NewDingTalkChannel(dingtalkConfig, messageBus, logger)
+			mgr.Register(dingtalk)
+			logger.Info("已注册钉钉渠道")
+
+		case models.ChannelTypeMatrix:
+			var cfg models.MatrixChannelConfig
+			if err := json.Unmarshal([]byte(ch.Config), &cfg); err != nil {
+				logger.Error("解析 Matrix 渠道配置失败", zap.Error(err), zap.Uint("channel_id", ch.ID))
+				continue
+			}
+			matrixConfig := &channels.MatrixConfig{
+				Homeserver: cfg.Homeserver,
+				UserID:     cfg.UserID,
+				Token:      cfg.Token,
+			}
+			matrix := channels.NewMatrixChannel(matrixConfig, messageBus, logger)
+			mgr.Register(matrix)
+			logger.Info("已注册 Matrix 渠道", zap.String("homeserver", cfg.Homeserver), zap.String("user_id", cfg.UserID))
+
+		case models.ChannelTypeWebSocket:
+			var cfg models.WebSocketChannelConfig
+			if err := json.Unmarshal([]byte(ch.Config), &cfg); err != nil {
+				logger.Error("解析 WebSocket 渠道配置失败", zap.Error(err), zap.Uint("channel_id", ch.ID))
+				continue
+			}
+			wsConfig := &channels.WebSocketConfig{
+				Addr: cfg.Addr,
+				Path: cfg.Path,
+			}
+			ws := channels.NewWebSocketChannel(wsConfig, messageBus, logger)
+			mgr.Register(ws)
+			logger.Info("已注册 WebSocket 渠道", zap.String("addr", cfg.Addr), zap.String("path", cfg.Path))
+
+		default:
+			logger.Warn("未知渠道类型", zap.String("type", string(ch.Type)), zap.Uint("channel_id", ch.ID))
 		}
 	}
-
-	if path != "" {
-		return config.LoadConfig(path)
-	}
-
-	return createDefaultConfig(), nil
-}
-
-func createDefaultConfig() *config.Config {
-	return &config.Config{
-		Agents: config.AgentsConfig{
-			Defaults: config.AgentDefaults{
-				Model:       getEnvOrDefault("NANOBOT_MODEL", "gpt-4o-mini"),
-				MaxTokens:   4096,
-				Temperature: 0.7,
-			},
-			MaxIterations: 15,
-		},
-		Providers: config.ProvidersConfig{
-			OpenAI: config.ProviderConfig{
-				APIKey:  os.Getenv("OPENAI_API_KEY"),
-				APIBase: os.Getenv("OPENAI_API_BASE"),
-			},
-			Anthropic: config.ProviderConfig{
-				APIKey: os.Getenv("ANTHROPIC_API_KEY"),
-			},
-			DeepSeek: config.ProviderConfig{
-				APIKey: os.Getenv("DEEPSEEK_API_KEY"),
-			},
-			OpenRouter: config.ProviderConfig{
-				APIKey: os.Getenv("OPENROUTER_API_KEY"),
-			},
-			SiliconFlow: config.ProviderConfig{
-				APIKey:  os.Getenv("SILICONFLOW_API_KEY"),
-				APIBase: "https://api.siliconflow.cn/v1",
-			},
-		},
-		Tools: config.ToolsConfig{
-			Web: config.WebToolsConfig{
-				Search: config.WebSearchConfig{
-					MaxResults: 5,
-				},
-			},
-			Exec: config.ExecToolConfig{
-				Timeout: 120,
-			},
-			RestrictToWorkspace: true,
-		},
-		Gateway: config.GatewayConfig{
-			Host: getEnvOrDefault("NANOBOT_HOST", "0.0.0.0"),
-			Port: 8080,
-		},
-	}
-}
-func getEnvOrDefault(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-// registerChannels 根据配置注册启用的渠道
-func registerChannels(mgr *channels.Manager, cfg *config.Config, messageBus *bus.MessageBus, logger *zap.Logger) {
-	// WebSocket 渠道（默认启用）
-	if cfg.Channels.WebSocket.Enabled {
-		wsConfig := &channels.WebSocketConfig{
-			Addr:      cfg.Channels.WebSocket.Addr,
-			Path:      cfg.Channels.WebSocket.Path,
-			AllowFrom: cfg.Channels.WebSocket.AllowFrom,
-		}
-		ws := channels.NewWebSocketChannel(wsConfig, messageBus, logger)
-		mgr.Register(ws)
-		if wsConfig.Addr != "" {
-			logger.Info("已注册 WebSocket 渠道", zap.String("addr", wsConfig.Addr), zap.String("path", wsConfig.Path))
-		} else {
-			logger.Info("已注册 WebSocket 渠道", zap.String("addr", ":8088"), zap.String("path", "/ws"))
-		}
-	}
-
-	// 钉钉渠道
-	if cfg.Channels.DingTalk.Enabled {
-		dingtalkConfig := &channels.DingTalkConfig{
-			ClientID:     cfg.Channels.DingTalk.ClientID,
-			ClientSecret: cfg.Channels.DingTalk.ClientSecret,
-			AllowFrom:    cfg.Channels.DingTalk.AllowFrom,
-		}
-		dingtalk := channels.NewDingTalkChannel(dingtalkConfig, messageBus, logger)
-		mgr.Register(dingtalk)
-		logger.Info("已注册钉钉渠道")
-	}
-
-	// Matrix 渠道
-	if cfg.Channels.Matrix.Enabled {
-		matrixConfig := &channels.MatrixConfig{
-			Homeserver: cfg.Channels.Matrix.Homeserver,
-			UserID:     cfg.Channels.Matrix.UserID,
-			Token:      cfg.Channels.Matrix.Token,
-			AllowFrom:  cfg.Channels.Matrix.AllowFrom,
-			DataDir:    cfg.Channels.Matrix.DataDir,
-		}
-		matrix := channels.NewMatrixChannel(matrixConfig, messageBus, logger)
-		mgr.Register(matrix)
-		logger.Info("已注册 Matrix 渠道",
-			zap.String("homeserver", matrixConfig.Homeserver),
-			zap.String("user_id", matrixConfig.UserID),
-		)
-	}
-
-	// 飞书渠道
-	if cfg.Channels.Feishu.Enabled {
-		feishuConfig := &channels.FeishuConfig{
-			AppID:             cfg.Channels.Feishu.AppID,
-			AppSecret:         cfg.Channels.Feishu.AppSecret,
-			EncryptKey:        cfg.Channels.Feishu.EncryptKey,
-			VerificationToken: cfg.Channels.Feishu.VerificationToken,
-			AllowFrom:         cfg.Channels.Feishu.AllowFrom,
-		}
-		feishu := channels.NewFeishuChannel(feishuConfig, messageBus, logger)
-		mgr.Register(feishu)
-		logger.Info("已注册飞书渠道",
-			zap.String("app_id", feishuConfig.AppID),
-		)
-	}
-
 }
 
 // setDatabaseProviderLoader 设置从数据库加载 Provider 配置的函数
