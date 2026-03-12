@@ -7,6 +7,7 @@ import (
 	"github.com/weibaohui/nanobot-go/agent/hooks"
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/trace"
+	"github.com/weibaohui/nanobot-go/agent/interrupt"
 	"github.com/weibaohui/nanobot-go/agent/tools"
 	"github.com/weibaohui/nanobot-go/agent/tools/askuser"
 	toolcron "github.com/weibaohui/nanobot-go/agent/tools/cron"
@@ -17,6 +18,7 @@ import (
 	"github.com/weibaohui/nanobot-go/agent/tools/readfile"
 	"github.com/weibaohui/nanobot-go/agent/tools/skill"
 	tasktool "github.com/weibaohui/nanobot-go/agent/tools/task"
+	"github.com/weibaohui/nanobot-go/agent/task"
 	"github.com/weibaohui/nanobot-go/agent/tools/webfetch"
 	"github.com/weibaohui/nanobot-go/agent/tools/websearch"
 	"github.com/weibaohui/nanobot-go/agent/tools/writefile"
@@ -43,9 +45,9 @@ type Loop struct {
 	hookManager         *hooks.HookManager
 	hookCallback        func(eventType events.EventType, data map[string]interface{}) // Hook 回调
 
-	interruptManager *InterruptManager
+	interruptManager *interrupt.Manager
 	masterAgent      *MasterAgent
-	taskManager      *AgentTaskManager
+	taskManager      *task.Manager
 }
 
 // LoopConfig Loop 配置
@@ -95,13 +97,13 @@ func NewLoop(cfg *LoopConfig) *Loop {
 		loop.tools.SetHookManager(cfg.HookManager, logger)
 	}
 
-	loop.interruptManager = NewInterruptManager(cfg.MessageBus, logger)
+	loop.interruptManager = interrupt.NewManager(cfg.MessageBus, logger)
 
 	loop.registerDefaultTools()
 
 	loop.taskManager = loop.createBackgroundAgentTaskManager()
 	if loop.taskManager != nil {
-		adapter := NewTaskManagerAdapter(loop.taskManager)
+		adapter := task.NewAdapter(loop.taskManager)
 		loop.registerTaskTools(adapter)
 	}
 
@@ -210,8 +212,8 @@ func (l *Loop) registerTaskTools(manager tasktool.Manager) {
 }
 
 // createBackgroundAgentTaskManager 创建任务管理器
-func (l *Loop) createBackgroundAgentTaskManager() *AgentTaskManager {
-	taskManager, err := NewBackgroundAgentTaskManager(&AgentTaskManagerConfig{
+func (l *Loop) createBackgroundAgentTaskManager() *task.Manager {
+	taskManager, err := task.NewManager(&task.ManagerConfig{
 		ConfigLoader:    l.configLoader,
 		Workspace:       l.workspace,
 		Tools:           l.tools.GetTools(),
@@ -221,15 +223,15 @@ func (l *Loop) createBackgroundAgentTaskManager() *AgentTaskManager {
 		MaxIterations:   l.maxIterations,
 		Sessions:        l.sessions,
 		HookManager:     l.hookManager,
-		OnTaskComplete: func(channel, chatID, taskID string, status TaskStatus, result string) {
+		OnTaskComplete: func(channel, chatID, taskID string, status task.Status, result string) {
 			// 任务完成时发送通知消息
-			statusText := map[TaskStatus]string{
-				TaskFinished: "完成",
-				TaskFailed:   "失败",
-				TaskStopped:  "已停止",
+			statusText := map[task.Status]string{
+				task.StatusFinished: "完成",
+				task.StatusFailed:   "失败",
+				task.StatusStopped:  "已停止",
 			}[status]
 			msg := fmt.Sprintf("后台任务 %s\n状态: %s\n任务ID: %s", statusText, statusText, taskID)
-			if result != "" && status == TaskFinished {
+			if result != "" && status == task.StatusFinished {
 				msg = fmt.Sprintf("后台任务完成\n任务ID: %s\n\n%s", taskID, result)
 			}
 			l.bus.PublishOutbound(bus.NewOutboundMessage(channel, chatID, msg))

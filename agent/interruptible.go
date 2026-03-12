@@ -12,6 +12,7 @@ import (
 	hooks "github.com/weibaohui/nanobot-go/agent/hooks"
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/trace"
+	"github.com/weibaohui/nanobot-go/agent/interrupt"
 	"github.com/weibaohui/nanobot-go/agent/tools/askuser"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/session"
@@ -57,7 +58,7 @@ type interruptible struct {
 	bus               *bus.MessageBus
 	context           *ContextBuilder
 	adkRunner         *adk.Runner
-	interruptManager  *InterruptManager
+	interruptManager  *interrupt.Manager
 	checkpointStore   compose.CheckPointStore
 	registeredTools   []string
 	maxIterations     int
@@ -75,7 +76,7 @@ type interruptibleConfig struct {
 	Sessions         *session.Manager
 	Bus              *bus.MessageBus
 	Context          *ContextBuilder
-	InterruptMgr     *InterruptManager
+	InterruptMgr     *interrupt.Manager
 	CheckpointStore  compose.CheckPointStore
 	MaxIterations    int
 	RegisteredTools  []string
@@ -199,7 +200,7 @@ func (i *interruptible) Process(ctx context.Context, msg *bus.InboundMessage, bu
 }
 
 // processInterrupted 处理中断恢复流程
-func (i *interruptible) processInterrupted(ctx context.Context, sess *session.Session, msg *bus.InboundMessage, pendingInterrupt *InterruptInfo, buildMessagesFunc func(history []*schema.Message, userInput, channel, chatID string) []*schema.Message) (string, error) {
+func (i *interruptible) processInterrupted(ctx context.Context, sess *session.Session, msg *bus.InboundMessage, pendingInterrupt *interrupt.InterruptInfo, buildMessagesFunc func(history []*schema.Message, userInput, channel, chatID string) []*schema.Message) (string, error) {
 	sessionKey := msg.SessionKey()
 
 	// 使用原始 checkpoint ID 进行恢复
@@ -216,7 +217,7 @@ func (i *interruptible) processInterrupted(ctx context.Context, sess *session.Se
 	)
 
 	// 提交用户响应
-	response := &UserResponse{
+	response := &interrupt.UserResponse{
 		CheckpointID: resumeCheckpointID,
 		Answer:       msg.Content,
 	}
@@ -408,7 +409,7 @@ func (i *interruptible) handleInterrupt(msg *bus.InboundMessage, checkpointID st
 	}
 
 	// 发送中断请求
-	i.interruptManager.HandleInterrupt(&InterruptInfo{
+	i.interruptManager.HandleInterrupt(&interrupt.InterruptInfo{
 		CheckpointID:         checkpointID,
 		OriginalCheckpointID: originalCheckpointID,
 		InterruptID:          interruptID,

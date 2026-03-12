@@ -9,6 +9,7 @@ import (
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/agent/hooks"
+	"github.com/weibaohui/nanobot-go/agent/interrupt"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
@@ -37,7 +38,7 @@ type MasterAgentConfig struct {
 	Sessions       *session.Manager
 	Bus            *bus.MessageBus
 	Context        *ContextBuilder
-	InterruptMgr   *InterruptManager
+	InterruptMgr   *interrupt.Manager
 	CheckpointStore compose.CheckPointStore
 	MaxIterations  int
 	RegisteredTools []string
