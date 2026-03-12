@@ -161,6 +161,11 @@ func createDefaultConfig() *config.Config {
 			},
 			RestrictToWorkspace: true,
 		},
+		Database: config.DatabaseConfig{
+			Enabled: true,
+			DataDir: ".nanobot",
+			DBName:  "nanobot.db",
+		},
 	}
 }
 func runGateway(cmd *cobra.Command, args []string) {
