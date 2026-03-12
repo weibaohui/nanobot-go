@@ -43,6 +43,15 @@ type ModelInfo struct {
 	MaxTokens int    `json:"max_tokens,omitempty"`
 }
 
+// LLMConfig LLM 配置信息，用于创建 LLM 客户端
+type LLMConfig struct {
+	ProviderKey  string            `json:"provider_key"`
+	APIKey       string            `json:"api_key"`
+	APIBase      string            `json:"api_base"`
+	DefaultModel string            `json:"default_model"`
+	ExtraHeaders map[string]string `json:"extra_headers,omitempty"`
+}
+
 // ProviderService Provider 服务接口
 type ProviderService interface {
 	List(ctx context.Context, userID uint, offset int, limit int) ([]models.LLMProvider, int64, error)
@@ -54,6 +63,7 @@ type ProviderService interface {
 	GetModelConfig(ctx context.Context, id uint) (interface{}, error)
 	UpdateModelConfig(ctx context.Context, id uint, config map[string]interface{}) error
 	TestConnection(ctx context.Context, id uint) (map[string]interface{}, error)
+	GetLLMConfig(ctx context.Context, userID uint) (*LLMConfig, error)
 }
 
 // providerService Provider 服务实现
@@ -268,5 +278,24 @@ func (s *providerService) TestConnection(ctx context.Context, id uint) (map[stri
 		"success": true,
 		"message": fmt.Sprintf("成功连接到 %s (%s)", provider.ProviderName, provider.ProviderKey),
 		"models":  provider.GetSupportedModels(),
+	}, nil
+}
+
+// GetLLMConfig 获取用于创建 LLM 客户端的配置
+// 返回用户默认 Provider 的配置信息
+func (s *providerService) GetLLMConfig(ctx context.Context, userID uint) (*LLMConfig, error) {
+	var provider models.LLMProvider
+	if err := s.db.WithContext(ctx).
+		Where("user_id = ? AND is_default = ? AND is_active = ?", userID, true, true).
+		First(&provider).Error; err != nil {
+		return nil, fmt.Errorf("获取默认 Provider 失败: %w", err)
+	}
+
+	return &LLMConfig{
+		ProviderKey:  provider.ProviderKey,
+		APIKey:       provider.APIKey,
+		APIBase:      provider.APIBase,
+		DefaultModel: provider.DefaultModel,
+		ExtraHeaders: provider.GetExtraHeaders(),
 	}, nil
 }
