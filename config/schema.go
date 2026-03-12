@@ -74,6 +74,9 @@ type MemoryStorageConfig struct {
 	StreamVectorization bool `json:"streamVectorization"` // 流水记忆是否向量化
 }
 
+// ProviderLoader 从数据库加载 Provider 配置的函数类型
+type ProviderLoader func(model string) *ProviderConfig
+
 // Config 根配置结构
 type Config struct {
 	Agents          AgentsConfig          `json:"agents"`
@@ -85,6 +88,9 @@ type Config struct {
 	ThinkingProcess ThinkingProcessConfig `json:"thinkingProcess"` // 思考过程配置
 	Database        DatabaseConfig        `json:"database"`        // 数据库配置
 	Memory          MemoryConfig          `json:"memory"`          // 记忆模块配置
+
+	// providerLoader 从数据库加载 Provider 配置的函数（运行时设置，不从配置文件读取）
+	providerLoader ProviderLoader `json:"-"`
 }
 
 // AgentsConfig 代理配置
@@ -322,11 +328,24 @@ func (c *Config) GetWorkspacePath() string {
 	return GetWorkspacePath(c.Agents.Defaults.Workspace)
 }
 
+// SetProviderLoader 设置 Provider 加载函数（用于从数据库加载）
+func (c *Config) SetProviderLoader(loader ProviderLoader) {
+	c.providerLoader = loader
+}
+
 // GetProvider 获取匹配的提供商配置
+// 优先从数据库加载（如果设置了 providerLoader），否则使用配置文件
 func (c *Config) GetProvider(model string) *ProviderConfig {
 	modelLower := model
 	if modelLower == "" {
 		modelLower = c.Agents.Defaults.Model
+	}
+
+	// 优先使用数据库加载（如果设置了 providerLoader）
+	if c.providerLoader != nil {
+		if dbProvider := c.providerLoader(modelLower); dbProvider != nil {
+			return dbProvider
+		}
 	}
 
 	// 按关键词匹配（优先级从高到低）
