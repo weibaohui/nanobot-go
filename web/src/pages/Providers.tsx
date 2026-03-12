@@ -30,7 +30,7 @@ const Providers: React.FC = () => {
   const fetchProviders = async () => {
     setLoading(true);
     try {
-      const res = await providersApi.list();
+      const res = await providersApi.list(1);
       // providersApi.list 返回 ListResponse { items, total }
       setProviders((res as any)?.items || []);
     } catch (error) {

@@ -1,4 +1,4 @@
-.PHONY: help build clean dev dev-backend dev-web test migrate
+.PHONY: help build clean dev dev-backend dev-web stop test migrate
 
 # 默认目标
 help:
@@ -8,6 +8,7 @@ help:
 	@echo "  make dev        - 同时启动后端和前端开发服务器"
 	@echo "  make dev-backend - 仅启动后端开发服务器"
 	@echo "  make dev-web    - 仅启动前端开发服务器"
+	@echo "  make stop       - 停止所有 nanobot 进程"
 	@echo "  make test       - 运行测试"
 	@echo "  make migrate    - 运行配置迁移工具"
 	@echo "  make fmt        - 格式化代码"
@@ -46,6 +47,28 @@ dev-backend:
 # 启动前端开发服务器
 dev-web:
 	cd web && npm run dev
+
+# 停止所有 nanobot 进程
+stop:
+	@echo "正在停止所有 nanobot 相关进程..."
+	@echo "  - 停止 go run nanobot..."
+	@ps -ef | grep "go run ./cmd/nanobot" | grep -v grep | awk '{print $$2}' | xargs -I {} kill -9 {} 2>/dev/null || true
+	@echo "  - 停止 nanobot gateway 二进制..."
+	@ps -ef | grep "nanobot gateway" | grep -v grep | awk '{print $$2}' | xargs -I {} kill -9 {} 2>/dev/null || true
+	@echo "  - 停止 make dev 相关 shell..."
+	@ps -ef | grep -E "make dev|trap.*kill 0" | grep -v grep | awk '{print $$2}' | xargs -I {} kill -9 {} 2>/dev/null || true
+	@echo "  - 停止 node/vite..."
+	@pgrep -f "vite" | xargs -I {} kill -9 {} 2>/dev/null || true
+	@echo "  - 停止 esbuild..."
+	@pgrep -f "esbuild.*nanobot" | xargs -I {} kill -9 {} 2>/dev/null || true
+	@sleep 1
+	@remaining=$$(ps -ef | grep -E "(nanobot|go run.*nanobot)" | grep -v grep | wc -l); \
+	if [ $$remaining -eq 0 ]; then \
+		echo "已停止所有 nanobot 进程"; \
+	else \
+		echo "警告: 仍有 $$remaining 个进程在运行"; \
+		ps -ef | grep -E "(nanobot|go run.*nanobot)" | grep -v grep; \
+	fi
 
 # 运行测试
 test:

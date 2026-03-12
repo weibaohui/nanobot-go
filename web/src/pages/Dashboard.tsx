@@ -23,9 +23,9 @@ const Dashboard: React.FC = () => {
     const fetchStats = async () => {
       try {
         const [agentsRes, channelsRes, providersRes, cronRes] = await Promise.all([
-          agentsApi.list(),
-          channelsApi.list(),
-          providersApi.list(),
+          agentsApi.list(1),
+          channelsApi.list(1),
+          providersApi.list(1),
           cronApi.list(),
         ]);
 
