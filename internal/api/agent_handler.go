@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/weibaohui/nanobot-go/internal/service"
+	agentsvc "github.com/weibaohui/nanobot-go/internal/service/agent"
 )
 
 // handleAgents 处理 /api/v1/agents
@@ -67,7 +67,7 @@ func (h *Handler) listAgents(c *gin.Context) {
 
 // createAgent 创建 Agent
 func (h *Handler) createAgent(c *gin.Context) {
-	var req service.CreateAgentRequest
+	var req agentsvc.CreateAgentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
@@ -111,7 +111,7 @@ func (h *Handler) getAgent(c *gin.Context, id uint) {
 
 // updateAgent 更新 Agent
 func (h *Handler) updateAgent(c *gin.Context, id uint) {
-	var req service.UpdateAgentRequest
+	var req agentsvc.UpdateAgentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return

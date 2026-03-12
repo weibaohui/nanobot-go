@@ -1,0 +1,149 @@
+package agent
+
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/weibaohui/nanobot-go/internal/models"
+)
+
+// CreateAgent 创建 Agent
+func (s *service) CreateAgent(userID uint, req CreateAgentRequest) (*models.Agent, error) {
+	// 序列化技能列表
+	skillsJSON, err := json.Marshal(req.SkillsList)
+	if err != nil {
+		return nil, fmt.Errorf("序列化技能列表失败: %w", err)
+	}
+
+	// 序列化工具列表
+	toolsJSON, err := json.Marshal(req.ToolsList)
+	if err != nil {
+		return nil, fmt.Errorf("序列化工具列表失败: %w", err)
+	}
+
+	// 设置默认值
+	maxTokens := req.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = 4096
+	}
+	temperature := req.Temperature
+	if temperature == 0 {
+		temperature = 0.7
+	}
+	maxIterations := req.MaxIterations
+	if maxIterations <= 0 {
+		maxIterations = 15
+	}
+
+	agent := &models.Agent{
+		UserID:          userID,
+		Name:            req.Name,
+		Description:     req.Description,
+		IdentityContent: req.IdentityContent,
+		SoulContent:     req.SoulContent,
+		AgentsContent:   req.AgentsContent,
+		UserContent:     req.UserContent,
+		ToolsContent:    req.ToolsContent,
+		SkillsList:      string(skillsJSON),
+		ToolsList:       string(toolsJSON),
+		Model:           req.Model,
+		MaxTokens:       maxTokens,
+		Temperature:     temperature,
+		MaxIterations:   maxIterations,
+		IsActive:        true,
+		IsDefault:       req.IsDefault,
+	}
+
+	if err := s.agentRepo.Create(agent); err != nil {
+		return nil, err
+	}
+
+	return agent, nil
+}
+
+// GetAgent 获取 Agent
+func (s *service) GetAgent(id uint) (*models.Agent, error) {
+	return s.agentRepo.GetByID(id)
+}
+
+// GetUserAgents 获取用户的所有 Agent
+func (s *service) GetUserAgents(userID uint) ([]models.Agent, error) {
+	return s.agentRepo.GetByUserID(userID)
+}
+
+// UpdateAgent 更新 Agent
+func (s *service) UpdateAgent(id uint, req UpdateAgentRequest) (*models.Agent, error) {
+	agent, err := s.agentRepo.GetByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if agent == nil {
+		return nil, fmt.Errorf("agent not found")
+	}
+
+	// 更新字段
+	if req.Name != "" {
+		agent.Name = req.Name
+	}
+	if req.Description != "" {
+		agent.Description = req.Description
+	}
+	if req.IdentityContent != "" {
+		agent.IdentityContent = req.IdentityContent
+	}
+	if req.SoulContent != "" {
+		agent.SoulContent = req.SoulContent
+	}
+	if req.AgentsContent != "" {
+		agent.AgentsContent = req.AgentsContent
+	}
+	if req.UserContent != "" {
+		agent.UserContent = req.UserContent
+	}
+	if req.ToolsContent != "" {
+		agent.ToolsContent = req.ToolsContent
+	}
+	if req.Model != "" {
+		agent.Model = req.Model
+	}
+	if req.MaxTokens > 0 {
+		agent.MaxTokens = req.MaxTokens
+	}
+	if req.Temperature != 0 {
+		agent.Temperature = req.Temperature
+	}
+	if req.MaxIterations > 0 {
+		agent.MaxIterations = req.MaxIterations
+	}
+	if req.IsActive != nil {
+		agent.IsActive = *req.IsActive
+	}
+	if req.IsDefault != nil {
+		agent.IsDefault = *req.IsDefault
+	}
+	if req.SkillsList != nil {
+		skillsJSON, err := json.Marshal(req.SkillsList)
+		if err != nil {
+			return nil, fmt.Errorf("序列化技能列表失败: %w", err)
+		}
+		agent.SkillsList = string(skillsJSON)
+	}
+	if req.ToolsList != nil {
+		toolsJSON, err := json.Marshal(req.ToolsList)
+		if err != nil {
+			return nil, fmt.Errorf("序列化工具列表失败: %w", err)
+		}
+		agent.ToolsList = string(toolsJSON)
+	}
+
+	if err := s.agentRepo.Update(agent); err != nil {
+		return nil, err
+	}
+
+	return agent, nil
+}
+
+// DeleteAgent 删除 Agent
+func (s *service) DeleteAgent(id uint) error {
+	return s.agentRepo.Delete(id)
+}
