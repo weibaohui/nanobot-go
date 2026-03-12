@@ -4,3 +4,6 @@ export { agentsApi } from './agents';
 export { channelsApi } from './channels';
 export { providersApi } from './providers';
 export { cronApi } from './cron';
+export { conversationsApi } from './conversations';
+export { streamMemoriesApi } from './streamMemories';
+export { longTermMemoriesApi } from './longTermMemories';

@@ -205,3 +205,46 @@ export interface ListResponse<T> {
   page: number;
   page_size: number;
 }
+
+// Conversation Record 类型
+export interface ConversationRecord {
+  id: number;
+  trace_id: string;
+  span_id: string;
+  session_key: string;
+  event_type: string;
+  role?: string;
+  content: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  user_id?: string;
+  agent_id?: string;
+  channel_id?: string;
+  timestamp: string;
+}
+
+// Stream Memory 类型
+export interface StreamMemory {
+  id: number;
+  trace_id: string;
+  session_key: string;
+  channel_type: string;
+  event_type: string;
+  content: string;
+  summary?: string;
+  processed: boolean;
+  processed_at?: string;
+  created_at: string;
+}
+
+// Long-term Memory 类型
+export interface LongTermMemory {
+  id: number;
+  memory_date: string;
+  content: string;
+  summary?: string;
+  tags?: string;
+  created_at: string;
+  updated_at: string;
+}

@@ -10,6 +10,9 @@ import {
   UserOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  CommentOutlined,
+  ThunderboltOutlined,
+  DatabaseOutlined,
 } from '@ant-design/icons';
 
 const { Header, Sider, Content } = Layout;
@@ -41,6 +44,9 @@ const MainLayout: React.FC = () => {
     { key: '/channels', icon: <MessageOutlined />, label: '渠道' },
     { key: '/providers', icon: <KeyOutlined />, label: 'LLM' },
     { key: '/cron', icon: <ClockCircleOutlined />, label: '定时任务' },
+    { key: '/conversations', icon: <CommentOutlined />, label: '对话记录' },
+    { key: '/stream-memories', icon: <ThunderboltOutlined />, label: '短期记忆' },
+    { key: '/long-term-memories', icon: <DatabaseOutlined />, label: '长期记忆' },
     { key: '/users', icon: <UserOutlined />, label: '用户' },
   ];
 
