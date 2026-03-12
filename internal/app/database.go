@@ -1,12 +1,9 @@
 package app
 
 import (
-	"context"
-
 	"github.com/weibaohui/nanobot-go/config"
-	"github.com/weibaohui/nanobot-go/conversation/repository"
 	"github.com/weibaohui/nanobot-go/internal/database"
-	"github.com/weibaohui/nanobot-go/internal/models"
+	"github.com/weibaohui/nanobot-go/internal/service/conversation"
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
 )
@@ -37,9 +34,7 @@ func InitDatabase(cfg *config.Config, logger *zap.Logger) *DatabaseComponents {
 		return nil
 	}
 
-	convRepo := &convRepoAdapter{
-		repo: repository.NewConversationRecordRepository(dbClient.DB()),
-	}
+	convRepo := conversation.NewRepository(dbClient.DB())
 
 	logger.Info("数据库和对话记录仓库已初始化")
 
@@ -54,13 +49,4 @@ func (d *DatabaseComponents) Close() {
 	if d.DB != nil {
 		d.DB.Close()
 	}
-}
-
-// convRepoAdapter 将 repository.ConversationRecordRepository 适配为 session.ConversationRecordRepository
-type convRepoAdapter struct {
-	repo repository.ConversationRecordRepository
-}
-
-func (a *convRepoAdapter) FindBySessionKey(ctx context.Context, sessionKey string, opts *models.QueryOptions) ([]models.ConversationRecord, error) {
-	return a.repo.FindBySessionKey(ctx, sessionKey, opts)
 }

@@ -7,8 +7,8 @@ import (
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/hooks/observer"
 	"github.com/weibaohui/nanobot-go/agent/hooks/trace"
-	"github.com/weibaohui/nanobot-go/conversation/service"
 	"github.com/weibaohui/nanobot-go/internal/models"
+	"github.com/weibaohui/nanobot-go/internal/service/conversation"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -21,7 +21,7 @@ type DedupRepository interface {
 
 // ConversationCreator 对话创建接口
 type ConversationCreator interface {
-	Create(ctx context.Context, dto *service.ConversationDTO) error
+	Create(ctx context.Context, dto *conversation.ConversationDTO) error
 }
 
 // DBClient 数据库客户端接口
@@ -104,7 +104,7 @@ func (o *SQLiteObserver) handlePromptSubmitted(ctx context.Context, event events
 	}
 
 	baseEvent := event.ToBaseEvent()
-	dto := &service.ConversationDTO{
+	dto := &conversation.ConversationDTO{
 		TraceID:      baseEvent.TraceID,
 		SpanID:       baseEvent.SpanID,
 		ParentSpanID: baseEvent.ParentSpanID,
@@ -155,7 +155,7 @@ func (o *SQLiteObserver) handleLLMCallEnd(ctx context.Context, event events.Even
 		return nil
 	}
 
-	dto := &service.ConversationDTO{
+	dto := &conversation.ConversationDTO{
 		TraceID:      baseEvent.TraceID,
 		SpanID:       baseEvent.SpanID,
 		ParentSpanID: baseEvent.ParentSpanID,
@@ -167,7 +167,7 @@ func (o *SQLiteObserver) handleLLMCallEnd(ctx context.Context, event events.Even
 	}
 
 	if e.TokenUsage != nil {
-		dto.TokenUsage = &service.TokenUsageDTO{
+		dto.TokenUsage = &conversation.TokenUsageDTO{
 			PromptTokens:     e.TokenUsage.PromptTokens,
 			CompletionTokens: e.TokenUsage.CompletionTokens,
 			TotalTokens:      e.TokenUsage.TotalTokens,
@@ -205,7 +205,7 @@ func (o *SQLiteObserver) handleToolCompleted(ctx context.Context, event events.E
 		content = "(无输出)"
 	}
 
-	dto := &service.ConversationDTO{
+	dto := &conversation.ConversationDTO{
 		TraceID:      baseEvent.TraceID,
 		SpanID:       baseEvent.SpanID,
 		ParentSpanID: baseEvent.ParentSpanID,
