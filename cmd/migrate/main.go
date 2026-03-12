@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"github.com/weibaohui/nanobot-go/internal/database"
 	"github.com/weibaohui/nanobot-go/internal/models"
 	"github.com/weibaohui/nanobot-go/internal/repository"
+	"github.com/weibaohui/nanobot-go/internal/service"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -41,6 +43,11 @@ type OldConfig struct {
 			ExtraHeaders map[string]string `json:"extraHeaders"`
 		} `json:"siliconflow"`
 	} `json:"providers"`
+	Database struct {
+		Enabled bool   `json:"enabled"`
+		DataDir string `json:"dataDir"`
+		DBName  string `json:"dbName"`
+	} `json:"database"`
 }
 
 func main() {
@@ -59,8 +66,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 2. 初始化数据库
-	db, err := initDatabase()
+	// 2. 初始化数据库（使用配置文件中的数据库设置）
+	db, err := initDatabase(oldConfig)
 	if err != nil {
 		fmt.Printf("初始化数据库失败: %v\n", err)
 		os.Exit(1)
@@ -100,16 +107,45 @@ func loadOldConfig(path string) (*OldConfig, error) {
 }
 
 // initDatabase 初始化数据库连接
-func initDatabase() (*gorm.DB, error) {
-	// 使用项目默认配置
-	cfg := &database.Config{
-		DataDir:      "./data",
-		DBName:       "events.db",
+// 优先使用配置文件中的数据库设置，如果没有则使用默认值
+func initDatabase(cfg *OldConfig) (*gorm.DB, error) {
+	// 获取 workspace 路径
+	workspace := cfg.Agents.Defaults.Workspace
+	if workspace == "" {
+		workspace = "~/.nanobot/workspace"
+	}
+	// 展开 ~ 为家目录
+	if workspace[0] == '~' {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, err
+		}
+		workspace = filepath.Join(home, workspace[1:])
+	}
+
+	// 数据库配置（优先使用配置文件中的设置）
+	dataDir := cfg.Database.DataDir
+	if dataDir == "" {
+		dataDir = ".nanobot"
+	}
+	dbName := cfg.Database.DBName
+	if dbName == "" {
+		dbName = "nanobot.db"
+	}
+
+	// 构建完整的数据目录路径（workspace + dataDir）
+	fullDataDir := filepath.Join(workspace, dataDir)
+
+	fmt.Printf("数据库路径: %s/%s\n", fullDataDir, dbName)
+
+	dbCfg := &database.Config{
+		DataDir:      fullDataDir,
+		DBName:       dbName,
 		MaxOpenConns: 1,
 		MaxIdleConns: 1,
 	}
 
-	client, err := database.NewClient(cfg)
+	client, err := database.NewClient(dbCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -128,6 +164,7 @@ func migrate(db *gorm.DB, oldCfg *OldConfig) error {
 	userRepo := repository.NewUserRepository(db)
 	agentRepo := repository.NewAgentRepository(db)
 	channelRepo := repository.NewChannelRepository(db)
+	providerService := service.NewProviderService(db)
 
 	// 1. 创建或获取默认用户
 	user, err := createOrGetDefaultUser(userRepo)
@@ -136,14 +173,19 @@ func migrate(db *gorm.DB, oldCfg *OldConfig) error {
 	}
 	fmt.Printf("✓ 用户已创建/获取: ID=%d, Username=%s\n", user.ID, user.Username)
 
-	// 2. 创建默认 Agent
+	// 2. 迁移 LLM Provider 配置
+	if err := migrateProviders(providerService, user.ID, oldCfg); err != nil {
+		return fmt.Errorf("迁移LLM Provider失败: %w", err)
+	}
+
+	// 3. 创建默认 Agent
 	agent, err := createDefaultAgent(agentRepo, user.ID, oldCfg)
 	if err != nil {
 		return fmt.Errorf("创建默认Agent失败: %w", err)
 	}
 	fmt.Printf("✓ 默认Agent已创建: ID=%d, Name=%s\n", agent.ID, agent.Name)
 
-	// 3. 创建飞书 Channel（如果启用）
+	// 4. 创建飞书 Channel（如果启用）
 	if oldCfg.Channels.Feishu.Enabled {
 		channel, err := createFeishuChannel(channelRepo, user.ID, agent.ID, oldCfg)
 		if err != nil {
@@ -308,4 +350,60 @@ func createFeishuChannel(repo repository.ChannelRepository, userID uint, agentID
 	}
 
 	return channel, nil
+}
+
+// migrateProviders 迁移 LLM Provider 配置
+func migrateProviders(providerService service.ProviderService, userID uint, oldCfg *OldConfig) error {
+	ctx := context.Background()
+
+	// 检查是否已有 Provider
+	existingProviders, _, err := providerService.List(ctx, userID, 0, 10)
+	if err != nil {
+		return fmt.Errorf("查询现有Provider失败: %w", err)
+	}
+	if len(existingProviders) > 0 {
+		fmt.Printf("  ℹ️ 已有 %d 个Provider存在，跳过迁移\n", len(existingProviders))
+		return nil
+	}
+
+	// 迁移 SiliconFlow Provider
+	if oldCfg.Providers.SiliconFlow.APIKey != "" {
+		// 序列化 extra headers
+		var extraHeaders string
+		if oldCfg.Providers.SiliconFlow.ExtraHeaders != nil {
+			headersJSON, err := json.Marshal(oldCfg.Providers.SiliconFlow.ExtraHeaders)
+			if err != nil {
+				return fmt.Errorf("序列化extra headers失败: %w", err)
+			}
+			extraHeaders = string(headersJSON)
+		}
+
+		// 使用默认模型或配置中的模型
+		defaultModel := oldCfg.Agents.Defaults.Model
+		if defaultModel == "" {
+			defaultModel = "MiniMax-M2.5"
+		}
+
+		req := service.CreateProviderRequest{
+			ProviderKey:  "siliconflow",
+			ProviderName: "SiliconFlow",
+			APIKey:       oldCfg.Providers.SiliconFlow.APIKey,
+			APIBase:      oldCfg.Providers.SiliconFlow.APIBase,
+			ExtraHeaders: extraHeaders,
+			DefaultModel: defaultModel,
+			IsDefault:    true,
+			Priority:     10,
+		}
+
+		provider, err := providerService.Create(ctx, userID, req)
+		if err != nil {
+			return fmt.Errorf("创建SiliconFlow Provider失败: %w", err)
+		}
+		fmt.Printf("✓ LLM Provider已创建: ID=%d, Name=%s, Model=%s\n",
+			provider.ID, provider.ProviderName, defaultModel)
+	} else {
+		fmt.Printf("  ℹ️ 配置文件中没有找到SiliconFlow API Key，跳过Provider迁移\n")
+	}
+
+	return nil
 }
