@@ -297,6 +297,15 @@ const Agents: React.FC = () => {
             <Switch checkedChildren="默认" unCheckedChildren="非默认" />
           </Form.Item>
 
+          <Form.Item
+            name="enable_thinking_process"
+            label="思考过程"
+            valuePropName="checked"
+            initialValue={false}
+          >
+            <Switch checkedChildren="开启" unCheckedChildren="关闭" />
+          </Form.Item>
+
           <Collapse ghost>
             <Panel header={<span><FileTextOutlined /> 配置文件编辑</span>} key="1">
               <Form.Item name="identity_content" label="IDENTITY.md">

@@ -22,6 +22,9 @@ type SessionKeyKey struct{}
 // ChannelKey 是 context 中存储 Channel 的 key
 type ChannelKey struct{}
 
+// EnableThinkingProcessKey 是 context 中存储是否启用思考过程的 key
+type EnableThinkingProcessKey struct{}
+
 // NewTraceID 生成新的 TraceID
 func NewTraceID() string {
 	return uuid.New().String()
@@ -102,6 +105,19 @@ func GetChannel(ctx context.Context) string {
 		return channel
 	}
 	return ""
+}
+
+// WithEnableThinkingProcess 将是否启用思考过程注入到 context 中
+func WithEnableThinkingProcess(ctx context.Context, enabled bool) context.Context {
+	return context.WithValue(ctx, EnableThinkingProcessKey{}, enabled)
+}
+
+// GetEnableThinkingProcess 从 context 中获取是否启用思考过程
+func GetEnableThinkingProcess(ctx context.Context) bool {
+	if enabled, ok := ctx.Value(EnableThinkingProcessKey{}).(bool); ok {
+		return enabled
+	}
+	return false
 }
 
 // MustGetTraceID 从 context 中获取 TraceID，如果不存在则返回空字符串

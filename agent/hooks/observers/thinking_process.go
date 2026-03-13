@@ -57,8 +57,13 @@ func NewThinkingProcessObserver(cfg *config.ThinkingProcessConfig, messageBus *b
 
 // OnEvent 处理事件
 func (o *ThinkingProcessObserver) OnEvent(ctx context.Context, event events.Event) error {
-	// 检查是否启用
-	if !o.config.Enabled {
+	// 检查是否启用 - 优先从 context 获取 Agent 级别的设置
+	enabled := trace.GetEnableThinkingProcess(ctx)
+	// 如果 context 中没有设置（没有绑定 Agent 的情况），使用全局配置作为后备
+	if !enabled {
+		enabled = o.config.Enabled
+	}
+	if !enabled {
 		return nil
 	}
 

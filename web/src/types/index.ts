@@ -45,6 +45,7 @@ export interface Agent {
   max_iterations: number;
   is_active: boolean;
   is_default: boolean;
+  enable_thinking_process: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -66,6 +67,7 @@ export interface CreateAgentRequest {
   skills_list?: string[];
   tools_list?: string[];
   is_default?: boolean;
+  enable_thinking_process?: boolean;
 }
 
 export interface UpdateAgentRequest extends Partial<CreateAgentRequest> {

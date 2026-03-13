@@ -71,7 +71,8 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 	}
 
 	// 加载渠道绑定的 Agent 配置
-	if err := l.loadChannelAgentConfig(ctx, msg); err != nil {
+	ctx, err := l.loadChannelAgentConfig(ctx, msg)
+	if err != nil {
 		l.logger.Warn("加载渠道 Agent 配置失败，将使用默认配置", zap.Error(err))
 	}
 
@@ -130,9 +131,10 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 
 // loadChannelAgentConfig 加载渠道绑定的 Agent 配置
 // 从数据库获取 Agent 的 markdown 配置内容，设置到 ContextBuilder
-func (l *Loop) loadChannelAgentConfig(ctx context.Context, msg *bus.InboundMessage) error {
+// 返回注入 Agent 设置后的 context
+func (l *Loop) loadChannelAgentConfig(ctx context.Context, msg *bus.InboundMessage) (context.Context, error) {
 	if l.channelService == nil || l.agentService == nil {
-		return fmt.Errorf("channelService 或 agentService 未初始化")
+		return ctx, fmt.Errorf("channelService 或 agentService 未初始化")
 	}
 
 	// 从消息元数据中获取 channel_id
@@ -146,16 +148,16 @@ func (l *Loop) loadChannelAgentConfig(ctx context.Context, msg *bus.InboundMessa
 	}
 
 	if channelID == 0 {
-		return fmt.Errorf("消息中未包含 channel_id")
+		return ctx, fmt.Errorf("消息中未包含 channel_id")
 	}
 
 	// 获取渠道信息
 	channel, err := l.channelService.GetChannel(channelID)
 	if err != nil {
-		return fmt.Errorf("获取渠道信息失败: %w", err)
+		return ctx, fmt.Errorf("获取渠道信息失败: %w", err)
 	}
 	if channel == nil {
-		return fmt.Errorf("渠道不存在: %d", channelID)
+		return ctx, fmt.Errorf("渠道不存在: %d", channelID)
 	}
 
 	// 检查渠道是否绑定了 Agent
@@ -165,15 +167,23 @@ func (l *Loop) loadChannelAgentConfig(ctx context.Context, msg *bus.InboundMessa
 		)
 		// 清除之前的 Agent 配置，使用默认文件配置
 		l.context.SetAgentConfig(nil)
-		return nil
+		// 未绑定 Agent，思考过程默认关闭
+		ctx = trace.WithEnableThinkingProcess(ctx, false)
+		return ctx, nil
 	}
 
 	agentID := *channel.AgentID
 
-	// 获取 Agent 配置
+	// 获取 Agent 完整信息（不是配置内容）
+	agent, err := l.agentService.GetAgent(agentID)
+	if err != nil {
+		return ctx, fmt.Errorf("获取 Agent 信息失败: %w", err)
+	}
+
+	// 获取 Agent 配置内容
 	agentConfig, err := l.agentService.GetAgentConfig(agentID)
 	if err != nil {
-		return fmt.Errorf("获取 Agent 配置失败: %w", err)
+		return ctx, fmt.Errorf("获取 Agent 配置失败: %w", err)
 	}
 
 	// 创建 AgentConfig 并设置到 ContextBuilder
@@ -186,11 +196,15 @@ func (l *Loop) loadChannelAgentConfig(ctx context.Context, msg *bus.InboundMessa
 	}
 	l.context.SetAgentConfig(config)
 
+	// 将思考过程设置注入到 context
+	ctx = trace.WithEnableThinkingProcess(ctx, agent.EnableThinkingProcess)
+
 	l.logger.Info("已加载渠道绑定的 Agent 配置",
 		zap.Uint("channel_id", channelID),
 		zap.Uint("agent_id", agentID),
-		zap.String("agent_name", channel.Agent.Name),
+		zap.String("agent_name", agent.Name),
+		zap.Bool("enable_thinking_process", agent.EnableThinkingProcess),
 	)
 
-	return nil
+	return ctx, nil
 }

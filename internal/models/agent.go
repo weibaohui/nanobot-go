@@ -34,8 +34,9 @@ type Agent struct {
 	Temperature   float64 `gorm:"default:0.7" json:"temperature"`
 	MaxIterations int     `gorm:"default:15" json:"max_iterations"`
 
-	IsActive  bool `gorm:"default:true" json:"is_active"`
-	IsDefault bool `gorm:"default:false" json:"is_default"` // 是否默认 Agent
+	IsActive             bool `gorm:"default:true" json:"is_active"`
+	IsDefault            bool `gorm:"default:false" json:"is_default"`             // 是否默认 Agent
+	EnableThinkingProcess bool `gorm:"default:false" json:"enable_thinking_process"` // 是否启用思考过程输出
 
 	CreatedAt time.Time `gorm:"type:datetime;default:CURRENT_TIMESTAMP" json:"created_at"`
 	UpdatedAt time.Time `gorm:"type:datetime;default:CURRENT_TIMESTAMP" json:"updated_at"`

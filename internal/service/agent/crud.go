@@ -36,22 +36,23 @@ func (s *service) CreateAgent(userID uint, req CreateAgentRequest) (*models.Agen
 	}
 
 	agent := &models.Agent{
-		UserID:          userID,
-		Name:            req.Name,
-		Description:     req.Description,
-		IdentityContent: req.IdentityContent,
-		SoulContent:     req.SoulContent,
-		AgentsContent:   req.AgentsContent,
-		UserContent:     req.UserContent,
-		ToolsContent:    req.ToolsContent,
-		SkillsList:      string(skillsJSON),
-		ToolsList:       string(toolsJSON),
-		Model:           req.Model,
-		MaxTokens:       maxTokens,
-		Temperature:     temperature,
-		MaxIterations:   maxIterations,
-		IsActive:        true,
-		IsDefault:       req.IsDefault,
+		UserID:                userID,
+		Name:                  req.Name,
+		Description:           req.Description,
+		IdentityContent:       req.IdentityContent,
+		SoulContent:           req.SoulContent,
+		AgentsContent:         req.AgentsContent,
+		UserContent:           req.UserContent,
+		ToolsContent:          req.ToolsContent,
+		SkillsList:            string(skillsJSON),
+		ToolsList:             string(toolsJSON),
+		Model:                 req.Model,
+		MaxTokens:             maxTokens,
+		Temperature:           temperature,
+		MaxIterations:         maxIterations,
+		IsActive:              true,
+		IsDefault:             req.IsDefault,
+		EnableThinkingProcess: req.EnableThinkingProcess,
 	}
 
 	if err := s.agentRepo.Create(agent); err != nil {
@@ -120,6 +121,9 @@ func (s *service) UpdateAgent(id uint, req UpdateAgentRequest) (*models.Agent, e
 	}
 	if req.IsDefault != nil {
 		agent.IsDefault = *req.IsDefault
+	}
+	if req.EnableThinkingProcess != nil {
+		agent.EnableThinkingProcess = *req.EnableThinkingProcess
 	}
 	if req.SkillsList != nil {
 		skillsJSON, err := json.Marshal(req.SkillsList)
