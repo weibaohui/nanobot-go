@@ -14,14 +14,16 @@ import {
   Card,
   Grid,
   Typography,
+  Collapse,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, FileTextOutlined } from '@ant-design/icons';
 import { agentsApi } from '../api';
 import type { Agent, CreateAgentRequest } from '../types';
 import type { TableColumnsType } from 'antd';
 
 const { useBreakpoint } = Grid;
 const { Title } = Typography;
+const { Panel } = Collapse;
 
 const Agents: React.FC = () => {
   const screens = useBreakpoint();
@@ -294,6 +296,50 @@ const Agents: React.FC = () => {
           <Form.Item name="is_default" valuePropName="checked" initialValue={false}>
             <Switch checkedChildren="默认" unCheckedChildren="非默认" />
           </Form.Item>
+
+          <Collapse ghost>
+            <Panel header={<span><FileTextOutlined /> 配置文件编辑</span>} key="1">
+              <Form.Item name="identity_content" label="IDENTITY.md">
+                <Input.TextArea
+                  rows={6}
+                  placeholder="Agent 身份定义..."
+                  style={{ fontFamily: 'monospace', fontSize: '12px' }}
+                />
+              </Form.Item>
+
+              <Form.Item name="soul_content" label="SOUL.md">
+                <Input.TextArea
+                  rows={6}
+                  placeholder="Agent 灵魂/核心定义..."
+                  style={{ fontFamily: 'monospace', fontSize: '12px' }}
+                />
+              </Form.Item>
+
+              <Form.Item name="agents_content" label="AGENTS.md">
+                <Input.TextArea
+                  rows={6}
+                  placeholder="可用 Agents 定义..."
+                  style={{ fontFamily: 'monospace', fontSize: '12px' }}
+                />
+              </Form.Item>
+
+              <Form.Item name="tools_content" label="TOOLS.md">
+                <Input.TextArea
+                  rows={6}
+                  placeholder="可用工具定义..."
+                  style={{ fontFamily: 'monospace', fontSize: '12px' }}
+                />
+              </Form.Item>
+
+              <Form.Item name="user_content" label="USER.md">
+                <Input.TextArea
+                  rows={6}
+                  placeholder="用户信息/上下文..."
+                  style={{ fontFamily: 'monospace', fontSize: '12px' }}
+                />
+              </Form.Item>
+            </Panel>
+          </Collapse>
         </Form>
       </Modal>
     </div>
