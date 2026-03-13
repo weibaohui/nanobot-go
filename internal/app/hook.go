@@ -41,15 +41,14 @@ func InitHookSystem(cfg *config.Config, messageBus *bus.MessageBus, logger *zap.
 		}),
 	)
 
-	// 如果启用了思考过程推送，注册 ThinkingProcessObserver
-	if cfg.ThinkingProcess.Enabled {
-		thinkingProcessObserver := observers.NewThinkingProcessObserver(&cfg.ThinkingProcess, messageBus, logger, nil)
-		hookSystem.Register(thinkingProcessObserver)
-		logger.Info("思考过程观察器已启用",
-			zap.Bool("enabled", cfg.ThinkingProcess.Enabled),
-			zap.Strings("events", cfg.ThinkingProcess.Events),
-		)
-	}
+	// 注册 ThinkingProcessObserver
+	// 每个 Agent 可以独立控制是否启用思考过程输出
+	thinkingProcessObserver := observers.NewThinkingProcessObserver(&cfg.ThinkingProcess, messageBus, logger, nil)
+	hookSystem.Register(thinkingProcessObserver)
+	logger.Info("思考过程观察器已注册",
+		zap.Bool("global_enabled", cfg.ThinkingProcess.Enabled),
+		zap.Strings("events", cfg.ThinkingProcess.Events),
+	)
 
 	// 注册 SQLiteObserver
 	if sqliteObserver, err := observers.NewSQLiteObserverFromConfig(cfg, logger, nil); err != nil {
