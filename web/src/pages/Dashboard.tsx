@@ -30,10 +30,10 @@ const Dashboard: React.FC = () => {
         ]);
 
         setStats({
-          agents: agentsRes.data?.total || 0,
-          channels: channelsRes.data?.total || 0,
-          providers: providersRes.data?.total || 0,
-          cronJobs: cronRes.data?.total || 0,
+          agents: (agentsRes as any)?.total || 0,
+          channels: (channelsRes as any)?.total || 0,
+          providers: (providersRes as any)?.total || 0,
+          cronJobs: (cronRes as any)?.total || 0,
         });
       } catch (error) {
         console.error('获取统计数据失败:', error);
