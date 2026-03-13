@@ -126,6 +126,18 @@ const Agents: React.FC = () => {
     }
   };
 
+  const handleToggleThinking = async (agent: Agent, enabled: boolean) => {
+    try {
+      await agentsApi.update(agent.id, {
+        enable_thinking_process: enabled,
+      } as CreateAgentRequest);
+      message.success(enabled ? '已开启思考过程' : '已关闭思考过程');
+      fetchAgents();
+    } catch (error) {
+      message.error('更新失败');
+    }
+  };
+
   const columns: TableColumnsType<Agent> = [
     {
       title: 'ID',
@@ -155,6 +167,20 @@ const Agents: React.FC = () => {
             <span>{record.model_name || record.model_id}</span>
           )}
         </Space>
+      ),
+    },
+    {
+      title: '思考过程',
+      width: screens.xs ? 80 : 100,
+      align: 'center',
+      render: (_: any, record: Agent) => (
+        <Switch
+          size="small"
+          checked={record.enable_thinking_process}
+          onChange={(checked) => handleToggleThinking(record, checked)}
+          checkedChildren="开"
+          unCheckedChildren="关"
+        />
       ),
     },
     {
@@ -325,15 +351,6 @@ const Agents: React.FC = () => {
 
           <Form.Item name="is_default" valuePropName="checked" initialValue={false}>
             <Switch checkedChildren="默认" unCheckedChildren="非默认" />
-          </Form.Item>
-
-          <Form.Item
-            name="enable_thinking_process"
-            label="思考过程"
-            valuePropName="checked"
-            initialValue={false}
-          >
-            <Switch checkedChildren="开启" unCheckedChildren="关闭" />
           </Form.Item>
 
           <Divider>
