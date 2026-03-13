@@ -99,6 +99,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, event events.Event, channel, 
 			bgCtx = trace.WithTraceID(bgCtx, traceID)
 			bgCtx = trace.WithSpanID(bgCtx, spanID)
 			bgCtx = trace.WithParentSpanID(bgCtx, parentSpanID)
+			bgCtx = trace.WithEnableThinkingProcess(bgCtx, trace.GetEnableThinkingProcess(ctx))
 
 			if err := o.OnEvent(bgCtx, event); err != nil {
 				d.logger.Error("观察器处理事件失败",
