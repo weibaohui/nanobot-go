@@ -32,9 +32,10 @@ type ThinkingProcessObserver struct {
 
 // sessionInfo 会话信息
 type sessionInfo struct {
-	chatID    string
-	channel   string
-	updatedAt time.Time
+	chatID                string
+	channel               string
+	enableThinkingProcess bool
+	updatedAt             time.Time
 }
 
 // NewThinkingProcessObserver 创建思考过程观察器
@@ -59,7 +60,18 @@ func NewThinkingProcessObserver(cfg *config.ThinkingProcessConfig, messageBus *b
 func (o *ThinkingProcessObserver) OnEvent(ctx context.Context, event events.Event) error {
 	// 检查是否启用 - 优先从 context 获取 Agent 级别的设置
 	enabled := trace.GetEnableThinkingProcess(ctx)
-	// 如果 context 中没有设置（没有绑定 Agent 的情况），使用全局配置作为后备
+	sessionKey := trace.GetSessionKey(ctx)
+
+	// 如果 context 中没有设置，尝试从 sessionCache 获取
+	if !enabled && sessionKey != "" {
+		o.mu.RLock()
+		if info, exists := o.sessionCache[sessionKey]; exists {
+			enabled = info.enableThinkingProcess
+		}
+		o.mu.RUnlock()
+	}
+
+	// 如果还是没有，使用全局配置作为后备
 	if !enabled {
 		enabled = o.config.Enabled
 	}
@@ -68,15 +80,14 @@ func (o *ThinkingProcessObserver) OnEvent(ctx context.Context, event events.Even
 	}
 
 	// 先尝试更新会话缓存（从有会话信息的事件中）
-	o.updateSessionCache(event)
+	o.updateSessionCache(ctx, event)
 
 	// 检查事件类型是否在监听列表中
 	if !o.shouldProcessEvent(event.GetEventType()) {
 		return nil
 	}
 
-	// 从 context 获取会话信息
-	sessionKey := trace.GetSessionKey(ctx)
+	// 从 context 获取会话信息（sessionKey 已在上面获取）
 	channel := trace.GetChannel(ctx)
 
 	// 获取 chatID 和 channel（优先从缓存获取完整的会话信息）
@@ -114,16 +125,17 @@ func (o *ThinkingProcessObserver) OnEvent(ctx context.Context, event events.Even
 }
 
 // updateSessionCache 更新会话缓存
-func (o *ThinkingProcessObserver) updateSessionCache(event events.Event) {
+func (o *ThinkingProcessObserver) updateSessionCache(ctx context.Context, event events.Event) {
 	switch e := event.(type) {
 	case *events.MessageReceivedEvent:
 		// 收到消息时，缓存会话信息
 		if e.SessionKey != "" && e.ChatID != "" {
 			o.mu.Lock()
 			o.sessionCache[e.SessionKey] = sessionInfo{
-				chatID:    e.ChatID,
-				channel:   e.Channel,
-				updatedAt: time.Now(),
+				chatID:                e.ChatID,
+				channel:               e.Channel,
+				enableThinkingProcess: trace.GetEnableThinkingProcess(ctx),
+				updatedAt:             time.Now(),
 			}
 			o.mu.Unlock()
 		}
@@ -133,9 +145,10 @@ func (o *ThinkingProcessObserver) updateSessionCache(event events.Event) {
 		if e.SessionKey != "" && e.ChatID != "" {
 			o.mu.Lock()
 			o.sessionCache[e.SessionKey] = sessionInfo{
-				chatID:    e.ChatID,
-				channel:   e.Channel,
-				updatedAt: time.Now(),
+				chatID:                e.ChatID,
+				channel:               e.Channel,
+				enableThinkingProcess: trace.GetEnableThinkingProcess(ctx),
+				updatedAt:             time.Now(),
 			}
 			o.mu.Unlock()
 		}
@@ -149,9 +162,10 @@ func (o *ThinkingProcessObserver) updateSessionCache(event events.Event) {
 			if exists {
 				o.mu.Lock()
 				o.sessionCache[e.SessionKey] = sessionInfo{
-					chatID:    info.chatID,
-					channel:   info.channel,
-					updatedAt: time.Now(),
+					chatID:                info.chatID,
+					channel:               info.channel,
+					enableThinkingProcess: trace.GetEnableThinkingProcess(ctx),
+					updatedAt:             time.Now(),
 				}
 				o.mu.Unlock()
 			}
