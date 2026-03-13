@@ -94,15 +94,16 @@ func (o *ThinkingProcessObserver) OnEvent(ctx context.Context, event events.Even
 			zap.Bool("global_enabled", enabled),
 		)
 	}
+	// 先尝试更新会话缓存（从有会话信息的事件中）
+	// 注意：缓存更新要在 enabled 检查之前，确保即使思考过程未启用，缓存也能被更新
+	o.updateSessionCache(ctx, event)
+
 	if !enabled {
 		o.logger.Debug("[ThinkingProcess] 未启用，跳过",
 			zap.String("event_type", string(eventType)),
 		)
 		return nil
 	}
-
-	// 先尝试更新会话缓存（从有会话信息的事件中）
-	o.updateSessionCache(ctx, event)
 
 	// 检查事件类型是否在监听列表中
 	if !o.shouldProcessEvent(event.GetEventType()) {
