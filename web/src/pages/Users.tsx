@@ -13,7 +13,7 @@ import {
   Card,
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, KeyOutlined } from '@ant-design/icons';
-import { usersApi } from '../api';
+import { usersApi, authApi } from '../api';
 import type { User, CreateUserRequest } from '../types';
 
 const Users: React.FC = () => {
@@ -82,7 +82,7 @@ const Users: React.FC = () => {
   const handleChangePassword = async (values: { old_password: string; new_password: string }) => {
     if (!selectedUser) return;
     try {
-      await usersApi.changePassword(selectedUser.id, values.old_password, values.new_password);
+      await authApi.changePassword(selectedUser.id, values.old_password, values.new_password);
       message.success('密码修改成功');
       setPasswordModalVisible(false);
       passwordForm.resetFields();

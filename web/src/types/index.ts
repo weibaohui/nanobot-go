@@ -194,6 +194,18 @@ export interface UpdateCronJobRequest extends Partial<CreateCronJobRequest> {
   is_active?: boolean;
 }
 
+// 认证类型
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  token: string;
+  user: User;
+  expires_at: number;
+}
+
 // API 响应类型
 export interface ApiResponse<T> {
   code: number;

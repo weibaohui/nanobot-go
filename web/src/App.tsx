@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import MainLayout from './layouts/MainLayout';
@@ -12,13 +12,35 @@ import Users from './pages/Users';
 import Conversations from './pages/Conversations';
 import StreamMemories from './pages/StreamMemories';
 import LongTermMemories from './pages/LongTermMemories';
+import Login from './pages/Login';
+import { isAuthenticated } from './api';
+
+// 路由守卫组件
+const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const location = useLocation();
+  const authenticated = isAuthenticated();
+
+  if (!authenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return <>{children}</>;
+};
 
 const App: React.FC = () => {
   return (
     <ConfigProvider locale={zhCN}>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<MainLayout />}>
+          {/* 公开路由 */}
+          <Route path="/login" element={<Login />} />
+
+          {/* 需要认证的路由 */}
+          <Route path="/" element={
+            <PrivateRoute>
+              <MainLayout />
+            </PrivateRoute>
+          }>
             <Route index element={<Dashboard />} />
             <Route path="agents" element={<Agents />} />
             <Route path="channels" element={<Channels />} />
@@ -29,6 +51,8 @@ const App: React.FC = () => {
             <Route path="stream-memories" element={<StreamMemories />} />
             <Route path="long-term-memories" element={<LongTermMemories />} />
           </Route>
+
+          {/* 未匹配路由重定向 */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

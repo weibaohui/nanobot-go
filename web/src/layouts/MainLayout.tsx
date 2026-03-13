@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Menu, Button, theme, Grid, Typography, Space } from 'antd';
+import { Layout, Menu, Button, theme, Grid, Typography, Space, Avatar, Dropdown } from 'antd';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   DashboardOutlined,
@@ -13,7 +13,10 @@ import {
   CommentOutlined,
   ThunderboltOutlined,
   DatabaseOutlined,
+  LogoutOutlined,
 } from '@ant-design/icons';
+import { authApi, clearToken } from '../api';
+import type { User } from '../types';
 
 const { Header, Sider, Content } = Layout;
 const { useBreakpoint } = Grid;
@@ -24,10 +27,26 @@ const MainLayout: React.FC = () => {
   const location = useLocation();
   const screens = useBreakpoint();
   const [collapsed, setCollapsed] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   const {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken();
+
+  // 获取当前用户信息
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const res = await authApi.me();
+        if (res.data) {
+          setCurrentUser(res.data);
+        }
+      } catch (error) {
+        console.error('获取用户信息失败:', error);
+      }
+    };
+    fetchCurrentUser();
+  }, []);
 
   // 根据屏幕尺寸自动折叠侧边栏
   useEffect(() => {
@@ -137,15 +156,29 @@ const MainLayout: React.FC = () => {
             <h2 style={{ margin: 0, fontSize: screens.xs ? 16 : 18 }}>管理系统</h2>
           </Space>
 
-          <Button
-            size={screens.xs ? 'small' : 'middle'}
-            onClick={() => {
-              localStorage.removeItem('token');
-              navigate('/login');
+          <Dropdown
+            menu={{
+              items: [
+                {
+                  key: 'logout',
+                  icon: <LogoutOutlined />,
+                  label: '退出登录',
+                  onClick: () => {
+                    clearToken();
+                    navigate('/login');
+                  },
+                },
+              ],
             }}
+            placement="bottomRight"
           >
-            {screens.xs ? '退出' : '退出登录'}
-          </Button>
+            <Space style={{ cursor: 'pointer' }}>
+              <Avatar icon={<UserOutlined />} />
+              {!screens.xs && (
+                <Typography.Text>{currentUser?.display_name || currentUser?.username || '用户'}</Typography.Text>
+              )}
+            </Space>
+          </Dropdown>
         </Header>
 
         <Content

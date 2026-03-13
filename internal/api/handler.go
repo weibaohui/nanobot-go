@@ -48,113 +48,124 @@ func NewHandler(
 
 // RegisterRoutes 注册路由
 func (h *Handler) RegisterRoutes(router *gin.Engine) {
-	// User API
-	users := router.Group("/api/v1/users")
-	{
-		users.GET("", h.handleUsers)
-		users.POST("", h.handleUsers)
-		users.GET("/:id", h.handleUserByID)
-		users.PUT("/:id", h.handleUserByID)
-		users.DELETE("/:id", h.handleUserByID)
-	}
+	// 公开 API（不需要认证）
+	router.POST("/api/v1/auth/login", h.login)
 
-	// Agent API
-	agents := router.Group("/api/v1/agents")
+	// 需要认证的 API
+	authorized := router.Group("/api/v1")
+	authorized.Use(AuthMiddleware())
 	{
-		agents.GET("", h.handleAgents)
-		agents.POST("", h.handleAgents)
-		agents.GET("/:id", h.handleAgentByID)
-		agents.PUT("/:id", h.handleAgentByID)
-		agents.DELETE("/:id", h.handleAgentByID)
-	}
+		// 当前用户信息
+		authorized.GET("/auth/me", h.getCurrentUser)
 
-	// Channel API
-	channels := router.Group("/api/v1/channels")
-	{
-		channels.GET("", h.handleChannels)
-		channels.POST("", h.createChannel)
-		channels.GET("/:id", h.handleChannelByID)
-		channels.PUT("/:id", h.updateChannel)
-		channels.DELETE("/:id", h.deleteChannel)
-	}
+		// User API
+		users := authorized.Group("/users")
+		{
+			users.GET("", h.handleUsers)
+			users.POST("", h.handleUsers)
+			users.GET("/:id", h.handleUserByID)
+			users.PUT("/:id", h.handleUserByID)
+			users.DELETE("/:id", h.handleUserByID)
+			users.POST("/:id/change-password", h.handleChangePassword)
 
-	// Session API
-	sessions := router.Group("/api/v1/sessions")
-	{
-		sessions.GET("", h.handleSessions)
-		sessions.POST("", h.createSession)
-		sessions.GET("/:id", h.handleSessionByKey)
-		sessions.DELETE("/:id", h.handleSessionByKey)
-		sessions.POST("/:id/touch", func(c *gin.Context) {
-			h.handleSessionByKey(c)
-		})
-		sessions.GET("/:id/metadata", func(c *gin.Context) {
-			h.handleSessionByKey(c)
-		})
-		sessions.PUT("/:id/metadata", func(c *gin.Context) {
-			h.handleSessionByKey(c)
-		})
-	}
+		// Agent API
+		agents := authorized.Group("/agents")
+		{
+			agents.GET("", h.handleAgents)
+			agents.POST("", h.handleAgents)
+			agents.GET("/:id", h.handleAgentByID)
+			agents.PUT("/:id", h.handleAgentByID)
+			agents.DELETE("/:id", h.handleAgentByID)
+		}
 
-	// Provider API
-	providers := router.Group("/api/v1/providers")
-	{
-		providers.GET("", h.handleProviders)
-		providers.POST("", h.createProvider)
-		providers.GET("/:id", h.handleProviderByID)
-		providers.PUT("/:id", h.updateProvider)
-		providers.DELETE("/:id", h.deleteProvider)
-		providers.POST("/:id/test", h.testProviderConnection)
-	}
+		// Channel API
+		channels := authorized.Group("/channels")
+		{
+			channels.GET("", h.handleChannels)
+			channels.POST("", h.createChannel)
+			channels.GET("/:id", h.handleChannelByID)
+			channels.PUT("/:id", h.updateChannel)
+			channels.DELETE("/:id", h.deleteChannel)
+		}
 
-	// Cron Job API
-	cronJobs := router.Group("/api/v1/cron-jobs")
-	{
-		cronJobs.GET("", h.handleCronJobs)
-		cronJobs.POST("", h.createCronJob)
-		cronJobs.GET("/pending", h.handlePendingCronJobs)
-		cronJobs.GET("/:id", h.handleCronJobByID)
-		cronJobs.PUT("/:id", h.updateCronJob)
-		cronJobs.DELETE("/:id", h.deleteCronJob)
-		cronJobs.POST("/:id/enable", h.enableCronJob)
-		cronJobs.POST("/:id/disable", h.disableCronJob)
-		cronJobs.POST("/:id/execute", h.executeCronJob)
-	}
+		// Session API
+		sessions := authorized.Group("/sessions")
+		{
+			sessions.GET("", h.handleSessions)
+			sessions.POST("", h.createSession)
+			sessions.GET("/:id", h.handleSessionByKey)
+			sessions.DELETE("/:id", h.handleSessionByKey)
+			sessions.POST("/:id/touch", func(c *gin.Context) {
+				h.handleSessionByKey(c)
+			})
+			sessions.GET("/:id/metadata", func(c *gin.Context) {
+				h.handleSessionByKey(c)
+			})
+			sessions.PUT("/:id/metadata", func(c *gin.Context) {
+				h.handleSessionByKey(c)
+			})
+		}
 
-	// Conversation Record API
-	conversations := router.Group("/api/v1/conversations")
-	{
-		conversations.GET("", h.handleConversationRecords)
-		conversations.GET("/:id", h.handleConversationRecordByID)
-		conversations.POST("", h.createConversationRecord)
-		conversations.PUT("/:id", h.updateConversationRecord)
-		conversations.DELETE("/:id", h.deleteConversationRecord)
-		conversations.GET("/session/:sessionKey", h.handleConversationBySession)
-		conversations.GET("/trace/:traceID", h.handleConversationByTrace)
-	}
+		// Provider API
+		providers := authorized.Group("/providers")
+		{
+			providers.GET("", h.handleProviders)
+			providers.POST("", h.createProvider)
+			providers.GET("/:id", h.handleProviderByID)
+			providers.PUT("/:id", h.updateProvider)
+			providers.DELETE("/:id", h.deleteProvider)
+			providers.POST("/:id/test", h.testProviderConnection)
+		}
 
-	// Short-term Memory API
-	streamMemories := router.Group("/api/v1/stream-memories")
-	{
-		streamMemories.GET("", h.handleStreamMemories)
-		streamMemories.GET("/:id", h.handleStreamMemoryByID)
-		streamMemories.POST("", h.createStreamMemory)
-		streamMemories.PUT("/:id", h.updateStreamMemory)
-		streamMemories.DELETE("/:id", h.deleteStreamMemory)
-		streamMemories.GET("/unprocessed", h.handleUnprocessedMemories)
-	}
+		// Cron Job API
+		cronJobs := authorized.Group("/cron-jobs")
+		{
+			cronJobs.GET("", h.handleCronJobs)
+			cronJobs.POST("", h.createCronJob)
+			cronJobs.GET("/pending", h.handlePendingCronJobs)
+			cronJobs.GET("/:id", h.handleCronJobByID)
+			cronJobs.PUT("/:id", h.updateCronJob)
+			cronJobs.DELETE("/:id", h.deleteCronJob)
+			cronJobs.POST("/:id/enable", h.enableCronJob)
+			cronJobs.POST("/:id/disable", h.disableCronJob)
+			cronJobs.POST("/:id/execute", h.executeCronJob)
+		}
 
-	// Long-term Memory API
-	longTermMemories := router.Group("/api/v1/long-term-memories")
-	{
-		longTermMemories.GET("", h.handleLongTermMemories)
-		longTermMemories.GET("/:id", h.handleLongTermMemoryByID)
-		longTermMemories.GET("/date/:date", h.handleLongTermMemoryByDate)
-		longTermMemories.POST("", h.createLongTermMemory)
-		longTermMemories.PUT("/:id", h.updateLongTermMemory)
-		longTermMemories.DELETE("/:id", h.deleteLongTermMemory)
-		longTermMemories.GET("/search", h.searchLongTermMemories)
-		longTermMemories.GET("/recent", h.getRecentLongTermMemories)
+		// Conversation Record API
+		conversations := authorized.Group("/conversations")
+		{
+			conversations.GET("", h.handleConversationRecords)
+			conversations.GET("/:id", h.handleConversationRecordByID)
+			conversations.POST("", h.createConversationRecord)
+			conversations.PUT("/:id", h.updateConversationRecord)
+			conversations.DELETE("/:id", h.deleteConversationRecord)
+			conversations.GET("/session/:sessionKey", h.handleConversationBySession)
+			conversations.GET("/trace/:traceID", h.handleConversationByTrace)
+		}
+
+		// Short-term Memory API
+		streamMemories := authorized.Group("/stream-memories")
+		{
+			streamMemories.GET("", h.handleStreamMemories)
+			streamMemories.GET("/:id", h.handleStreamMemoryByID)
+			streamMemories.POST("", h.createStreamMemory)
+			streamMemories.PUT("/:id", h.updateStreamMemory)
+			streamMemories.DELETE("/:id", h.deleteStreamMemory)
+			streamMemories.GET("/unprocessed", h.handleUnprocessedMemories)
+		}
+
+		// Long-term Memory API
+		longTermMemories := authorized.Group("/long-term-memories")
+		{
+			longTermMemories.GET("", h.handleLongTermMemories)
+			longTermMemories.GET("/:id", h.handleLongTermMemoryByID)
+			longTermMemories.GET("/date/:date", h.handleLongTermMemoryByDate)
+			longTermMemories.POST("", h.createLongTermMemory)
+			longTermMemories.PUT("/:id", h.updateLongTermMemory)
+			longTermMemories.DELETE("/:id", h.deleteLongTermMemory)
+			longTermMemories.GET("/search", h.searchLongTermMemories)
+			longTermMemories.GET("/recent", h.getRecentLongTermMemories)
+		}
 	}
 }
 

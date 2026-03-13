@@ -7,3 +7,4 @@ export { cronApi } from './cron';
 export { conversationsApi } from './conversations';
 export { streamMemoriesApi } from './streamMemories';
 export { longTermMemoriesApi } from './longTermMemories';
+export { authApi, setToken, getToken, clearToken, isAuthenticated } from './auth';
