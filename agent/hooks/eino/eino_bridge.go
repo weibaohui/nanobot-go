@@ -59,6 +59,14 @@ func (cb *EinoCallbackBridge) onStart(ctx context.Context, info *callbacks.RunIn
 	// 从 context 获取会话信息
 	sessionKey := trace.GetSessionKey(ctx)
 	channel := trace.GetChannel(ctx)
+	enableThinking := trace.GetEnableThinkingProcess(ctx)
+
+	cb.logger.Debug("[EinoBridge] onStart",
+		zap.String("trace_id", traceID),
+		zap.String("session_key", sessionKey),
+		zap.String("channel", channel),
+		zap.Bool("enable_thinking_process", enableThinking),
+	)
 
 	// 分发组件开始事件
 	componentEvent := events.NewComponentStartEvent(traceID, spanID, parentSpanID, info)

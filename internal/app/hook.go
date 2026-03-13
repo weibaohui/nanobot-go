@@ -89,6 +89,10 @@ func createHookCallback(hookSystem *hooks.HookManager, logger *zap.Logger) func(
 		if parentSpanID, ok := data["parent_span_id"].(string); ok && parentSpanID != "" {
 			ctx = trace.WithParentSpanID(ctx, parentSpanID)
 		}
+		// 从 data 中提取 enable_thinking_process 并设置到 context
+		if enableThinking, ok := data["enable_thinking_process"].(bool); ok {
+			ctx = trace.WithEnableThinkingProcess(ctx, enableThinking)
+		}
 
 		var sessionKey, channel string
 		if sk, ok := data["session_key"].(string); ok {

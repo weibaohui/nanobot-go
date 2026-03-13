@@ -31,6 +31,7 @@ func (a *ChatModelAdapter) triggerLLMCallStart(ctx context.Context, input []*sch
 	parentSpanID := trace.GetParentSpanID(ctx)
 	sessionKey := trace.GetSessionKey(ctx)
 	channel := trace.GetChannel(ctx)
+	enableThinking := trace.GetEnableThinkingProcess(ctx)
 
 	var toolNames []string
 	for _, msg := range input {
@@ -40,15 +41,16 @@ func (a *ChatModelAdapter) triggerLLMCallStart(ctx context.Context, input []*sch
 	}
 
 	data := map[string]interface{}{
-		"event_type":     events.EventLLMCallStart,
-		"trace_id":       traceID,
-		"span_id":        spanID,
-		"parent_span_id": parentSpanID,
-		"session_key":    sessionKey,
-		"channel":        channel,
-		"input_count":    len(input),
-		"tool_names":     toolNames,
-		"messages":       input,
+		"event_type":              events.EventLLMCallStart,
+		"trace_id":                traceID,
+		"span_id":                 spanID,
+		"parent_span_id":          parentSpanID,
+		"session_key":             sessionKey,
+		"channel":                 channel,
+		"input_count":             len(input),
+		"tool_names":              toolNames,
+		"messages":                input,
+		"enable_thinking_process": enableThinking,
 	}
 	a.hookCallback(events.EventLLMCallStart, data)
 }
@@ -64,6 +66,7 @@ func (a *ChatModelAdapter) triggerLLMCallEnd(ctx context.Context, response *sche
 	parentSpanID := trace.GetParentSpanID(ctx)
 	sessionKey := trace.GetSessionKey(ctx)
 	channel := trace.GetChannel(ctx)
+	enableThinking := trace.GetEnableThinkingProcess(ctx)
 
 	var tokenUsage *schema.TokenUsage
 	if response.ResponseMeta != nil && response.ResponseMeta.Usage != nil {
@@ -73,15 +76,16 @@ func (a *ChatModelAdapter) triggerLLMCallEnd(ctx context.Context, response *sche
 	toolCalls := response.ToolCalls
 
 	data := map[string]interface{}{
-		"event_type":     events.EventLLMCallEnd,
-		"trace_id":       traceID,
-		"span_id":        spanID,
-		"parent_span_id": parentSpanID,
-		"session_key":    sessionKey,
-		"channel":        channel,
-		"response":       response.Content,
-		"tool_calls":     toolCalls,
-		"token_usage":    tokenUsage,
+		"event_type":              events.EventLLMCallEnd,
+		"trace_id":                traceID,
+		"span_id":                 spanID,
+		"parent_span_id":          parentSpanID,
+		"session_key":             sessionKey,
+		"channel":                 channel,
+		"response":                response.Content,
+		"tool_calls":              toolCalls,
+		"token_usage":             tokenUsage,
+		"enable_thinking_process": enableThinking,
 	}
 	a.hookCallback(events.EventLLMCallEnd, data)
 }
@@ -97,15 +101,17 @@ func (a *ChatModelAdapter) triggerLLMCallError(ctx context.Context, err error) {
 	parentSpanID := trace.GetParentSpanID(ctx)
 	sessionKey := trace.GetSessionKey(ctx)
 	channel := trace.GetChannel(ctx)
+	enableThinking := trace.GetEnableThinkingProcess(ctx)
 
 	data := map[string]interface{}{
-		"event_type":     events.EventLLMCallError,
-		"trace_id":       traceID,
-		"span_id":        spanID,
-		"parent_span_id": parentSpanID,
-		"session_key":    sessionKey,
-		"channel":        channel,
-		"error":          err.Error(),
+		"event_type":              events.EventLLMCallError,
+		"trace_id":                traceID,
+		"span_id":                 spanID,
+		"parent_span_id":          parentSpanID,
+		"session_key":             sessionKey,
+		"channel":                 channel,
+		"error":                   err.Error(),
+		"enable_thinking_process": enableThinking,
 	}
 	a.hookCallback(events.EventLLMCallError, data)
 }
