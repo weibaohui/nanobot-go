@@ -61,12 +61,28 @@ func (o *ThinkingProcessObserver) OnEvent(ctx context.Context, event events.Even
 	// 检查是否启用 - 优先从 context 获取 Agent 级别的设置
 	enabled := trace.GetEnableThinkingProcess(ctx)
 	sessionKey := trace.GetSessionKey(ctx)
+	eventType := event.GetEventType()
+
+	o.logger.Debug("[ThinkingProcess] OnEvent 开始",
+		zap.String("event_type", string(eventType)),
+		zap.String("session_key", sessionKey),
+		zap.Bool("enabled_from_ctx", enabled),
+	)
 
 	// 如果 context 中没有设置，尝试从 sessionCache 获取
 	if !enabled && sessionKey != "" {
 		o.mu.RLock()
 		if info, exists := o.sessionCache[sessionKey]; exists {
 			enabled = info.enableThinkingProcess
+			o.logger.Debug("[ThinkingProcess] 从 sessionCache 获取设置",
+				zap.String("session_key", sessionKey),
+				zap.Bool("enabled", enabled),
+			)
+		} else {
+			o.logger.Debug("[ThinkingProcess] sessionCache 中未找到",
+				zap.String("session_key", sessionKey),
+				zap.Int("cache_size", len(o.sessionCache)),
+			)
 		}
 		o.mu.RUnlock()
 	}
@@ -74,8 +90,14 @@ func (o *ThinkingProcessObserver) OnEvent(ctx context.Context, event events.Even
 	// 如果还是没有，使用全局配置作为后备
 	if !enabled {
 		enabled = o.config.Enabled
+		o.logger.Debug("[ThinkingProcess] 使用全局配置",
+			zap.Bool("global_enabled", enabled),
+		)
 	}
 	if !enabled {
+		o.logger.Debug("[ThinkingProcess] 未启用，跳过",
+			zap.String("event_type", string(eventType)),
+		)
 		return nil
 	}
 
@@ -130,32 +152,43 @@ func (o *ThinkingProcessObserver) updateSessionCache(ctx context.Context, event 
 	case *events.MessageReceivedEvent:
 		// 收到消息时，缓存会话信息
 		if e.SessionKey != "" && e.ChatID != "" {
+			enableThinking := trace.GetEnableThinkingProcess(ctx)
 			o.mu.Lock()
 			o.sessionCache[e.SessionKey] = sessionInfo{
 				chatID:                e.ChatID,
 				channel:               e.Channel,
-				enableThinkingProcess: trace.GetEnableThinkingProcess(ctx),
+				enableThinkingProcess: enableThinking,
 				updatedAt:             time.Now(),
 			}
 			o.mu.Unlock()
+			o.logger.Debug("[ThinkingProcess] MessageReceived 更新缓存",
+				zap.String("session_key", e.SessionKey),
+				zap.Bool("enable_thinking", enableThinking),
+			)
 		}
 
 	case *events.MessageSentEvent:
 		// 发送消息时也更新缓存
 		if e.SessionKey != "" && e.ChatID != "" {
+			enableThinking := trace.GetEnableThinkingProcess(ctx)
 			o.mu.Lock()
 			o.sessionCache[e.SessionKey] = sessionInfo{
 				chatID:                e.ChatID,
 				channel:               e.Channel,
-				enableThinkingProcess: trace.GetEnableThinkingProcess(ctx),
+				enableThinkingProcess: enableThinking,
 				updatedAt:             time.Now(),
 			}
 			o.mu.Unlock()
+			o.logger.Debug("[ThinkingProcess] MessageSent 更新缓存",
+				zap.String("session_key", e.SessionKey),
+				zap.Bool("enable_thinking", enableThinking),
+			)
 		}
 
 	case *events.PromptSubmittedEvent:
 		// Prompt 提交时也更新缓存（如果有 sessionKey）
 		if e.SessionKey != "" {
+			enableThinking := trace.GetEnableThinkingProcess(ctx)
 			o.mu.RLock()
 			info, exists := o.sessionCache[e.SessionKey]
 			o.mu.RUnlock()
@@ -164,10 +197,18 @@ func (o *ThinkingProcessObserver) updateSessionCache(ctx context.Context, event 
 				o.sessionCache[e.SessionKey] = sessionInfo{
 					chatID:                info.chatID,
 					channel:               info.channel,
-					enableThinkingProcess: trace.GetEnableThinkingProcess(ctx),
+					enableThinkingProcess: enableThinking,
 					updatedAt:             time.Now(),
 				}
 				o.mu.Unlock()
+				o.logger.Debug("[ThinkingProcess] PromptSubmitted 更新缓存",
+					zap.String("session_key", e.SessionKey),
+					zap.Bool("enable_thinking", enableThinking),
+				)
+			} else {
+				o.logger.Debug("[ThinkingProcess] PromptSubmitted 缓存不存在",
+					zap.String("session_key", e.SessionKey),
+				)
 			}
 		}
 	}
