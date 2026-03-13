@@ -55,6 +55,28 @@ const { useBreakpoint } = Grid;
 const { Title } = Typography;
 const { Panel } = Collapse;
 
+// 安全解析 JSON 数组，返回数组长度或 0
+const getArrayLength = (jsonStr: string | null | undefined): number => {
+  if (!jsonStr || jsonStr === 'null') return 0;
+  try {
+    const parsed = JSON.parse(jsonStr);
+    return Array.isArray(parsed) ? parsed.length : 0;
+  } catch {
+    return 0;
+  }
+};
+
+// 安全解析 JSON 数组，返回数组或空数组
+const safeParseArray = (jsonStr: string | null | undefined): any[] => {
+  if (!jsonStr || jsonStr === 'null') return [];
+  try {
+    const parsed = JSON.parse(jsonStr);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
 const Agents: React.FC = () => {
   const screens = useBreakpoint();
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -227,7 +249,7 @@ const Agents: React.FC = () => {
       width: screens.xs ? 60 : 70,
       align: 'center',
       render: (_: any, record: Agent) => {
-        const skillsCount = record.skills_list ? JSON.parse(record.skills_list).length : 0;
+        const skillsCount = getArrayLength(record.skills_list);
         return (
           <Tag color={skillsCount === 0 ? 'default' : 'blue'}>
             {skillsCount === 0 ? '不限' : skillsCount}
@@ -240,7 +262,7 @@ const Agents: React.FC = () => {
       width: screens.xs ? 60 : 70,
       align: 'center',
       render: (_: any, record: Agent) => {
-        const toolsCount = record.tools_list ? JSON.parse(record.tools_list).length : 0;
+        const toolsCount = getArrayLength(record.tools_list);
         return (
           <Tag color={toolsCount === 0 ? 'default' : 'cyan'}>
             {toolsCount === 0 ? '不限' : toolsCount}
@@ -272,8 +294,8 @@ const Agents: React.FC = () => {
               setEditingAgent(record);
               form.setFieldsValue({
                 ...record,
-                skills_list: record.skills_list ? JSON.parse(record.skills_list) : [],
-                tools_list: record.tools_list ? JSON.parse(record.tools_list) : [],
+                skills_list: safeParseArray(record.skills_list),
+                tools_list: safeParseArray(record.tools_list),
               });
               setModalVisible(true);
             }}
