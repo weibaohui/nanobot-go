@@ -138,6 +138,18 @@ const Agents: React.FC = () => {
     }
   };
 
+  const handleUpdateMaxIterations = async (agent: Agent, value: number) => {
+    try {
+      await agentsApi.update(agent.id, {
+        max_iterations: value,
+      } as CreateAgentRequest);
+      message.success('已更新最大轮数');
+      fetchAgents();
+    } catch (error) {
+      message.error('更新失败');
+    }
+  };
+
   const columns: TableColumnsType<Agent> = [
     {
       title: 'ID',
@@ -170,8 +182,8 @@ const Agents: React.FC = () => {
       ),
     },
     {
-      title: '思考过程',
-      width: screens.xs ? 80 : 100,
+      title: '思考',
+      width: screens.xs ? 60 : 70,
       align: 'center',
       render: (_: any, record: Agent) => (
         <Switch
@@ -180,6 +192,33 @@ const Agents: React.FC = () => {
           onChange={(checked) => handleToggleThinking(record, checked)}
           checkedChildren="开"
           unCheckedChildren="关"
+        />
+      ),
+    },
+    {
+      title: '轮数',
+      width: screens.xs ? 70 : 90,
+      align: 'center',
+      render: (_: any, record: Agent) => (
+        <Input
+          type="number"
+          size="small"
+          min={1}
+          max={50}
+          defaultValue={record.max_iterations}
+          onPressEnter={(e) => {
+            const value = parseInt((e.target as HTMLInputElement).value, 10);
+            if (!isNaN(value) && value !== record.max_iterations) {
+              handleUpdateMaxIterations(record, value);
+            }
+          }}
+          onBlur={(e) => {
+            const value = parseInt(e.target.value, 10);
+            if (!isNaN(value) && value !== record.max_iterations) {
+              handleUpdateMaxIterations(record, value);
+            }
+          }}
+          style={{ width: screens.xs ? 50 : 70, textAlign: 'center' }}
         />
       ),
     },

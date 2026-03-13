@@ -27,7 +27,10 @@ func (h *Handler) handleChannels(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, ListResponse{Items: channels})
+		c.JSON(http.StatusOK, ListResponse{
+			Items: channels,
+			Total: int64(len(channels)),
+		})
 
 	case http.MethodPost:
 		var req service.CreateChannelRequest

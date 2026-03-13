@@ -62,6 +62,7 @@ func (h *Handler) listAgents(c *gin.Context) {
 
 	c.JSON(http.StatusOK, ListResponse{
 		Items: agents,
+		Total: int64(len(agents)),
 	})
 }
 
