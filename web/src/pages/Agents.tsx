@@ -223,6 +223,32 @@ const Agents: React.FC = () => {
       ),
     },
     {
+      title: '技能',
+      width: screens.xs ? 60 : 70,
+      align: 'center',
+      render: (_: any, record: Agent) => {
+        const skillsCount = record.skills_list ? JSON.parse(record.skills_list).length : 0;
+        return (
+          <Tag color={skillsCount === 0 ? 'default' : 'blue'}>
+            {skillsCount === 0 ? '不限' : skillsCount}
+          </Tag>
+        );
+      },
+    },
+    {
+      title: '工具',
+      width: screens.xs ? 60 : 70,
+      align: 'center',
+      render: (_: any, record: Agent) => {
+        const toolsCount = record.tools_list ? JSON.parse(record.tools_list).length : 0;
+        return (
+          <Tag color={toolsCount === 0 ? 'default' : 'cyan'}>
+            {toolsCount === 0 ? '不限' : toolsCount}
+          </Tag>
+        );
+      },
+    },
+    {
       title: '状态',
       render: (_: any, record: Agent) => (
         <Space size="small">

@@ -175,7 +175,7 @@ func parseID(c *gin.Context, param string) (uint, bool) {
 // ListResponse 列表响应
 type ListResponse struct {
 	Items    interface{} `json:"items"`
-	Total    int64       `json:"total,omitempty"`
+	Total    int64       `json:"total"`
 	Page     int         `json:"page,omitempty"`
 	PageSize int         `json:"page_size,omitempty"`
 }
