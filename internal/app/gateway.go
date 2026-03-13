@@ -140,6 +140,8 @@ func (g *Gateway) InitAgentLoop() {
 		Logger:         g.Logger,
 		HookManager:    g.Hook.Manager,
 		HookCallback:   g.Hook.Callback,
+		ChannelService: g.Providers.ChannelService,
+		AgentService:   g.Providers.AgentService,
 	})
 }
 
@@ -174,6 +176,7 @@ func (g *Gateway) registerChannelsFromDB() {
 				AppSecret:         cfg.AppSecret,
 				EncryptKey:        cfg.EncryptKey,
 				VerificationToken: cfg.VerificationToken,
+				ChannelID:         ch.ID, // 设置数据库中的渠道ID
 			}
 			feishu := channels.NewFeishuChannel(feishuConfig, g.MessageBus, g.Logger)
 			g.ChannelManager.Register(feishu)

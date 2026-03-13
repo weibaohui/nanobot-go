@@ -41,7 +41,7 @@ func (r *channelRepository) Create(channel *models.Channel) error {
 // GetByID 根据 ID 获取 Channel
 func (r *channelRepository) GetByID(id uint) (*models.Channel, error) {
 	var channel models.Channel
-	if err := r.db.First(&channel, id).Error; err != nil {
+	if err := r.db.Preload("Agent").First(&channel, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}

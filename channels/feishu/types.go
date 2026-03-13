@@ -20,6 +20,7 @@ type Config struct {
 	EncryptKey        string   `json:"encrypt_key"`
 	VerificationToken string   `json:"verification_token"`
 	AllowFrom         []string `json:"allow_from"`
+	ChannelID         uint     `json:"channel_id"` // 数据库中的渠道ID
 }
 
 // Channel 飞书渠道

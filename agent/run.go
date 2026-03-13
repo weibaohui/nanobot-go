@@ -70,6 +70,11 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 		l.hookManager.OnMessageReceived(ctx, msg)
 	}
 
+	// 加载渠道绑定的 Agent 配置
+	if err := l.loadChannelAgentConfig(ctx, msg); err != nil {
+		l.logger.Warn("加载渠道 Agent 配置失败，将使用默认配置", zap.Error(err))
+	}
+
 	// 使用 Master Agent 处理消息（包括中断恢复和正常处理）
 	if l.masterAgent == nil {
 		return fmt.Errorf("Master Agent 未初始化，无法处理消息")
@@ -120,5 +125,72 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 		}
 	}
 	l.bus.PublishOutbound(outMsg)
+	return nil
+}
+
+// loadChannelAgentConfig 加载渠道绑定的 Agent 配置
+// 从数据库获取 Agent 的 markdown 配置内容，设置到 ContextBuilder
+func (l *Loop) loadChannelAgentConfig(ctx context.Context, msg *bus.InboundMessage) error {
+	if l.channelService == nil || l.agentService == nil {
+		return fmt.Errorf("channelService 或 agentService 未初始化")
+	}
+
+	// 从消息元数据中获取 channel_id
+	var channelID uint
+	if msg.Metadata != nil {
+		if cid, ok := msg.Metadata["channel_id"].(float64); ok {
+			channelID = uint(cid)
+		} else if cid, ok := msg.Metadata["channel_id"].(uint); ok {
+			channelID = cid
+		}
+	}
+
+	if channelID == 0 {
+		return fmt.Errorf("消息中未包含 channel_id")
+	}
+
+	// 获取渠道信息
+	channel, err := l.channelService.GetChannel(channelID)
+	if err != nil {
+		return fmt.Errorf("获取渠道信息失败: %w", err)
+	}
+	if channel == nil {
+		return fmt.Errorf("渠道不存在: %d", channelID)
+	}
+
+	// 检查渠道是否绑定了 Agent
+	if channel.AgentID == nil || *channel.AgentID == 0 {
+		l.logger.Info("渠道未绑定 Agent，使用默认配置",
+			zap.Uint("channel_id", channelID),
+		)
+		// 清除之前的 Agent 配置，使用默认文件配置
+		l.context.SetAgentConfig(nil)
+		return nil
+	}
+
+	agentID := *channel.AgentID
+
+	// 获取 Agent 配置
+	agentConfig, err := l.agentService.GetAgentConfig(agentID)
+	if err != nil {
+		return fmt.Errorf("获取 Agent 配置失败: %w", err)
+	}
+
+	// 创建 AgentConfig 并设置到 ContextBuilder
+	config := &AgentConfig{
+		IdentityContent: agentConfig.IdentityContent,
+		SoulContent:     agentConfig.SoulContent,
+		AgentsContent:   agentConfig.AgentsContent,
+		ToolsContent:    agentConfig.ToolsContent,
+		UserContent:     agentConfig.UserContent,
+	}
+	l.context.SetAgentConfig(config)
+
+	l.logger.Info("已加载渠道绑定的 Agent 配置",
+		zap.Uint("channel_id", channelID),
+		zap.Uint("agent_id", agentID),
+		zap.String("agent_name", channel.Agent.Name),
+	)
+
 	return nil
 }

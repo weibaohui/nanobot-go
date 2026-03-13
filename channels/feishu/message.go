@@ -115,6 +115,7 @@ func (h *messageHandler) onMessageReceive(ctx context.Context, event *larkim.P2M
 
 	// 发布消息到总线
 	// 在 Metadata 中记录 app_id，用于后续消息路由
+	// 记录 channel_id 用于加载渠道绑定的 Agent 配置
 	c.bus.PublishInbound(&bus.InboundMessage{
 		Channel:   "feishu",
 		ChatID:    replyTo,
@@ -126,7 +127,8 @@ func (h *messageHandler) onMessageReceive(ctx context.Context, event *larkim.P2M
 			"chat_type":  chatType,
 			"msg_type":   msgType,
 			"chat_id":    chatID,
-			"app_id":     c.config.AppID, // 记录 app_id 用于消息路由
+			"app_id":     c.config.AppID,     // 记录 app_id 用于消息路由
+			"channel_id": c.config.ChannelID, // 记录 channel_id 用于加载 Agent 配置
 		},
 	})
 

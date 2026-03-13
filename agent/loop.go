@@ -6,10 +6,12 @@ import (
 	"github.com/weibaohui/nanobot-go/agent/hooks"
 	"github.com/weibaohui/nanobot-go/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/agent/interrupt"
-	"github.com/weibaohui/nanobot-go/agent/tools"
 	"github.com/weibaohui/nanobot-go/agent/task"
+	"github.com/weibaohui/nanobot-go/agent/tools"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/cron"
+	"github.com/weibaohui/nanobot-go/internal/service"
+	agentsvc "github.com/weibaohui/nanobot-go/internal/service/agent"
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
 )
@@ -30,6 +32,8 @@ type Loop struct {
 	logger              *zap.Logger
 	hookManager         *hooks.HookManager
 	hookCallback        func(eventType events.EventType, data map[string]interface{}) // Hook 回调
+	channelService      service.ChannelService // 渠道服务，用于获取渠道绑定的 Agent
+	agentService        agentsvc.Service       // Agent 服务，用于获取 Agent 配置
 
 	interruptManager *interrupt.Manager
 	masterAgent      *MasterAgent
@@ -49,6 +53,8 @@ type LoopConfig struct {
 	Logger              *zap.Logger
 	HookManager         *hooks.HookManager                                            // Hook 系统管理器
 	HookCallback        func(eventType events.EventType, data map[string]interface{}) // Hook 回调
+	ChannelService      service.ChannelService                                       // 渠道服务
+	AgentService        agentsvc.Service                                             // Agent 服务
 }
 
 // NewLoop 创建代理循环
@@ -76,6 +82,8 @@ func NewLoop(cfg *LoopConfig) *Loop {
 		logger:              logger,
 		hookManager:         cfg.HookManager,
 		hookCallback:        cfg.HookCallback,
+		channelService:      cfg.ChannelService,
+		agentService:        cfg.AgentService,
 	}
 
 	// 设置工具的 HookManager，使工具执行时能触发 Hook 事件

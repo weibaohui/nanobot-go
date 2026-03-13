@@ -23,12 +23,22 @@ const (
 	BootstrapLight BootstrapMode = "light"
 )
 
+// AgentConfig Agent 配置内容（从数据库加载）
+type AgentConfig struct {
+	IdentityContent string // IDENTITY.md 内容
+	SoulContent     string // SOUL.md 内容
+	AgentsContent   string // AGENTS.md 内容
+	ToolsContent    string // TOOLS.md 内容
+	UserContent     string // USER.md 内容
+}
+
 // ContextBuilder 上下文构建器
 type ContextBuilder struct {
 	workspace       string
 	memory          *MemoryStore
 	skills          *SkillsLoader
 	bootstrapMode   BootstrapMode // 引导文件加载模式
+	agentConfig     *AgentConfig  // Agent 配置内容（从数据库加载，优先使用）
 }
 
 // NewContextBuilder 创建上下文构建器
@@ -44,6 +54,12 @@ func NewContextBuilder(workspace string) *ContextBuilder {
 // SetBootstrapMode 设置引导文件加载模式
 func (c *ContextBuilder) SetBootstrapMode(mode BootstrapMode) {
 	c.bootstrapMode = mode
+}
+
+// SetAgentConfig 设置 Agent 配置（从数据库加载）
+// 设置后，引导文件将从这些配置中加载，而不是从 workspace 文件
+func (c *ContextBuilder) SetAgentConfig(config *AgentConfig) {
+	c.agentConfig = config
 }
 
 // GetSkillsLoader 获取技能加载器
@@ -148,7 +164,14 @@ func (c *ContextBuilder) loadBootstrapFiles() string {
 }
 
 // loadBootstrapFilesWithMode 使用指定模式加载引导文件
+// 优先从数据库 Agent 配置加载，如果没有则从 workspace 文件加载
 func (c *ContextBuilder) loadBootstrapFilesWithMode(mode BootstrapMode) string {
+	// 如果设置了 Agent 配置（从数据库加载），优先使用
+	if c.agentConfig != nil {
+		return c.loadBootstrapFromAgentConfig(mode)
+	}
+
+	// 否则从 workspace 文件加载
 	var bootstrapFiles []string
 
 	switch mode {
@@ -170,6 +193,60 @@ func (c *ContextBuilder) loadBootstrapFilesWithMode(mode BootstrapMode) string {
 		if data, err := os.ReadFile(filePath); err == nil {
 			content := string(data)
 			parts = append(parts, "## "+filename+"\n\n"+content)
+		}
+	}
+
+	return strings.Join(parts, "\n\n")
+}
+
+// loadBootstrapFromAgentConfig 从 Agent 配置（数据库）加载引导文件
+func (c *ContextBuilder) loadBootstrapFromAgentConfig(mode BootstrapMode) string {
+	var filesToLoad []struct {
+		name    string
+		content string
+	}
+
+	// 根据模式决定加载哪些文件
+	switch mode {
+	case BootstrapLight:
+		// 轻量模式：只加载代理定义和工具定义
+		filesToLoad = []struct {
+			name    string
+			content string
+		}{
+			{"AGENTS.md", c.agentConfig.AgentsContent},
+			{"TOOLS.md", c.agentConfig.ToolsContent},
+		}
+	case BootstrapFull:
+		// 完整模式：加载所有引导文件
+		filesToLoad = []struct {
+			name    string
+			content string
+		}{
+			{"IDENTITY.md", c.agentConfig.IdentityContent},
+			{"SOUL.md", c.agentConfig.SoulContent},
+			{"AGENTS.md", c.agentConfig.AgentsContent},
+			{"TOOLS.md", c.agentConfig.ToolsContent},
+			{"USER.md", c.agentConfig.UserContent},
+		}
+	default:
+		// 默认完整模式
+		filesToLoad = []struct {
+			name    string
+			content string
+		}{
+			{"IDENTITY.md", c.agentConfig.IdentityContent},
+			{"SOUL.md", c.agentConfig.SoulContent},
+			{"AGENTS.md", c.agentConfig.AgentsContent},
+			{"TOOLS.md", c.agentConfig.ToolsContent},
+			{"USER.md", c.agentConfig.UserContent},
+		}
+	}
+
+	var parts []string
+	for _, file := range filesToLoad {
+		if file.content != "" {
+			parts = append(parts, "## "+file.name+"\n\n"+file.content)
 		}
 	}
 
