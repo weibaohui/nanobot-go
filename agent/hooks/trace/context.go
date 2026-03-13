@@ -25,6 +25,12 @@ type ChannelKey struct{}
 // EnableThinkingProcessKey 是 context 中存储是否启用思考过程的 key
 type EnableThinkingProcessKey struct{}
 
+// ChannelIDKey 是 context 中存储 ChannelID 的 key
+type ChannelIDKey struct{}
+
+// AgentIDKey 是 context 中存储 AgentID 的 key
+type AgentIDKey struct{}
+
 // NewTraceID 生成新的 TraceID
 func NewTraceID() string {
 	return uuid.New().String()
@@ -118,6 +124,32 @@ func GetEnableThinkingProcess(ctx context.Context) bool {
 		return enabled
 	}
 	return false
+}
+
+// WithChannelID 将 ChannelID 注入到 context 中
+func WithChannelID(ctx context.Context, channelID uint) context.Context {
+	return context.WithValue(ctx, ChannelIDKey{}, channelID)
+}
+
+// GetChannelID 从 context 中获取 ChannelID，如果不存在则返回 0
+func GetChannelID(ctx context.Context) uint {
+	if channelID, ok := ctx.Value(ChannelIDKey{}).(uint); ok {
+		return channelID
+	}
+	return 0
+}
+
+// WithAgentID 将 AgentID 注入到 context 中
+func WithAgentID(ctx context.Context, agentID uint) context.Context {
+	return context.WithValue(ctx, AgentIDKey{}, agentID)
+}
+
+// GetAgentID 从 context 中获取 AgentID，如果不存在则返回 0
+func GetAgentID(ctx context.Context) uint {
+	if agentID, ok := ctx.Value(AgentIDKey{}).(uint); ok {
+		return agentID
+	}
+	return 0
 }
 
 // MustGetTraceID 从 context 中获取 TraceID，如果不存在则返回空字符串

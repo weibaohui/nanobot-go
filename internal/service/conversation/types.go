@@ -27,6 +27,12 @@ type ConversationDTO struct {
 	Content      string         `json:"content"`
 	TokenUsage   *TokenUsageDTO `json:"token_usage,omitempty"`
 	CreatedAt    time.Time      `json:"created_at"`
+
+	// 归属信息（用于多租户、多 Agent 架构）
+	UserID      *uint  `json:"user_id,omitempty"`      // 用户 ID
+	AgentID     *uint  `json:"agent_id,omitempty"`     // Agent ID
+	ChannelID   *uint  `json:"channel_id,omitempty"`   // Channel ID
+	ChannelType string `json:"channel_type,omitempty"` // 渠道类型
 }
 
 // TokenUsageDTO Token 使用信息

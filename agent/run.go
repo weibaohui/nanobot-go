@@ -169,6 +169,8 @@ func (l *Loop) loadChannelAgentConfig(ctx context.Context, msg *bus.InboundMessa
 		l.context.SetAgentConfig(nil)
 		// 未绑定 Agent，思考过程默认关闭
 		ctx = trace.WithEnableThinkingProcess(ctx, false)
+		// 仍然存储 channel_id
+		ctx = trace.WithChannelID(ctx, channelID)
 		return ctx, nil
 	}
 
@@ -198,6 +200,9 @@ func (l *Loop) loadChannelAgentConfig(ctx context.Context, msg *bus.InboundMessa
 
 	// 将思考过程设置注入到 context
 	ctx = trace.WithEnableThinkingProcess(ctx, agent.EnableThinkingProcess)
+	// 将 channel_id 和 agent_id 注入到 context
+	ctx = trace.WithChannelID(ctx, channelID)
+	ctx = trace.WithAgentID(ctx, agentID)
 
 	l.logger.Info("已加载渠道绑定的 Agent 配置",
 		zap.Uint("channel_id", channelID),

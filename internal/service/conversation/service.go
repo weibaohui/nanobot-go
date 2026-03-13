@@ -195,6 +195,10 @@ func (s *service) recordToDTO(record *models.ConversationRecord) ConversationDTO
 		Role:         record.Role,
 		Content:      record.Content,
 		CreatedAt:    record.CreatedAt,
+		UserID:       record.UserID,
+		AgentID:      record.AgentID,
+		ChannelID:    record.ChannelID,
+		ChannelType:  record.ChannelType,
 	}
 
 	if record.TotalTokens > 0 || record.PromptTokens > 0 || record.CompletionTokens > 0 {
@@ -222,6 +226,10 @@ func (s *service) dtoToRecord(dto *ConversationDTO) models.ConversationRecord {
 		Role:         dto.Role,
 		Content:      dto.Content,
 		CreatedAt:    dto.CreatedAt,
+		UserID:       dto.UserID,
+		AgentID:      dto.AgentID,
+		ChannelID:    dto.ChannelID,
+		ChannelType:  dto.ChannelType,
 	}
 
 	if dto.TokenUsage != nil {
