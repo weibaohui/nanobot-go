@@ -15,11 +15,41 @@ import {
   Grid,
   Typography,
   Collapse,
+  Divider,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, FileTextOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, FileTextOutlined, ToolOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { agentsApi } from '../api';
 import type { Agent, CreateAgentRequest } from '../types';
 import type { TableColumnsType } from 'antd';
+
+// 可用技能列表
+const AVAILABLE_SKILLS = [
+  { value: 'cron', label: 'cron - 定时任务管理', description: '创建和管理定时任务' },
+  { value: 'github', label: 'github - GitHub 操作', description: '仓库、Issue、PR 管理' },
+  { value: 'skill-creator', label: 'skill-creator - 技能创建', description: '创建新技能' },
+  { value: 'summarize', label: 'summarize - 文本总结', description: '总结长文本内容' },
+  { value: 'tmux', label: 'tmux - 终端会话', description: '管理 tmux 会话' },
+  { value: 'weather', label: 'weather - 天气查询', description: '查询天气信息' },
+];
+
+// 可用工具列表
+const AVAILABLE_TOOLS = [
+  { value: 'readfile', label: 'readfile - 读取文件', description: '读取文件内容' },
+  { value: 'writefile', label: 'writefile - 写入文件', description: '写入文件内容' },
+  { value: 'editfile', label: 'editfile - 编辑文件', description: '编辑文件内容' },
+  { value: 'listdir', label: 'listdir - 列出目录', description: '列出目录内容' },
+  { value: 'exec', label: 'exec - 执行命令', description: '执行 Shell 命令' },
+  { value: 'websearch', label: 'websearch - 网页搜索', description: '搜索网页内容' },
+  { value: 'webfetch', label: 'webfetch - 网页获取', description: '获取网页内容' },
+  { value: 'message', label: 'message - 发送消息', description: '发送消息到渠道' },
+  { value: 'cron', label: 'cron - 定时任务', description: '管理定时任务' },
+  { value: 'askuser', label: 'askuser - 询问用户', description: '向用户提问' },
+  { value: 'skill', label: 'skill - 技能调用', description: '调用技能' },
+  { value: 'task_start', label: 'task_start - 启动任务', description: '启动后台任务' },
+  { value: 'task_get', label: 'task_get - 获取任务', description: '获取任务状态' },
+  { value: 'task_stop', label: 'task_stop - 停止任务', description: '停止后台任务' },
+  { value: 'task_list', label: 'task_list - 列出任务', description: '列出所有任务' },
+];
 
 const { useBreakpoint } = Grid;
 const { Title } = Typography;
@@ -304,6 +334,44 @@ const Agents: React.FC = () => {
             initialValue={false}
           >
             <Switch checkedChildren="开启" unCheckedChildren="关闭" />
+          </Form.Item>
+
+          <Divider>
+            <ThunderboltOutlined /> 技能配置
+          </Divider>
+
+          <Form.Item
+            name="skills_list"
+            label="可用技能"
+            initialValue={[]}
+            extra="选择该 Agent 可以使用的技能"
+          >
+            <Select
+              mode="multiple"
+              placeholder="选择技能"
+              options={AVAILABLE_SKILLS}
+              style={{ width: '100%' }}
+              allowClear
+            />
+          </Form.Item>
+
+          <Divider>
+            <ToolOutlined /> 工具配置
+          </Divider>
+
+          <Form.Item
+            name="tools_list"
+            label="可用工具"
+            initialValue={[]}
+            extra="选择该 Agent 可以使用的工具"
+          >
+            <Select
+              mode="multiple"
+              placeholder="选择工具"
+              options={AVAILABLE_TOOLS}
+              style={{ width: '100%' }}
+              allowClear
+            />
           </Form.Item>
 
           <Collapse ghost>
