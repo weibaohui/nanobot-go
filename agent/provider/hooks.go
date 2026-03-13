@@ -32,6 +32,8 @@ func (a *ChatModelAdapter) triggerLLMCallStart(ctx context.Context, input []*sch
 	sessionKey := trace.GetSessionKey(ctx)
 	channel := trace.GetChannel(ctx)
 	enableThinking := trace.GetEnableThinkingProcess(ctx)
+	channelID := trace.GetChannelID(ctx)
+	agentID := trace.GetAgentID(ctx)
 
 	var toolNames []string
 	for _, msg := range input {
@@ -51,6 +53,8 @@ func (a *ChatModelAdapter) triggerLLMCallStart(ctx context.Context, input []*sch
 		"tool_names":              toolNames,
 		"messages":                input,
 		"enable_thinking_process": enableThinking,
+		"channel_id":              channelID,
+		"agent_id":                agentID,
 	}
 	a.hookCallback(events.EventLLMCallStart, data)
 }
@@ -67,6 +71,8 @@ func (a *ChatModelAdapter) triggerLLMCallEnd(ctx context.Context, response *sche
 	sessionKey := trace.GetSessionKey(ctx)
 	channel := trace.GetChannel(ctx)
 	enableThinking := trace.GetEnableThinkingProcess(ctx)
+	channelID := trace.GetChannelID(ctx)
+	agentID := trace.GetAgentID(ctx)
 
 	var tokenUsage *schema.TokenUsage
 	if response.ResponseMeta != nil && response.ResponseMeta.Usage != nil {
@@ -86,6 +92,8 @@ func (a *ChatModelAdapter) triggerLLMCallEnd(ctx context.Context, response *sche
 		"tool_calls":              toolCalls,
 		"token_usage":             tokenUsage,
 		"enable_thinking_process": enableThinking,
+		"channel_id":              channelID,
+		"agent_id":                agentID,
 	}
 	a.hookCallback(events.EventLLMCallEnd, data)
 }
@@ -102,6 +110,8 @@ func (a *ChatModelAdapter) triggerLLMCallError(ctx context.Context, err error) {
 	sessionKey := trace.GetSessionKey(ctx)
 	channel := trace.GetChannel(ctx)
 	enableThinking := trace.GetEnableThinkingProcess(ctx)
+	channelID := trace.GetChannelID(ctx)
+	agentID := trace.GetAgentID(ctx)
 
 	data := map[string]interface{}{
 		"event_type":              events.EventLLMCallError,
@@ -112,6 +122,8 @@ func (a *ChatModelAdapter) triggerLLMCallError(ctx context.Context, err error) {
 		"channel":                 channel,
 		"error":                   err.Error(),
 		"enable_thinking_process": enableThinking,
+		"channel_id":              channelID,
+		"agent_id":                agentID,
 	}
 	a.hookCallback(events.EventLLMCallError, data)
 }

@@ -44,6 +44,13 @@ func CreateHookCallback(hookManager *hooks.HookManager, logger *zap.Logger) Hook
 		if enableThinking, ok := data["enable_thinking_process"].(bool); ok {
 			ctx = trace.WithEnableThinkingProcess(ctx, enableThinking)
 		}
+		// 从 data 中提取 channel_id 和 agent_id 并设置到 context
+		if channelID, ok := data["channel_id"].(uint); ok && channelID > 0 {
+			ctx = trace.WithChannelID(ctx, channelID)
+		}
+		if agentID, ok := data["agent_id"].(uint); ok && agentID > 0 {
+			ctx = trace.WithAgentID(ctx, agentID)
+		}
 
 		// 创建事件并分发
 		baseEvent := &events.BaseEvent{
