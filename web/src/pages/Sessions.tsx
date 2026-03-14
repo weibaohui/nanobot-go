@@ -19,7 +19,7 @@ import {
   ThunderboltOutlined,
   ClockCircleOutlined,
 } from '@ant-design/icons';
-import { sessionsApi } from '../api';
+import { sessionsApi, getCurrentUserCode } from '../api';
 import type { Session } from '../types';
 
 const Sessions: React.FC = () => {
@@ -33,7 +33,9 @@ const Sessions: React.FC = () => {
   const fetchSessions = async () => {
     setLoading(true);
     try {
-      const res = await sessionsApi.list();
+      // 使用当前用户的 user_code 获取会话列表
+      const userCode = getCurrentUserCode();
+      const res = await sessionsApi.list(userCode ? { user_code: userCode } : undefined);
       setSessions((res as any)?.items || []);
     } catch (error) {
       message.error('获取会话列表失败');
