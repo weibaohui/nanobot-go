@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/weibaohui/nanobot-go/internal/models"
@@ -11,40 +10,40 @@ import (
 
 // CreateCronJobRequest 创建定时任务请求
 type CreateCronJobRequest struct {
-	Name              string  `json:"name"`
-	Description       string  `json:"description,omitempty"`
-	ChannelID         uint    `json:"channel_id"`
-	CronExpression    string  `json:"cron_expression"`
-	Timezone          string  `json:"timezone,omitempty"`
-	Prompt            string  `json:"prompt"`
+	Name               string  `json:"name"`
+	Description        string  `json:"description,omitempty"`
+	ChannelCode        string  `json:"channel_code"`
+	CronExpression     string  `json:"cron_expression"`
+	Timezone           string  `json:"timezone,omitempty"`
+	Prompt             string  `json:"prompt"`
 	ModelSelectionMode string  `json:"model_selection_mode,omitempty"`
-	ModelID           string  `json:"model_id,omitempty"`
-	ModelName         string  `json:"model_name,omitempty"`
-	TargetChannelID   *uint   `json:"target_channel_id,omitempty"`
-	TargetUserID      string  `json:"target_user_id,omitempty"`
+	ModelID            string  `json:"model_id,omitempty"`
+	ModelName          string  `json:"model_name,omitempty"`
+	TargetChannelCode  string  `json:"target_channel_code,omitempty"`
+	TargetUserCode     string  `json:"target_user_code,omitempty"`
 }
 
 // UpdateCronJobRequest 更新定时任务请求
 type UpdateCronJobRequest struct {
-	Name              string  `json:"name,omitempty"`
-	Description       string  `json:"description,omitempty"`
-	ChannelID         uint    `json:"channel_id,omitempty"`
-	CronExpression    string  `json:"cron_expression,omitempty"`
-	Timezone          string  `json:"timezone,omitempty"`
-	Prompt            string  `json:"prompt,omitempty"`
-	ModelSelectionMode string  `json:"model_selection_mode,omitempty"`
-	ModelID           string  `json:"model_id,omitempty"`
-	ModelName         string  `json:"model_name,omitempty"`
-	TargetChannelID   *uint   `json:"target_channel_id,omitempty"`
-	TargetUserID      string  `json:"target_user_id,omitempty"`
-	IsActive          *bool   `json:"is_active,omitempty"`
+	Name               string `json:"name,omitempty"`
+	Description        string `json:"description,omitempty"`
+	ChannelCode        string `json:"channel_code,omitempty"`
+	CronExpression     string `json:"cron_expression,omitempty"`
+	Timezone           string `json:"timezone,omitempty"`
+	Prompt             string `json:"prompt,omitempty"`
+	ModelSelectionMode string `json:"model_selection_mode,omitempty"`
+	ModelID            string `json:"model_id,omitempty"`
+	ModelName          string `json:"model_name,omitempty"`
+	TargetChannelCode  string `json:"target_channel_code,omitempty"`
+	TargetUserCode     string `json:"target_user_code,omitempty"`
+	IsActive           *bool  `json:"is_active,omitempty"`
 }
 
 // CronJobService 定时任务服务接口
 type CronJobService interface {
-	List(ctx context.Context, userID uint, offset int, limit int) ([]models.CronJob, int64, error)
+	List(ctx context.Context, userCode string, offset int, limit int) ([]models.CronJob, int64, error)
 	Get(ctx context.Context, id uint) (*models.CronJob, error)
-	Create(ctx context.Context, userID uint, req CreateCronJobRequest) (*models.CronJob, error)
+	Create(ctx context.Context, userCode string, req CreateCronJobRequest) (*models.CronJob, error)
 	Update(ctx context.Context, id uint, req UpdateCronJobRequest) error
 	Delete(ctx context.Context, id uint) error
 	Enable(ctx context.Context, id uint) error
@@ -53,22 +52,29 @@ type CronJobService interface {
 	GetPending(ctx context.Context) ([]models.CronJob, error)
 }
 
+// CodeLookupService 用于查询实体 Code 的接口
+type CodeLookupService interface {
+	GetUserByCode(code string) (*models.User, error)
+	GetChannelByCode(code string) (*models.Channel, error)
+}
+
 // cronJobService 定时任务服务实现
 type cronJobService struct {
-	db *gorm.DB
+	db          *gorm.DB
+	lookupSvc   CodeLookupService
 }
 
 // NewCronJobService 创建定时任务服务
-func NewCronJobService(db *gorm.DB) CronJobService {
-	return &cronJobService{db: db}
+func NewCronJobService(db *gorm.DB, lookupSvc CodeLookupService) CronJobService {
+	return &cronJobService{db: db, lookupSvc: lookupSvc}
 }
 
 // List 获取定时任务列表
-func (s *cronJobService) List(ctx context.Context, userID uint, offset int, limit int) ([]models.CronJob, int64, error) {
+func (s *cronJobService) List(ctx context.Context, userCode string, offset int, limit int) ([]models.CronJob, int64, error) {
 	var jobs []models.CronJob
 	var total int64
 
-	query := s.db.WithContext(ctx).Where("user_id = ?", userID)
+	query := s.db.WithContext(ctx).Where("user_code = ?", userCode)
 
 	if err := query.Model(&models.CronJob{}).Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -91,29 +97,23 @@ func (s *cronJobService) Get(ctx context.Context, id uint) (*models.CronJob, err
 }
 
 // Create 创建定时任务
-func (s *cronJobService) Create(ctx context.Context, userID uint, req CreateCronJobRequest) (*models.CronJob, error) {
-	// 验证 channel 是否存在
-	var channel models.Channel
-	if err := s.db.WithContext(ctx).First(&channel, req.ChannelID).Error; err != nil {
-		return nil, fmt.Errorf("channel not found: %w", err)
-	}
-
+func (s *cronJobService) Create(ctx context.Context, userCode string, req CreateCronJobRequest) (*models.CronJob, error) {
 	job := &models.CronJob{
-		UserID:           userID,
-		ChannelID:        req.ChannelID,
-		Name:             req.Name,
-		Description:      req.Description,
-		CronExpression:   req.CronExpression,
-		Timezone:         req.Timezone,
-		Prompt:           req.Prompt,
+		UserCode:           userCode,
+		ChannelCode:        req.ChannelCode,
+		Name:               req.Name,
+		Description:        req.Description,
+		CronExpression:     req.CronExpression,
+		Timezone:           req.Timezone,
+		Prompt:             req.Prompt,
 		ModelSelectionMode: req.ModelSelectionMode,
-		ModelID:          req.ModelID,
-		ModelName:        req.ModelName,
-		TargetChannelID:  req.TargetChannelID,
-		TargetUserID:     req.TargetUserID,
-		IsActive:         true,
-		RunCount:         0,
-		FailCount:        0,
+		ModelID:            req.ModelID,
+		ModelName:          req.ModelName,
+		TargetChannelCode:  req.TargetChannelCode,
+		TargetUserCode:     req.TargetUserCode,
+		IsActive:           true,
+		RunCount:           0,
+		FailCount:          0,
 	}
 
 	if req.Timezone == "" {
@@ -145,13 +145,8 @@ func (s *cronJobService) Update(ctx context.Context, id uint, req UpdateCronJobR
 	if req.Description != "" {
 		updates["description"] = req.Description
 	}
-	if req.ChannelID != 0 {
-		// 验证 channel 是否存在
-		var channel models.Channel
-		if err := s.db.WithContext(ctx).First(&channel, req.ChannelID).Error; err != nil {
-			return fmt.Errorf("channel not found: %w", err)
-		}
-		updates["channel_id"] = req.ChannelID
+	if req.ChannelCode != "" {
+		updates["channel_code"] = req.ChannelCode
 	}
 	if req.CronExpression != "" {
 		updates["cron_expression"] = req.CronExpression
@@ -171,18 +166,11 @@ func (s *cronJobService) Update(ctx context.Context, id uint, req UpdateCronJobR
 	if req.ModelName != "" {
 		updates["model_name"] = req.ModelName
 	}
-	if req.TargetChannelID != nil {
-		if *req.TargetChannelID != 0 {
-			// 验证 channel 是否存在
-			var channel models.Channel
-			if err := s.db.WithContext(ctx).First(&channel, *req.TargetChannelID).Error; err != nil {
-				return fmt.Errorf("target channel not found: %w", err)
-			}
-		}
-		updates["target_channel_id"] = req.TargetChannelID
+	if req.TargetChannelCode != "" {
+		updates["target_channel_code"] = req.TargetChannelCode
 	}
-	if req.TargetUserID != "" {
-		updates["target_user_id"] = req.TargetUserID
+	if req.TargetUserCode != "" {
+		updates["target_user_code"] = req.TargetUserCode
 	}
 	if req.IsActive != nil {
 		updates["is_active"] = *req.IsActive

@@ -22,9 +22,9 @@ type ConversationRecord struct {
 	CreatedAt        time.Time `gorm:"type:datetime;default:CURRENT_TIMESTAMP" json:"created_at"`
 
 	// 新增字段：归属信息（用于多租户、多 Agent 架构）
-	UserID      *uint      `gorm:"index" json:"user_id,omitempty"`      // 用户 ID
-	AgentID     *uint      `gorm:"index" json:"agent_id,omitempty"`     // Agent ID
-	ChannelID   *uint      `gorm:"index" json:"channel_id,omitempty"`   // Channel ID
+	UserCode    string     `gorm:"type:varchar(16);index" json:"user_code,omitempty"`
+	AgentCode   string     `gorm:"type:varchar(16);index" json:"agent_code,omitempty"`
+	ChannelCode string     `gorm:"type:varchar(16);index" json:"channel_code,omitempty"`
 	ChannelType string     `gorm:"type:text;index" json:"channel_type,omitempty"` // 渠道类型
 }
 

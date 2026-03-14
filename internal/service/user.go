@@ -34,6 +34,7 @@ type UserService interface {
 	// CRUD
 	CreateUser(req CreateUserRequest) (*models.User, error)
 	GetUser(id uint) (*models.User, error)
+	GetUserByCode(code string) (*models.User, error)
 	GetUserByUsername(username string) (*models.User, error)
 	GetUserByEmail(email string) (*models.User, error)
 	UpdateUser(id uint, req UpdateUserRequest) (*models.User, error)
@@ -50,15 +51,17 @@ type UserService interface {
 
 // userService 用户服务实现
 type userService struct {
-	userRepo  repository.UserRepository
-	agentRepo repository.AgentRepository
+	userRepo    repository.UserRepository
+	agentRepo   repository.AgentRepository
+	codeService CodeService
 }
 
 // NewUserService 创建用户服务
-func NewUserService(userRepo repository.UserRepository, agentRepo repository.AgentRepository) UserService {
+func NewUserService(userRepo repository.UserRepository, agentRepo repository.AgentRepository, codeService CodeService) UserService {
 	return &userService{
-		userRepo:  userRepo,
-		agentRepo: agentRepo,
+		userRepo:    userRepo,
+		agentRepo:   agentRepo,
+		codeService: codeService,
 	}
 }
 
@@ -90,7 +93,18 @@ func (s *userService) CreateUser(req CreateUserRequest) (*models.User, error) {
 		return nil, fmt.Errorf("failed to hash password: %w", err)
 	}
 
+	// 生成唯一 UserCode
+	userCode, err := GenerateUniqueCodeWithRetry(
+		s.codeService.GenerateUserCode,
+		s.userRepo.CheckUserCodeExists,
+		3,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate user code: %w", err)
+	}
+
 	user := &models.User{
+		UserCode:     userCode,
 		Username:     req.Username,
 		Email:        req.Email,
 		PasswordHash: string(passwordHash),
@@ -108,6 +122,11 @@ func (s *userService) CreateUser(req CreateUserRequest) (*models.User, error) {
 // GetUser 获取用户
 func (s *userService) GetUser(id uint) (*models.User, error) {
 	return s.userRepo.GetByID(id)
+}
+
+// GetUserByCode 根据 Code 获取用户
+func (s *userService) GetUserByCode(code string) (*models.User, error) {
+	return s.userRepo.GetByUserCode(code)
 }
 
 // GetUserByUsername 根据用户名获取用户

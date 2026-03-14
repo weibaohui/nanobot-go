@@ -11,24 +11,24 @@ import (
 
 // CreateSessionRequest 创建会话请求
 type CreateSessionRequest struct {
-	SessionKey string
-	ExternalID string
-	AgentID    *uint
-	ChannelID  uint
-	Metadata   map[string]interface{}
+	SessionKey  string
+	ExternalID  string
+	AgentCode   string
+	ChannelCode string
+	Metadata    map[string]interface{}
 }
 
 // SessionService 会话服务接口
 type SessionService interface {
 	// CRUD
-	CreateSession(userID uint, req CreateSessionRequest) (*models.Session, error)
+	CreateSession(userCode string, req CreateSessionRequest) (*models.Session, error)
 	GetSession(id uint) (*models.Session, error)
 	GetSessionByKey(key string) (*models.Session, error)
-	GetChannelSessions(channelID uint) ([]models.Session, error)
-	GetUserSessions(userID uint) ([]models.Session, error)
+	GetChannelSessions(channelCode string) ([]models.Session, error)
+	GetUserSessions(userCode string) ([]models.Session, error)
 	UpdateSession(session *models.Session) error
 	DeleteSession(sessionKey string) error
-	DeleteChannelSessions(channelID uint) error
+	DeleteChannelSessions(channelCode string) error
 
 	// 活跃管理
 	TouchSession(sessionKey string) error
@@ -42,33 +42,38 @@ type SessionService interface {
 // sessionService 会话服务实现
 type sessionService struct {
 	sessionRepo repository.SessionRepository
+	lookupSvc   CodeLookupService
 }
 
 // NewSessionService 创建会话服务
-func NewSessionService(sessionRepo repository.SessionRepository) SessionService {
+func NewSessionService(sessionRepo repository.SessionRepository, lookupSvc CodeLookupService) SessionService {
 	return &sessionService{
 		sessionRepo: sessionRepo,
+		lookupSvc:   lookupSvc,
 	}
 }
 
 // CreateSession 创建会话
-func (s *sessionService) CreateSession(userID uint, req CreateSessionRequest) (*models.Session, error) {
+func (s *sessionService) CreateSession(userCode string, req CreateSessionRequest) (*models.Session, error) {
+	session := &models.Session{
+		UserCode:    userCode,
+		ChannelCode: req.ChannelCode,
+		AgentCode:   req.AgentCode,
+		SessionKey:  req.SessionKey,
+		ExternalID:  req.ExternalID,
+	}
+
 	// 序列化元数据
-	metadataJSON, err := json.Marshal(req.Metadata)
-	if err != nil {
-		return nil, fmt.Errorf("序列化元数据失败: %w", err)
+	if req.Metadata != nil {
+		metadataJSON, err := json.Marshal(req.Metadata)
+		if err != nil {
+			return nil, fmt.Errorf("序列化元数据失败: %w", err)
+		}
+		session.Metadata = string(metadataJSON)
 	}
 
 	now := time.Now()
-	session := &models.Session{
-		UserID:       userID,
-		AgentID:      req.AgentID,
-		ChannelID:    req.ChannelID,
-		SessionKey:   req.SessionKey,
-		ExternalID:   req.ExternalID,
-		LastActiveAt: &now,
-		Metadata:     string(metadataJSON),
-	}
+	session.LastActiveAt = &now
 
 	if err := s.sessionRepo.Create(session); err != nil {
 		return nil, err
@@ -88,13 +93,13 @@ func (s *sessionService) GetSessionByKey(key string) (*models.Session, error) {
 }
 
 // GetChannelSessions 获取 Channel 的所有会话
-func (s *sessionService) GetChannelSessions(channelID uint) ([]models.Session, error) {
-	return s.sessionRepo.GetByChannelID(channelID)
+func (s *sessionService) GetChannelSessions(channelCode string) ([]models.Session, error) {
+	return s.sessionRepo.GetByChannelCode(channelCode)
 }
 
 // GetUserSessions 获取用户的所有会话
-func (s *sessionService) GetUserSessions(userID uint) ([]models.Session, error) {
-	return s.sessionRepo.GetActiveByUserID(userID)
+func (s *sessionService) GetUserSessions(userCode string) ([]models.Session, error) {
+	return s.sessionRepo.GetActiveByUserCode(userCode)
 }
 
 // UpdateSession 更新会话
@@ -108,8 +113,8 @@ func (s *sessionService) DeleteSession(sessionKey string) error {
 }
 
 // DeleteChannelSessions 删除 Channel 的所有会话
-func (s *sessionService) DeleteChannelSessions(channelID uint) error {
-	return s.sessionRepo.DeleteByChannelID(channelID)
+func (s *sessionService) DeleteChannelSessions(channelCode string) error {
+	return s.sessionRepo.DeleteByChannelCode(channelCode)
 }
 
 // TouchSession 更新会话最后活跃时间

@@ -23,23 +23,24 @@ type UpdateChannelRequest struct {
 	Config    map[string]interface{} `json:"config,omitempty"`
 	AllowFrom []string               `json:"allow_from,omitempty"`
 	IsActive  *bool                  `json:"is_active,omitempty"`
-	AgentID   *uint                  `json:"agent_id,omitempty"`
+	AgentCode string                 `json:"agent_code,omitempty"`
 }
 
 // ChannelService Channel 服务接口
 type ChannelService interface {
 	// CRUD
-	CreateChannel(userID uint, req CreateChannelRequest) (*models.Channel, error)
+	CreateChannel(userCode string, req CreateChannelRequest) (*models.Channel, error)
 	GetChannel(id uint) (*models.Channel, error)
-	GetUserChannels(userID uint) ([]models.Channel, error)
-	GetUserActiveChannels(userID uint) ([]models.Channel, error)
+	GetChannelByCode(code string) (*models.Channel, error)
+	GetUserChannels(userCode string) ([]models.Channel, error)
+	GetUserActiveChannels(userCode string) ([]models.Channel, error)
 	UpdateChannel(id uint, req UpdateChannelRequest) (*models.Channel, error)
 	DeleteChannel(id uint) error
 
 	// Agent 绑定
-	BindAgent(channelID, agentID uint) error
-	UnbindAgent(channelID uint) error
-	GetAgentChannels(agentID uint) ([]models.Channel, error)
+	BindAgent(channelCode, agentCode string) error
+	UnbindAgent(channelCode string) error
+	GetAgentChannels(agentCode string) ([]models.Channel, error)
 
 	// 配置管理
 	GetChannelConfig(channelID uint) (map[string]interface{}, error)
@@ -54,35 +55,33 @@ type ChannelService interface {
 type channelService struct {
 	channelRepo repository.ChannelRepository
 	agentRepo   repository.AgentRepository
+	codeService CodeService
 }
 
 // NewChannelService 创建 Channel 服务
-func NewChannelService(channelRepo repository.ChannelRepository, agentRepo repository.AgentRepository) ChannelService {
+func NewChannelService(channelRepo repository.ChannelRepository, agentRepo repository.AgentRepository, codeService CodeService) ChannelService {
 	return &channelService{
 		channelRepo: channelRepo,
 		agentRepo:   agentRepo,
+		codeService: codeService,
 	}
 }
 
 // CreateChannel 创建 Channel
-func (s *channelService) CreateChannel(userID uint, req CreateChannelRequest) (*models.Channel, error) {
+func (s *channelService) CreateChannel(userCode string, req CreateChannelRequest) (*models.Channel, error) {
 	// 验证渠道类型
 	if !isValidChannelType(req.Type) {
 		return nil, fmt.Errorf("invalid channel type: %s", req.Type)
 	}
 
-	// 如果指定了 AgentID，验证该 Agent 存在且属于该用户
-	if req.AgentID != nil {
-		agent, err := s.agentRepo.GetByID(*req.AgentID)
-		if err != nil {
-			return nil, err
-		}
-		if agent == nil {
-			return nil, fmt.Errorf("agent not found")
-		}
-		if agent.UserID != userID {
-			return nil, fmt.Errorf("agent does not belong to user")
-		}
+	// 生成唯一 ChannelCode
+	channelCode, err := GenerateUniqueCodeWithRetry(
+		s.codeService.GenerateChannelCode,
+		s.channelRepo.CheckChannelCodeExists,
+		3,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate channel code: %w", err)
 	}
 
 	// 序列化配置
@@ -98,13 +97,13 @@ func (s *channelService) CreateChannel(userID uint, req CreateChannelRequest) (*
 	}
 
 	channel := &models.Channel{
-		UserID:    userID,
-		AgentID:   req.AgentID,
-		Name:      req.Name,
-		Type:      req.Type,
-		IsActive:  true,
-		AllowFrom: string(allowFromJSON),
-		Config:    string(configJSON),
+		UserCode:    userCode,
+		ChannelCode: channelCode,
+		Name:        req.Name,
+		Type:        req.Type,
+		IsActive:    true,
+		AllowFrom:   string(allowFromJSON),
+		Config:      string(configJSON),
 	}
 
 	if err := s.channelRepo.Create(channel); err != nil {
@@ -119,14 +118,19 @@ func (s *channelService) GetChannel(id uint) (*models.Channel, error) {
 	return s.channelRepo.GetByID(id)
 }
 
+// GetChannelByCode 根据 Code 获取 Channel
+func (s *channelService) GetChannelByCode(code string) (*models.Channel, error) {
+	return s.channelRepo.GetByChannelCode(code)
+}
+
 // GetUserChannels 获取用户的所有 Channel
-func (s *channelService) GetUserChannels(userID uint) ([]models.Channel, error) {
-	return s.channelRepo.GetByUserID(userID)
+func (s *channelService) GetUserChannels(userCode string) ([]models.Channel, error) {
+	return s.channelRepo.GetByUserCode(userCode)
 }
 
 // GetUserActiveChannels 获取用户的所有活跃 Channel
-func (s *channelService) GetUserActiveChannels(userID uint) ([]models.Channel, error) {
-	return s.channelRepo.GetActiveByUserID(userID)
+func (s *channelService) GetUserActiveChannels(userCode string) ([]models.Channel, error) {
+	return s.channelRepo.GetActiveByUserCode(userCode)
 }
 
 // UpdateChannel 更新 Channel
@@ -145,20 +149,6 @@ func (s *channelService) UpdateChannel(id uint, req UpdateChannelRequest) (*mode
 	}
 	if req.IsActive != nil {
 		channel.IsActive = *req.IsActive
-	}
-	if req.AgentID != nil {
-		// 验证新的 AgentID
-		agent, err := s.agentRepo.GetByID(*req.AgentID)
-		if err != nil {
-			return nil, err
-		}
-		if agent == nil {
-			return nil, fmt.Errorf("agent not found")
-		}
-		if agent.UserID != channel.UserID {
-			return nil, fmt.Errorf("agent does not belong to user")
-		}
-		channel.AgentID = req.AgentID
 	}
 	if req.Config != nil {
 		configJSON, err := json.Marshal(req.Config)
@@ -188,38 +178,27 @@ func (s *channelService) DeleteChannel(id uint) error {
 }
 
 // BindAgent 绑定 Agent 到 Channel
-func (s *channelService) BindAgent(channelID, agentID uint) error {
-	channel, err := s.channelRepo.GetByID(channelID)
-	if err != nil {
-		return err
-	}
-	if channel == nil {
-		return fmt.Errorf("channel not found")
-	}
-
-	// 验证 Agent 存在且属于同一用户
-	agent, err := s.agentRepo.GetByID(agentID)
+func (s *channelService) BindAgent(channelCode, agentCode string) error {
+	// 验证 Agent 存在
+	agent, err := s.agentRepo.GetByAgentCode(agentCode)
 	if err != nil {
 		return err
 	}
 	if agent == nil {
 		return fmt.Errorf("agent not found")
 	}
-	if agent.UserID != channel.UserID {
-		return fmt.Errorf("agent does not belong to user")
-	}
 
-	return s.channelRepo.BindAgent(channelID, agentID)
+	return s.channelRepo.BindAgent(channelCode, agentCode)
 }
 
 // UnbindAgent 解除 Channel 的 Agent 绑定
-func (s *channelService) UnbindAgent(channelID uint) error {
-	return s.channelRepo.UnbindAgent(channelID)
+func (s *channelService) UnbindAgent(channelCode string) error {
+	return s.channelRepo.UnbindAgent(channelCode)
 }
 
 // GetAgentChannels 获取绑定到指定 Agent 的所有 Channel
-func (s *channelService) GetAgentChannels(agentID uint) ([]models.Channel, error) {
-	return s.channelRepo.GetByAgentID(agentID)
+func (s *channelService) GetAgentChannels(agentCode string) ([]models.Channel, error) {
+	return s.channelRepo.GetByAgentCode(agentCode)
 }
 
 // GetChannelConfig 获取 Channel 配置

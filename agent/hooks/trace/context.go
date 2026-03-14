@@ -31,6 +31,15 @@ type ChannelIDKey struct{}
 // AgentIDKey 是 context 中存储 AgentID 的 key
 type AgentIDKey struct{}
 
+// UserCodeKey 是 context 中存储 UserCode 的 key
+type UserCodeKey struct{}
+
+// ChannelCodeKey 是 context 中存储 ChannelCode 的 key
+type ChannelCodeKey struct{}
+
+// AgentCodeKey 是 context 中存储 AgentCode 的 key
+type AgentCodeKey struct{}
+
 // NewTraceID 生成新的 TraceID
 func NewTraceID() string {
 	return uuid.New().String()
@@ -150,6 +159,45 @@ func GetAgentID(ctx context.Context) uint {
 		return agentID
 	}
 	return 0
+}
+
+// WithUserCode 将 UserCode 注入到 context 中
+func WithUserCode(ctx context.Context, userCode string) context.Context {
+	return context.WithValue(ctx, UserCodeKey{}, userCode)
+}
+
+// GetUserCode 从 context 中获取 UserCode，如果不存在则返回空字符串
+func GetUserCode(ctx context.Context) string {
+	if userCode, ok := ctx.Value(UserCodeKey{}).(string); ok {
+		return userCode
+	}
+	return ""
+}
+
+// WithChannelCode 将 ChannelCode 注入到 context 中
+func WithChannelCode(ctx context.Context, channelCode string) context.Context {
+	return context.WithValue(ctx, ChannelCodeKey{}, channelCode)
+}
+
+// GetChannelCode 从 context 中获取 ChannelCode，如果不存在则返回空字符串
+func GetChannelCode(ctx context.Context) string {
+	if channelCode, ok := ctx.Value(ChannelCodeKey{}).(string); ok {
+		return channelCode
+	}
+	return ""
+}
+
+// WithAgentCode 将 AgentCode 注入到 context 中
+func WithAgentCode(ctx context.Context, agentCode string) context.Context {
+	return context.WithValue(ctx, AgentCodeKey{}, agentCode)
+}
+
+// GetAgentCode 从 context 中获取 AgentCode，如果不存在则返回空字符串
+func GetAgentCode(ctx context.Context) string {
+	if agentCode, ok := ctx.Value(AgentCodeKey{}).(string); ok {
+		return agentCode
+	}
+	return ""
 }
 
 // MustGetTraceID 从 context 中获取 TraceID，如果不存在则返回空字符串

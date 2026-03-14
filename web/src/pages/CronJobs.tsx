@@ -20,7 +20,7 @@ import {
   PlayCircleOutlined,
   PauseCircleOutlined,
 } from '@ant-design/icons';
-import { cronApi, channelsApi } from '../api';
+import { cronApi, channelsApi, getCurrentUserCode } from '../api';
 import type { CronJob, CreateCronJobRequest, Channel } from '../types';
 
 const CronJobs: React.FC = () => {
@@ -36,9 +36,10 @@ const CronJobs: React.FC = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
+      const userCode = getCurrentUserCode() || '';
       const [jobsRes, channelsRes] = await Promise.all([
-        cronApi.list(),
-        channelsApi.list(1),
+        cronApi.list(userCode),
+        channelsApi.list(userCode),
       ]);
       // 列表 API 返回 ListResponse { items, total }
       setJobs((jobsRes as any)?.items || []);
@@ -56,7 +57,8 @@ const CronJobs: React.FC = () => {
 
   const handleCreate = async (values: CreateCronJobRequest) => {
     try {
-      await cronApi.create(1, values.channel_id, values);
+      const userCode = getCurrentUserCode() || '';
+      await cronApi.create(userCode, values.channel_code, values);
       message.success('创建成功');
       setModalVisible(false);
       form.resetFields();
@@ -134,8 +136,8 @@ const CronJobs: React.FC = () => {
     {
       title: '来源渠道',
       render: (_: any, record: CronJob) => {
-        const channel = channels.find((c) => c.id === record.channel_id);
-        return channel?.name || record.channel_id;
+        const channel = channels.find((c) => c.channel_code === record.channel_code);
+        return channel?.name || record.channel_code;
       },
     },
     { title: 'Cron 表达式', dataIndex: 'cron_expression', render: (expr: string) => <code>{expr}</code> },

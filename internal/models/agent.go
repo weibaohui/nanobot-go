@@ -8,8 +8,9 @@ import (
 // Agent Agent 模型
 // 存储 Agent 配置信息，包括所有 Markdown 文档内容和能力配置
 type Agent struct {
-	ID          uint   `gorm:"primarykey" json:"id"`
-	UserID      uint   `gorm:"not null;index" json:"user_id"`
+	ID        uint   `gorm:"primarykey" json:"id"`
+	AgentCode string `gorm:"type:varchar(16);uniqueIndex" json:"agent_code"`
+	UserCode  string `gorm:"type:varchar(16);index" json:"user_code"`
 	Name        string `gorm:"type:text;not null" json:"name"`
 	Description string `gorm:"type:text" json:"description"`
 
@@ -40,10 +41,6 @@ type Agent struct {
 
 	CreatedAt time.Time `gorm:"type:datetime;default:CURRENT_TIMESTAMP" json:"created_at"`
 	UpdatedAt time.Time `gorm:"type:datetime;default:CURRENT_TIMESTAMP" json:"updated_at"`
-
-	// 关联
-	User     User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Channels []Channel `gorm:"foreignKey:AgentID" json:"channels,omitempty"`
 }
 
 // TableName 指定表名

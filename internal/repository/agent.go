@@ -11,11 +11,14 @@ import (
 type AgentRepository interface {
 	Create(agent *models.Agent) error
 	GetByID(id uint) (*models.Agent, error)
-	GetByUserID(userID uint) ([]models.Agent, error)
-	GetDefaultByUserID(userID uint) (*models.Agent, error)
+	GetByAgentCode(code string) (*models.Agent, error)
+	GetByUserCode(userCode string) ([]models.Agent, error)
+	GetDefaultByUserCode(userCode string) (*models.Agent, error)
 	Update(agent *models.Agent) error
 	Delete(id uint) error
 	GetWithChannels(id uint) (*models.Agent, error)
+	// CheckAgentCodeExists 检查 AgentCode 是否已存在
+	CheckAgentCodeExists(code string) (bool, error)
 }
 
 // agentRepository Agent 仓库实现
@@ -48,19 +51,19 @@ func (r *agentRepository) GetByID(id uint) (*models.Agent, error) {
 	return &agent, nil
 }
 
-// GetByUserID 获取用户的所有 Agent
-func (r *agentRepository) GetByUserID(userID uint) ([]models.Agent, error) {
+// GetByUserCode 获取用户的所有 Agent
+func (r *agentRepository) GetByUserCode(userCode string) ([]models.Agent, error) {
 	var agents []models.Agent
-	if err := r.db.Where("user_id = ?", userID).Find(&agents).Error; err != nil {
+	if err := r.db.Where("user_code = ?", userCode).Find(&agents).Error; err != nil {
 		return nil, fmt.Errorf("获取用户 Agent 列表失败: %w", err)
 	}
 	return agents, nil
 }
 
-// GetDefaultByUserID 获取用户的默认 Agent
-func (r *agentRepository) GetDefaultByUserID(userID uint) (*models.Agent, error) {
+// GetDefaultByUserCode 获取用户的默认 Agent
+func (r *agentRepository) GetDefaultByUserCode(userCode string) (*models.Agent, error) {
 	var agent models.Agent
-	if err := r.db.Where("user_id = ? AND is_default = ?", userID, true).First(&agent).Error; err != nil {
+	if err := r.db.Where("user_code = ? AND is_default = ?", userCode, true).First(&agent).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
@@ -95,4 +98,25 @@ func (r *agentRepository) GetWithChannels(id uint) (*models.Agent, error) {
 		return nil, fmt.Errorf("获取 Agent 失败: %w", err)
 	}
 	return &agent, nil
+}
+
+// GetByAgentCode 根据 AgentCode 获取 Agent
+func (r *agentRepository) GetByAgentCode(code string) (*models.Agent, error) {
+	var agent models.Agent
+	if err := r.db.Where("agent_code = ?", code).First(&agent).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("获取 Agent 失败: %w", err)
+	}
+	return &agent, nil
+}
+
+// CheckAgentCodeExists 检查 AgentCode 是否已存在
+func (r *agentRepository) CheckAgentCodeExists(code string) (bool, error) {
+	var count int64
+	if err := r.db.Model(&models.Agent{}).Where("agent_code = ?", code).Count(&count).Error; err != nil {
+		return false, fmt.Errorf("检查 AgentCode 失败: %w", err)
+	}
+	return count > 0, nil
 }

@@ -3,9 +3,9 @@ import type { ApiResponse, ListResponse, LLMProvider, CreateProviderRequest, Upd
 
 export const providersApi = {
   // 获取 Provider 列表
-  list: (userId?: number, page: number = 1, pageSize: number = 20) =>
+  list: (userCode?: string, page: number = 1, pageSize: number = 20) =>
     client.get<any, ApiResponse<ListResponse<LLMProvider>>>('/providers', {
-      params: { user_id: userId, offset: (page - 1) * pageSize, limit: pageSize },
+      params: { user_code: userCode, offset: (page - 1) * pageSize, limit: pageSize },
     }),
 
   // 获取单个 Provider
@@ -13,9 +13,9 @@ export const providersApi = {
     client.get<any, ApiResponse<LLMProvider>>(`/providers/${id}`),
 
   // 创建 Provider
-  create: (userId: number, data: CreateProviderRequest) =>
+  create: (userCode: string, data: CreateProviderRequest) =>
     client.post<any, ApiResponse<LLMProvider>>('/providers', data, {
-      params: { user_id: userId },
+      params: { user_code: userCode },
     }),
 
   // 更新 Provider
@@ -27,12 +27,12 @@ export const providersApi = {
     client.delete<any, ApiResponse<void>>(`/providers/${id}`),
 
   // 获取默认 Provider
-  getDefault: (userId: number) =>
-    client.get<any, ApiResponse<LLMProvider>>(`/users/${userId}/default-provider`),
+  getDefault: (userCode: string) =>
+    client.get<any, ApiResponse<LLMProvider>>(`/users/${userCode}/default-provider`),
 
   // 设置默认 Provider
-  setDefault: (userId: number, providerId: number) =>
-    client.post<any, ApiResponse<void>>(`/users/${userId}/default-provider`, { provider_id: providerId }),
+  setDefault: (userCode: string, providerId: number) =>
+    client.post<any, ApiResponse<void>>(`/users/${userCode}/default-provider`, { provider_id: providerId }),
 
   // 测试连接
   testConnection: (id: number) =>

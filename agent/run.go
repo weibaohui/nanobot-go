@@ -161,7 +161,7 @@ func (l *Loop) loadChannelAgentConfig(ctx context.Context, msg *bus.InboundMessa
 	}
 
 	// 检查渠道是否绑定了 Agent
-	if channel.AgentID == nil || *channel.AgentID == 0 {
+	if channel.AgentCode == "" {
 		l.logger.Info("渠道未绑定 Agent，使用默认配置",
 			zap.Uint("channel_id", channelID),
 		)
@@ -169,21 +169,22 @@ func (l *Loop) loadChannelAgentConfig(ctx context.Context, msg *bus.InboundMessa
 		l.context.SetAgentConfig(nil)
 		// 未绑定 Agent，思考过程默认关闭
 		ctx = trace.WithEnableThinkingProcess(ctx, false)
-		// 仍然存储 channel_id
+		// 仍然存储 channel_id 和 channel_code
 		ctx = trace.WithChannelID(ctx, channelID)
+		ctx = trace.WithChannelCode(ctx, channel.ChannelCode)
+		// 通过 Channel 反推 UserCode
+		ctx = trace.WithUserCode(ctx, channel.UserCode)
 		return ctx, nil
 	}
 
-	agentID := *channel.AgentID
-
 	// 获取 Agent 完整信息（不是配置内容）
-	agent, err := l.agentService.GetAgent(agentID)
+	agent, err := l.agentService.GetAgentByCode(channel.AgentCode)
 	if err != nil {
 		return ctx, fmt.Errorf("获取 Agent 信息失败: %w", err)
 	}
 
 	// 获取 Agent 配置内容
-	agentConfig, err := l.agentService.GetAgentConfig(agentID)
+	agentConfig, err := l.agentService.GetAgentConfigByCode(channel.AgentCode)
 	if err != nil {
 		return ctx, fmt.Errorf("获取 Agent 配置失败: %w", err)
 	}
@@ -200,13 +201,16 @@ func (l *Loop) loadChannelAgentConfig(ctx context.Context, msg *bus.InboundMessa
 
 	// 将思考过程设置注入到 context
 	ctx = trace.WithEnableThinkingProcess(ctx, agent.EnableThinkingProcess)
-	// 将 channel_id 和 agent_id 注入到 context
+	// 将 channel_id, channel_code, agent_code 注入到 context
 	ctx = trace.WithChannelID(ctx, channelID)
-	ctx = trace.WithAgentID(ctx, agentID)
+	ctx = trace.WithChannelCode(ctx, channel.ChannelCode)
+	ctx = trace.WithAgentCode(ctx, agent.AgentCode)
+	// 通过 Agent 反推 UserCode
+	ctx = trace.WithUserCode(ctx, agent.UserCode)
 
 	l.logger.Info("已加载渠道绑定的 Agent 配置",
 		zap.Uint("channel_id", channelID),
-		zap.Uint("agent_id", agentID),
+		zap.String("agent_code", agent.AgentCode),
 		zap.String("agent_name", agent.Name),
 		zap.Bool("enable_thinking_process", agent.EnableThinkingProcess),
 	)

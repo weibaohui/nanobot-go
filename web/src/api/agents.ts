@@ -3,19 +3,23 @@ import type { ApiResponse, ListResponse, Agent, CreateAgentRequest, UpdateAgentR
 
 export const agentsApi = {
   // 获取 Agent 列表
-  list: (userId?: number, page: number = 1, pageSize: number = 20) =>
+  list: (userCode?: string, page: number = 1, pageSize: number = 20) =>
     client.get<any, ApiResponse<ListResponse<Agent>>>('/agents', {
-      params: { user_id: userId, offset: (page - 1) * pageSize, limit: pageSize },
+      params: { user_code: userCode, offset: (page - 1) * pageSize, limit: pageSize },
     }),
 
   // 获取单个 Agent
   get: (id: number) =>
     client.get<any, ApiResponse<Agent>>(`/agents/${id}`),
 
+  // 根据 Code 获取 Agent
+  getByCode: (code: string) =>
+    client.get<any, ApiResponse<Agent>>(`/agents/code/${code}`),
+
   // 创建 Agent
-  create: (userId: number, data: CreateAgentRequest) =>
+  create: (userCode: string, data: CreateAgentRequest) =>
     client.post<any, ApiResponse<Agent>>('/agents', data, {
-      params: { user_id: userId },
+      params: { user_code: userCode },
     }),
 
   // 更新 Agent
@@ -27,12 +31,12 @@ export const agentsApi = {
     client.delete<any, ApiResponse<void>>(`/agents/${id}`),
 
   // 获取默认 Agent
-  getDefault: (userId: number) =>
-    client.get<any, ApiResponse<Agent>>(`/users/${userId}/default-agent`),
+  getDefault: (userCode: string) =>
+    client.get<any, ApiResponse<Agent>>(`/users/${userCode}/default-agent`),
 
   // 设置默认 Agent
-  setDefault: (userId: number, agentId: number) =>
-    client.post<any, ApiResponse<void>>(`/users/${userId}/default-agent`, { agent_id: agentId }),
+  setDefault: (userCode: string, agentCode: string) =>
+    client.post<any, ApiResponse<void>>(`/users/${userCode}/default-agent`, { agent_code: agentCode }),
 
   // 获取 Agent 配置
   getConfig: (id: number) =>

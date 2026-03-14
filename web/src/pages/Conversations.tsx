@@ -157,9 +157,9 @@ const Conversations: React.FC = () => {
               Prompt: {selectedRecord.prompt_tokens} / Completion: {selectedRecord.completion_tokens} / Total: {selectedRecord.total_tokens}
             </Descriptions.Item>
             <Descriptions.Item label="时间">{selectedRecord.timestamp}</Descriptions.Item>
-            <Descriptions.Item label="User ID">{selectedRecord.user_id}</Descriptions.Item>
-            <Descriptions.Item label="Agent ID">{selectedRecord.agent_id}</Descriptions.Item>
-            <Descriptions.Item label="Channel ID">{selectedRecord.channel_id}</Descriptions.Item>
+            <Descriptions.Item label="User Code">{selectedRecord.user_code}</Descriptions.Item>
+            <Descriptions.Item label="Agent Code">{selectedRecord.agent_code}</Descriptions.Item>
+            <Descriptions.Item label="Channel Code">{selectedRecord.channel_code}</Descriptions.Item>
           </Descriptions>
         )}
       </Modal>

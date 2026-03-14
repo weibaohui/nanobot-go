@@ -27,6 +27,29 @@ func (s *service) GetAgentConfig(agentID uint) (*AgentConfig, error) {
 	}, nil
 }
 
+// GetAgentConfigByCode 根据 Code 获取 Agent 配置
+func (s *service) GetAgentConfigByCode(agentCode string) (*AgentConfig, error) {
+	agent, err := s.agentRepo.GetByAgentCode(agentCode)
+	if err != nil {
+		return nil, err
+	}
+	if agent == nil {
+		return nil, fmt.Errorf("agent not found")
+	}
+
+	return &AgentConfig{
+		IdentityContent: agent.IdentityContent,
+		SoulContent:     agent.SoulContent,
+		AgentsContent:   agent.AgentsContent,
+		UserContent:     agent.UserContent,
+		ToolsContent:    agent.ToolsContent,
+		Model:           agent.Model,
+		MaxTokens:       agent.MaxTokens,
+		Temperature:     agent.Temperature,
+		MaxIterations:   agent.MaxIterations,
+	}, nil
+}
+
 // UpdateAgentConfig 更新 Agent 配置
 func (s *service) UpdateAgentConfig(agentID uint, config *AgentConfig) error {
 	agent, err := s.agentRepo.GetByID(agentID)

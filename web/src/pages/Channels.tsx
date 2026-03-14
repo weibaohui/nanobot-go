@@ -14,7 +14,7 @@ import {
   Card,
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { channelsApi, agentsApi } from '../api';
+import { channelsApi, agentsApi, getCurrentUserCode } from '../api';
 import type { Channel, CreateChannelRequest, Agent, ChannelType } from '../types';
 import { ChannelTypeLabels } from '../types';
 
@@ -29,9 +29,10 @@ const Channels: React.FC = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
+      const userCode = getCurrentUserCode() || '';
       const [channelsRes, agentsRes] = await Promise.all([
-        channelsApi.list(1),
-        agentsApi.list(1),
+        channelsApi.list(userCode),
+        agentsApi.list(userCode),
       ]);
       // channelsApi.list 和 agentsApi.list 返回 ListResponse { items, total }
       // 但 client 响应拦截器返回 response.data，所以需要调整访问路径
@@ -52,7 +53,8 @@ const Channels: React.FC = () => {
 
   const handleCreate = async (values: CreateChannelRequest) => {
     try {
-      await channelsApi.create(1, values);
+      const userCode = getCurrentUserCode() || '';
+      await channelsApi.create(userCode, values);
       message.success('创建成功');
       setModalVisible(false);
       form.resetFields();
@@ -164,7 +166,7 @@ const Channels: React.FC = () => {
     {
       title: '绑定 Agent',
       render: (_: any, record: Channel) => {
-        const agent = agents.find(a => a.id === record.agent_id);
+        const agent = agents.find(a => a.agent_code === record.agent_code);
         return agent ? agent.name : <span style={{ color: '#999' }}>未绑定</span>;
       },
     },
@@ -267,10 +269,10 @@ const Channels: React.FC = () => {
             </Select>
           </Form.Item>
 
-          <Form.Item name="agent_id" label="绑定 Agent">
+          <Form.Item name="agent_code" label="绑定 Agent">
             <Select placeholder="选择要绑定的 Agent" allowClear>
               {agents.map(agent => (
-                <Select.Option key={agent.id} value={agent.id}>{agent.name}</Select.Option>
+                <Select.Option key={agent.agent_code} value={agent.agent_code}>{agent.name}</Select.Option>
               ))}
             </Select>
           </Form.Item>

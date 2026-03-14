@@ -15,7 +15,7 @@ import {
   List,
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, CheckOutlined } from '@ant-design/icons';
-import { providersApi } from '../api';
+import { providersApi, getCurrentUserCode } from '../api';
 import type { LLMProvider, CreateProviderRequest, ModelInfo } from '../types';
 
 const Providers: React.FC = () => {
@@ -30,7 +30,8 @@ const Providers: React.FC = () => {
   const fetchProviders = async () => {
     setLoading(true);
     try {
-      const res = await providersApi.list(1);
+      const userCode = getCurrentUserCode() || '';
+      const res = await providersApi.list(userCode);
       // providersApi.list 返回 ListResponse { items, total }
       setProviders((res as any)?.items || []);
     } catch (error) {
@@ -46,7 +47,8 @@ const Providers: React.FC = () => {
 
   const handleCreate = async (values: CreateProviderRequest) => {
     try {
-      await providersApi.create(1, { ...values, supported_models: models });
+      const userCode = getCurrentUserCode() || '';
+      await providersApi.create(userCode, { ...values, supported_models: models });
       message.success('创建成功');
       setModalVisible(false);
       form.resetFields();
@@ -84,7 +86,7 @@ const Providers: React.FC = () => {
 
   const handleSetDefault = async (provider: LLMProvider) => {
     try {
-      await providersApi.setDefault(provider.user_id, provider.id);
+      await providersApi.setDefault(provider.user_code, provider.id);
       message.success('已设为默认 Provider');
       fetchProviders();
     } catch (error) {

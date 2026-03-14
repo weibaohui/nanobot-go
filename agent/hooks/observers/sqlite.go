@@ -113,8 +113,9 @@ func (o *SQLiteObserver) handlePromptSubmitted(ctx context.Context, event events
 		SessionKey:   e.SessionKey,
 		Role:         "user",
 		Content:      e.UserInput,
-		ChannelID:    uintPtr(trace.GetChannelID(ctx)),
-		AgentID:      uintPtr(trace.GetAgentID(ctx)),
+		ChannelCode:  trace.GetChannelCode(ctx),
+		AgentCode:    trace.GetAgentCode(ctx),
+		UserCode:     trace.GetUserCode(ctx),
 	}
 
 	if err := o.creator.Create(ctx, dto); err != nil {
@@ -166,8 +167,9 @@ func (o *SQLiteObserver) handleLLMCallEnd(ctx context.Context, event events.Even
 		SessionKey:   sessionKey,
 		Role:         role,
 		Content:      content,
-		ChannelID:    uintPtr(trace.GetChannelID(ctx)),
-		AgentID:      uintPtr(trace.GetAgentID(ctx)),
+		ChannelCode:  trace.GetChannelCode(ctx),
+		AgentCode:    trace.GetAgentCode(ctx),
+		UserCode:     trace.GetUserCode(ctx),
 	}
 
 	if e.TokenUsage != nil {
@@ -218,8 +220,9 @@ func (o *SQLiteObserver) handleToolCompleted(ctx context.Context, event events.E
 		SessionKey:   sessionKey,
 		Role:         "tool_result",
 		Content:      e.ToolName + ": " + content,
-		ChannelID:    uintPtr(trace.GetChannelID(ctx)),
-		AgentID:      uintPtr(trace.GetAgentID(ctx)),
+		ChannelCode:  trace.GetChannelCode(ctx),
+		AgentCode:    trace.GetAgentCode(ctx),
+		UserCode:     trace.GetUserCode(ctx),
 	}
 
 	if err := o.creator.Create(ctx, dto); err != nil {
@@ -300,13 +303,4 @@ func (o *SQLiteObserver) GetDBClient() DBClient {
 // 使用 trace.GetSessionKey 获取通过 trace.WithSessionKey 注入的 session key
 func getCtxSessionKey(ctx context.Context) string {
 	return trace.GetSessionKey(ctx)
-}
-
-// uintPtr 将 uint 转换为 *uint
-// 如果值为 0，返回 nil（避免数据库存储空值时产生 0 值）
-func uintPtr(v uint) *uint {
-	if v == 0 {
-		return nil
-	}
-	return &v
 }

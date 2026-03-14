@@ -60,14 +60,16 @@ type AgentConfig struct {
 // Service Agent 服务接口
 type Service interface {
 	// CRUD
-	CreateAgent(userID uint, req CreateAgentRequest) (*models.Agent, error)
+	CreateAgent(userCode string, req CreateAgentRequest) (*models.Agent, error)
 	GetAgent(id uint) (*models.Agent, error)
-	GetUserAgents(userID uint) ([]models.Agent, error)
+	GetAgentByCode(code string) (*models.Agent, error)
+	GetUserAgents(userCode string) ([]models.Agent, error)
 	UpdateAgent(id uint, req UpdateAgentRequest) (*models.Agent, error)
 	DeleteAgent(id uint) error
 
 	// 配置管理
 	GetAgentConfig(agentID uint) (*AgentConfig, error)
+	GetAgentConfigByCode(agentCode string) (*AgentConfig, error)
 	UpdateAgentConfig(agentID uint, config *AgentConfig) error
 
 	// 记忆管理
@@ -83,18 +85,25 @@ type Service interface {
 	SetAvailableTools(agentID uint, tools []string) error
 
 	// 默认 Agent
-	GetDefaultAgent(userID uint) (*models.Agent, error)
-	SetDefaultAgent(userID uint, agentID uint) error
+	GetDefaultAgent(userCode string) (*models.Agent, error)
+	SetDefaultAgent(userCode string, agentID uint) error
 }
 
 // service Agent 服务实现
 type service struct {
-	agentRepo repository.AgentRepository
+	agentRepo   repository.AgentRepository
+	codeService CodeService
+}
+
+// CodeService Code 生成服务接口（从父包导入）
+type CodeService interface {
+	GenerateAgentCode() (string, error)
 }
 
 // NewService 创建 Agent 服务
-func NewService(agentRepo repository.AgentRepository) Service {
+func NewService(agentRepo repository.AgentRepository, codeService CodeService) Service {
 	return &service{
-		agentRepo: agentRepo,
+		agentRepo:   agentRepo,
+		codeService: codeService,
 	}
 }

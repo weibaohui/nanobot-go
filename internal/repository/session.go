@@ -13,12 +13,13 @@ type SessionRepository interface {
 	Create(session *models.Session) error
 	GetByID(id uint) (*models.Session, error)
 	GetBySessionKey(key string) (*models.Session, error)
-	GetByChannelID(channelID uint) ([]models.Session, error)
-	GetActiveByUserID(userID uint) ([]models.Session, error)
+	GetByChannelCode(channelCode string) ([]models.Session, error)
+	GetByUserCode(userCode string) ([]models.Session, error)
+	GetActiveByUserCode(userCode string) ([]models.Session, error)
 	UpdateLastActive(sessionKey string) error
 	Update(session *models.Session) error
 	Delete(sessionKey string) error
-	DeleteByChannelID(channelID uint) error
+	DeleteByChannelCode(channelCode string) error
 }
 
 // sessionRepository 会话仓库实现
@@ -63,20 +64,29 @@ func (r *sessionRepository) GetBySessionKey(key string) (*models.Session, error)
 	return &session, nil
 }
 
-// GetByChannelID 获取 Channel 的所有会话
-func (r *sessionRepository) GetByChannelID(channelID uint) ([]models.Session, error) {
+// GetByChannelCode 获取 Channel 的所有会话
+func (r *sessionRepository) GetByChannelCode(channelCode string) ([]models.Session, error) {
 	var sessions []models.Session
-	if err := r.db.Where("channel_id = ?", channelID).Find(&sessions).Error; err != nil {
+	if err := r.db.Where("channel_code = ?", channelCode).Find(&sessions).Error; err != nil {
 		return nil, fmt.Errorf("获取 Channel 会话列表失败: %w", err)
 	}
 	return sessions, nil
 }
 
-// GetActiveByUserID 获取用户的所有活跃会话
-func (r *sessionRepository) GetActiveByUserID(userID uint) ([]models.Session, error) {
+// GetByUserCode 获取用户的所有会话
+func (r *sessionRepository) GetByUserCode(userCode string) ([]models.Session, error) {
 	var sessions []models.Session
-	if err := r.db.Where("user_id = ?", userID).Find(&sessions).Error; err != nil {
+	if err := r.db.Where("user_code = ?", userCode).Find(&sessions).Error; err != nil {
 		return nil, fmt.Errorf("获取用户会话列表失败: %w", err)
+	}
+	return sessions, nil
+}
+
+// GetActiveByUserCode 获取用户的所有活跃会话
+func (r *sessionRepository) GetActiveByUserCode(userCode string) ([]models.Session, error) {
+	var sessions []models.Session
+	if err := r.db.Where("user_code = ? AND deleted_at IS NULL", userCode).Find(&sessions).Error; err != nil {
+		return nil, fmt.Errorf("获取用户活跃会话列表失败: %w", err)
 	}
 	return sessions, nil
 }
@@ -106,9 +116,9 @@ func (r *sessionRepository) Delete(sessionKey string) error {
 	return nil
 }
 
-// DeleteByChannelID 删除 Channel 的所有会话
-func (r *sessionRepository) DeleteByChannelID(channelID uint) error {
-	if err := r.db.Where("channel_id = ?", channelID).Delete(&models.Session{}).Error; err != nil {
+// DeleteByChannelCode 删除 Channel 的所有会话
+func (r *sessionRepository) DeleteByChannelCode(channelCode string) error {
+	if err := r.db.Where("channel_code = ?", channelCode).Delete(&models.Session{}).Error; err != nil {
 		return fmt.Errorf("删除 Channel 会话失败: %w", err)
 	}
 	return nil

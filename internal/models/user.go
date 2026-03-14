@@ -8,6 +8,7 @@ import (
 // 存储系统用户信息，支持多租户架构
 type User struct {
 	ID           uint      `gorm:"primarykey" json:"id"`
+	UserCode     string    `gorm:"type:varchar(16);uniqueIndex" json:"user_code"`
 	Username     string    `gorm:"type:text;not null;uniqueIndex" json:"username"`
 	Email        string    `gorm:"type:text;uniqueIndex" json:"email"`
 	PasswordHash string    `gorm:"type:text" json:"-"` // 不序列化到 JSON
@@ -15,10 +16,6 @@ type User struct {
 	IsActive     bool      `gorm:"default:true" json:"is_active"`
 	CreatedAt    time.Time `gorm:"type:datetime;default:CURRENT_TIMESTAMP" json:"created_at"`
 	UpdatedAt    time.Time `gorm:"type:datetime;default:CURRENT_TIMESTAMP" json:"updated_at"`
-
-	// 关联
-	Agents   []Agent   `gorm:"foreignKey:UserID" json:"agents,omitempty"`
-	Channels []Channel `gorm:"foreignKey:UserID" json:"channels,omitempty"`
 }
 
 // TableName 指定表名

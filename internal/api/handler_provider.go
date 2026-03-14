@@ -12,12 +12,12 @@ import (
 
 // ProviderService Provider 服务接口
 type ProviderService interface {
-	List(ctx context.Context, userID uint, offset int, limit int) ([]models.LLMProvider, int64, error)
+	List(ctx context.Context, userCode string, offset int, limit int) ([]models.LLMProvider, int64, error)
 	Get(ctx context.Context, id uint) (*models.LLMProvider, error)
-	Create(ctx context.Context, userID uint, req service.CreateProviderRequest) (*models.LLMProvider, error)
+	Create(ctx context.Context, userCode string, req service.CreateProviderRequest) (*models.LLMProvider, error)
 	Update(ctx context.Context, id uint, req service.UpdateProviderRequest) error
 	Delete(ctx context.Context, id uint) error
-	SetDefault(ctx context.Context, userID uint, providerID uint) error
+	SetDefault(ctx context.Context, userCode string, providerID uint) error
 	GetModelConfig(ctx context.Context, id uint) (interface{}, error)
 	UpdateModelConfig(ctx context.Context, id uint, config map[string]interface{}) error
 	TestConnection(ctx context.Context, id uint) (map[string]interface{}, error)
@@ -26,14 +26,14 @@ type ProviderService interface {
 // === Provider Handlers ===
 
 func (h *Handler) handleProviders(c *gin.Context) {
-	userID, _ := strconv.ParseUint(c.Query("user_id"), 10, 32)
+	userCode := c.Query("user_code")
 	offset, _ := strconv.Atoi(c.Query("offset"))
 	limit, _ := strconv.Atoi(c.Query("limit"))
 	if limit == 0 {
 		limit = 20
 	}
 
-	providers, total, err := h.providerService.List(c.Request.Context(), uint(userID), offset, limit)
+	providers, total, err := h.providerService.List(c.Request.Context(), userCode, offset, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 		return
@@ -65,14 +65,14 @@ func (h *Handler) handleProviderByID(c *gin.Context) {
 }
 
 func (h *Handler) createProvider(c *gin.Context) {
-	userID, _ := strconv.ParseUint(c.Query("user_id"), 10, 32)
+	userCode := c.Query("user_code")
 	var req service.CreateProviderRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	provider, err := h.providerService.Create(c.Request.Context(), uint(userID), req)
+	provider, err := h.providerService.Create(c.Request.Context(), userCode, req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 		return

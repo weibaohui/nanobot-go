@@ -44,12 +44,15 @@ func CreateHookCallback(hookManager *hooks.HookManager, logger *zap.Logger) Hook
 		if enableThinking, ok := data["enable_thinking_process"].(bool); ok {
 			ctx = trace.WithEnableThinkingProcess(ctx, enableThinking)
 		}
-		// 从 data 中提取 channel_id 和 agent_id 并设置到 context
-		if channelID, ok := data["channel_id"].(uint); ok && channelID > 0 {
-			ctx = trace.WithChannelID(ctx, channelID)
+		// 从 data 中提取 Code 字段并设置到 context
+		if userCode, ok := data["user_code"].(string); ok && userCode != "" {
+			ctx = trace.WithUserCode(ctx, userCode)
 		}
-		if agentID, ok := data["agent_id"].(uint); ok && agentID > 0 {
-			ctx = trace.WithAgentID(ctx, agentID)
+		if agentCode, ok := data["agent_code"].(string); ok && agentCode != "" {
+			ctx = trace.WithAgentCode(ctx, agentCode)
+		}
+		if channelCode, ok := data["channel_code"].(string); ok && channelCode != "" {
+			ctx = trace.WithChannelCode(ctx, channelCode)
 		}
 
 		// 创建事件并分发

@@ -30,9 +30,30 @@ export const getToken = (): string | null => {
 // 清除 token
 export const clearToken = () => {
   localStorage.removeItem('token');
+  localStorage.removeItem('user');
 };
 
 // 检查是否已登录
 export const isAuthenticated = (): boolean => {
   return !!getToken();
+};
+
+// 存储当前用户信息
+export const setCurrentUser = (user: User) => {
+  localStorage.setItem('user', JSON.stringify(user));
+};
+
+// 获取当前用户信息
+export const getCurrentUser = (): User | null => {
+  const userStr = localStorage.getItem('user');
+  if (userStr) {
+    return JSON.parse(userStr);
+  }
+  return null;
+};
+
+// 获取当前用户 Code
+export const getCurrentUserCode = (): string | null => {
+  const user = getCurrentUser();
+  return user?.user_code || null;
 };

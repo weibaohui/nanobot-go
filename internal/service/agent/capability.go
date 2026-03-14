@@ -90,14 +90,14 @@ func (s *service) SetAvailableTools(agentID uint, tools []string) error {
 }
 
 // GetDefaultAgent 获取用户的默认 Agent
-func (s *service) GetDefaultAgent(userID uint) (*models.Agent, error) {
-	return s.agentRepo.GetDefaultByUserID(userID)
+func (s *service) GetDefaultAgent(userCode string) (*models.Agent, error) {
+	return s.agentRepo.GetDefaultByUserCode(userCode)
 }
 
 // SetDefaultAgent 设置默认 Agent
-func (s *service) SetDefaultAgent(userID uint, agentID uint) error {
+func (s *service) SetDefaultAgent(userCode string, agentID uint) error {
 	// 获取该用户的所有 Agent
-	agents, err := s.agentRepo.GetByUserID(userID)
+	agents, err := s.agentRepo.GetByUserCode(userCode)
 	if err != nil {
 		return err
 	}

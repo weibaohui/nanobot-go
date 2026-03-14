@@ -12,9 +12,9 @@ import (
 
 // CronJobService 定时任务服务接口
 type CronJobService interface {
-	List(ctx context.Context, userID uint, offset int, limit int) ([]models.CronJob, int64, error)
+	List(ctx context.Context, userCode string, offset int, limit int) ([]models.CronJob, int64, error)
 	Get(ctx context.Context, id uint) (*models.CronJob, error)
-	Create(ctx context.Context, userID uint, req service.CreateCronJobRequest) (*models.CronJob, error)
+	Create(ctx context.Context, userCode string, req service.CreateCronJobRequest) (*models.CronJob, error)
 	Update(ctx context.Context, id uint, req service.UpdateCronJobRequest) error
 	Delete(ctx context.Context, id uint) error
 	Enable(ctx context.Context, id uint) error
@@ -26,14 +26,14 @@ type CronJobService interface {
 // === Cron Job Handlers ===
 
 func (h *Handler) handleCronJobs(c *gin.Context) {
-	userID, _ := strconv.ParseUint(c.Query("user_id"), 10, 32)
+	userCode := c.Query("user_code")
 	offset, _ := strconv.Atoi(c.Query("offset"))
 	limit, _ := strconv.Atoi(c.Query("limit"))
 	if limit == 0 {
 		limit = 20
 	}
 
-	jobs, total, err := h.cronJobService.List(c.Request.Context(), uint(userID), offset, limit)
+	jobs, total, err := h.cronJobService.List(c.Request.Context(), userCode, offset, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 		return
@@ -74,14 +74,14 @@ func (h *Handler) handleCronJobByID(c *gin.Context) {
 }
 
 func (h *Handler) createCronJob(c *gin.Context) {
-	userID, _ := strconv.ParseUint(c.Query("user_id"), 10, 32)
+	userCode := c.Query("user_code")
 	var req service.CreateCronJobRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	job, err := h.cronJobService.Create(c.Request.Context(), uint(userID), req)
+	job, err := h.cronJobService.Create(c.Request.Context(), userCode, req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 		return
