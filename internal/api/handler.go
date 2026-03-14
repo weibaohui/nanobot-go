@@ -67,6 +67,7 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 			users.PUT("/:id", h.handleUserByID)
 			users.DELETE("/:id", h.handleUserByID)
 			users.POST("/:id/change-password", h.handleChangePassword)
+		}
 
 		// Agent API
 		agents := authorized.Group("/agents")
