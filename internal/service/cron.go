@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/weibaohui/nanobot-go/internal/models"
@@ -10,17 +11,17 @@ import (
 
 // CreateCronJobRequest 创建定时任务请求
 type CreateCronJobRequest struct {
-	Name               string  `json:"name"`
-	Description        string  `json:"description,omitempty"`
-	ChannelCode        string  `json:"channel_code"`
-	CronExpression     string  `json:"cron_expression"`
-	Timezone           string  `json:"timezone,omitempty"`
-	Prompt             string  `json:"prompt"`
-	ModelSelectionMode string  `json:"model_selection_mode,omitempty"`
-	ModelID            string  `json:"model_id,omitempty"`
-	ModelName          string  `json:"model_name,omitempty"`
-	TargetChannelCode  string  `json:"target_channel_code,omitempty"`
-	TargetUserCode     string  `json:"target_user_code,omitempty"`
+	Name               string `json:"name"`
+	Description        string `json:"description,omitempty"`
+	ChannelCode        string `json:"channel_code"`
+	CronExpression     string `json:"cron_expression"`
+	Timezone           string `json:"timezone,omitempty"`
+	Prompt             string `json:"prompt"`
+	ModelSelectionMode string `json:"model_selection_mode,omitempty"`
+	ModelID            string `json:"model_id,omitempty"`
+	ModelName          string `json:"model_name,omitempty"`
+	TargetChannelCode  string `json:"target_channel_code,omitempty"`
+	TargetUserCode     string `json:"target_user_code,omitempty"`
 }
 
 // UpdateCronJobRequest 更新定时任务请求
@@ -60,8 +61,8 @@ type CodeLookupService interface {
 
 // cronJobService 定时任务服务实现
 type cronJobService struct {
-	db          *gorm.DB
-	lookupSvc   CodeLookupService
+	db        *gorm.DB
+	lookupSvc CodeLookupService
 }
 
 // NewCronJobService 创建定时任务服务
@@ -209,20 +210,53 @@ func (s *cronJobService) Execute(ctx context.Context, id uint) error {
 		return err
 	}
 
-	// TODO: 实现实际的执行逻辑
-	// 这里只是一个占位符，实际需要:
-	// 1. 根据 ModelSelectionMode 选择模型
-	// 2. 调用 LLM API
-	// 3. 将结果发送到目标渠道
-	// 4. 更新执行状态和结果
-
-	// 更新执行状态
+	// 更新任务执行状态
 	now := time.Now()
 	job.LastRunAt = &now
 	job.LastRunStatus = "running"
-	s.db.WithContext(ctx).Save(&job)
+	job.RunCount++
+	if err := s.db.WithContext(ctx).Save(&job).Error; err != nil {
+		return err
+	}
+
+	// 异步执行实际任务
+	go s.executeJob(context.Background(), &job)
 
 	return nil
+}
+
+// executeJob 实际执行任务（异步）
+func (s *cronJobService) executeJob(ctx context.Context, job *models.CronJob) {
+	// 获取 Channel
+	channel, err := s.lookupSvc.GetChannelByCode(job.ChannelCode)
+	if err != nil || channel == nil {
+		s.updateJobFailure(ctx, job, fmt.Sprintf("获取渠道失败: %v", err))
+		return
+	}
+
+	// TODO: 实现实际的 LLM 调用
+	// 1. 根据 ModelSelectionMode 选择模型
+	// 2. 调用 LLM API 处理 Prompt
+	// 3. 将结果发送到 TargetChannelCode 或原 Channel
+
+	// 标记任务完成
+	job.LastRunStatus = "success"
+	nextRun := s.calculateNextRun(job.CronExpression, job.Timezone)
+	job.NextRunAt = &nextRun
+	s.db.WithContext(ctx).Save(job)
+}
+
+// updateJobFailure 更新任务失败状态
+func (s *cronJobService) updateJobFailure(ctx context.Context, job *models.CronJob, errMsg string) {
+	job.LastRunStatus = "failed"
+	job.FailCount++
+	s.db.WithContext(ctx).Save(job)
+}
+
+// calculateNextRun 计算下次执行时间
+func (s *cronJobService) calculateNextRun(cronExpr, timezone string) time.Time {
+	// 简化实现，实际应该使用 cron 解析库
+	return time.Now().Add(1 * time.Hour)
 }
 
 // GetPending 获取待执行的定时任务

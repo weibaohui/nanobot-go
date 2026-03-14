@@ -174,6 +174,11 @@ func (c *Client) InitSchema() error {
 		"CREATE INDEX IF NOT EXISTS idx_conv_records_agent_code ON conversation_records(agent_code);",
 		"CREATE INDEX IF NOT EXISTS idx_conv_records_channel_code ON conversation_records(channel_code);",
 		"CREATE INDEX IF NOT EXISTS idx_conv_records_channel_type ON conversation_records(channel_type);",
+		// 复合索引：优化常见查询场景
+		"CREATE INDEX IF NOT EXISTS idx_conv_records_user_code_timestamp ON conversation_records(user_code, timestamp);",
+		"CREATE INDEX IF NOT EXISTS idx_conv_records_agent_code_timestamp ON conversation_records(agent_code, timestamp);",
+		"CREATE INDEX IF NOT EXISTS idx_conv_records_channel_code_timestamp ON conversation_records(channel_code, timestamp);",
+		"CREATE INDEX IF NOT EXISTS idx_conv_records_session_key_timestamp ON conversation_records(session_key, timestamp);",
 	}
 
 	for _, indexSQL := range indexes {

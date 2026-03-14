@@ -228,6 +228,12 @@ func migrateChannels(oldDB, newDB *gorm.DB, codeService service.CodeService) err
 	return nil
 }
 
+// 旧的 Provider 结构（用于读取旧数据）
+type OldProvider struct {
+	ID     uint
+	UserID uint // 关联的用户ID
+}
+
 func migrateProviders(oldDB, newDB *gorm.DB) error {
 	var providers []models.LLMProvider
 	if err := oldDB.Table("llm_providers").Find(&providers).Error; err != nil {
@@ -244,8 +250,21 @@ func migrateProviders(oldDB, newDB *gorm.DB) error {
 		userCodeMap[u.ID] = u.UserCode
 	}
 
+	// 获取旧Provider的UserID映射
+	var oldProviders []OldProvider
+	if err := oldDB.Table("llm_providers").Select("id, user_id").Find(&oldProviders).Error; err != nil {
+		return fmt.Errorf("读取旧Provider数据失败: %w", err)
+	}
+	providerUserMap := make(map[uint]uint)
+	for _, op := range oldProviders {
+		providerUserMap[op.ID] = op.UserID
+	}
+
 	for _, p := range providers {
-		p.UserCode = userCodeMap[p.ID] // 假设 Provider ID 对应 User ID
+		// 使用Provider关联的UserID查找UserCode
+		if userID, ok := providerUserMap[p.ID]; ok {
+			p.UserCode = userCodeMap[userID]
+		}
 		if err := newDB.Create(&p).Error; err != nil {
 			return err
 		}

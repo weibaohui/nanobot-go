@@ -12,6 +12,7 @@ type AgentRepository interface {
 	Create(agent *models.Agent) error
 	GetByID(id uint) (*models.Agent, error)
 	GetByAgentCode(code string) (*models.Agent, error)
+	GetByAgentCodes(codes []string) ([]*models.Agent, error) // 批量查询
 	GetByUserCode(userCode string) ([]models.Agent, error)
 	GetDefaultByUserCode(userCode string) (*models.Agent, error)
 	Update(agent *models.Agent) error
@@ -110,6 +111,18 @@ func (r *agentRepository) GetByAgentCode(code string) (*models.Agent, error) {
 		return nil, fmt.Errorf("获取 Agent 失败: %w", err)
 	}
 	return &agent, nil
+}
+
+// GetByAgentCodes 根据多个 AgentCode 批量获取 Agent
+func (r *agentRepository) GetByAgentCodes(codes []string) ([]*models.Agent, error) {
+	if len(codes) == 0 {
+		return []*models.Agent{}, nil
+	}
+	var agents []*models.Agent
+	if err := r.db.Where("agent_code IN ?", codes).Find(&agents).Error; err != nil {
+		return nil, fmt.Errorf("批量获取 Agent 失败: %w", err)
+	}
+	return agents, nil
 }
 
 // CheckAgentCodeExists 检查 AgentCode 是否已存在

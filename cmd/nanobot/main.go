@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/weibaohui/nanobot-go/internal/api"
 	"github.com/weibaohui/nanobot-go/internal/app"
 	"github.com/weibaohui/nanobot-go/internal/database"
 	"go.uber.org/zap"
@@ -100,6 +101,15 @@ func runGateway(cmd *cobra.Command, args []string) {
 	// 初始化各模块
 	gateway.InitDatabase()
 	gateway.InitSessionManager()
+
+	// 验证 JWT 配置（仅在启用 API 时）
+	if apiEnabled {
+		if err := api.ValidateJWTConfig(); err != nil {
+			logger.Warn("JWT 配置警告", zap.Error(err))
+			logger.Warn("请设置 JWT_SECRET 环境变量以确保安全性")
+		}
+	}
+
 	gateway.InitAPI()
 	gateway.InitMemory()
 	gateway.InitHookSystem()

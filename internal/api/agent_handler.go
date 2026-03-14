@@ -7,36 +7,64 @@ import (
 	agentsvc "github.com/weibaohui/nanobot-go/internal/service/agent"
 )
 
-// handleAgents 处理 /api/v1/agents
-func (h *Handler) handleAgents(c *gin.Context) {
-	switch c.Request.Method {
-	case http.MethodGet:
-		h.listAgents(c)
-	case http.MethodPost:
-		h.createAgent(c)
-	default:
-		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "method not allowed"})
-	}
-}
-
-// handleAgentByID 处理 /api/v1/agents/{id}
-func (h *Handler) handleAgentByID(c *gin.Context) {
+// getAgentByID 获取指定 Agent
+func (h *Handler) getAgentByID(c *gin.Context) {
 	id, ok := parseID(c, "id")
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid agent id"})
 		return
 	}
 
-	switch c.Request.Method {
-	case http.MethodGet:
-		h.getAgent(c, uint(id))
-	case http.MethodPut:
-		h.updateAgent(c, uint(id))
-	case http.MethodDelete:
-		h.deleteAgent(c, uint(id))
-	default:
-		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "method not allowed"})
+	agent, err := h.agentService.GetAgent(uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
+	if agent == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "agent not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, agent)
+}
+
+// updateAgentByID 更新指定 Agent
+func (h *Handler) updateAgentByID(c *gin.Context) {
+	id, ok := parseID(c, "id")
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid agent id"})
+		return
+	}
+
+	var req agentsvc.UpdateAgentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	agent, err := h.agentService.UpdateAgent(uint(id), req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, agent)
+}
+
+// deleteAgentByID 删除指定 Agent
+func (h *Handler) deleteAgentByID(c *gin.Context) {
+	id, ok := parseID(c, "id")
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid agent id"})
+		return
+	}
+
+	if err := h.agentService.DeleteAgent(uint(id)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{Message: "agent deleted"})
 }
 
 // listAgents 获取 Agent 列表
@@ -80,48 +108,6 @@ func (h *Handler) createAgent(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, agent)
-}
-
-// getAgent 获取 Agent
-func (h *Handler) getAgent(c *gin.Context, id uint) {
-	agent, err := h.agentService.GetAgent(id)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	if agent == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "agent not found"})
-		return
-	}
-
-	c.JSON(http.StatusOK, agent)
-}
-
-// updateAgent 更新 Agent
-func (h *Handler) updateAgent(c *gin.Context, id uint) {
-	var req agentsvc.UpdateAgentRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
-		return
-	}
-
-	agent, err := h.agentService.UpdateAgent(id, req)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, agent)
-}
-
-// deleteAgent 删除 Agent
-func (h *Handler) deleteAgent(c *gin.Context, id uint) {
-	if err := h.agentService.DeleteAgent(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, SuccessResponse{Message: "agent deleted"})
 }
 
 // getAgentByCode 根据 Code 获取 Agent

@@ -12,6 +12,7 @@ type ChannelRepository interface {
 	Create(channel *models.Channel) error
 	GetByID(id uint) (*models.Channel, error)
 	GetByChannelCode(code string) (*models.Channel, error)
+	GetByChannelCodes(codes []string) ([]*models.Channel, error) // 批量查询
 	GetByUserCode(userCode string) ([]models.Channel, error)
 	GetByAgentCode(agentCode string) ([]models.Channel, error)
 	GetActiveByUserCode(userCode string) ([]models.Channel, error)
@@ -122,6 +123,18 @@ func (r *channelRepository) GetByChannelCode(code string) (*models.Channel, erro
 		return nil, fmt.Errorf("获取 Channel 失败: %w", err)
 	}
 	return &channel, nil
+}
+
+// GetByChannelCodes 根据多个 ChannelCode 批量获取 Channel
+func (r *channelRepository) GetByChannelCodes(codes []string) ([]*models.Channel, error) {
+	if len(codes) == 0 {
+		return []*models.Channel{}, nil
+	}
+	var channels []*models.Channel
+	if err := r.db.Where("channel_code IN ?", codes).Find(&channels).Error; err != nil {
+		return nil, fmt.Errorf("批量获取 Channel 失败: %w", err)
+	}
+	return channels, nil
 }
 
 // CheckChannelCodeExists 检查 ChannelCode 是否已存在

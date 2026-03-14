@@ -61,32 +61,32 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 		// User API
 		users := authorized.Group("/users")
 		{
-			users.GET("", h.handleUsers)
-			users.POST("", h.handleUsers)
-			users.GET("/:id", h.handleUserByID)
-			users.PUT("/:id", h.handleUserByID)
-			users.DELETE("/:id", h.handleUserByID)
-			users.POST("/:id/change-password", h.handleChangePassword)
+			users.GET("", h.listUsers)
+			users.POST("", h.createUser)
+			users.GET("/:id", h.getUserByID)
+			users.PUT("/:id", h.updateUserByID)
+			users.DELETE("/:id", h.deleteUserByID)
+			users.POST("/:id/change-password", h.changePasswordByID)
 			users.GET("/code/:code", h.getUserByCode)
 		}
 
 		// Agent API
 		agents := authorized.Group("/agents")
 		{
-			agents.GET("", h.handleAgents)
-			agents.POST("", h.handleAgents)
-			agents.GET("/:id", h.handleAgentByID)
-			agents.PUT("/:id", h.handleAgentByID)
-			agents.DELETE("/:id", h.handleAgentByID)
+			agents.GET("", h.listAgents)
+			agents.POST("", h.createAgent)
+			agents.GET("/:id", h.getAgentByID)
+			agents.PUT("/:id", h.updateAgentByID)
+			agents.DELETE("/:id", h.deleteAgentByID)
 			agents.GET("/code/:code", h.getAgentByCode)
 		}
 
 		// Channel API
 		channels := authorized.Group("/channels")
 		{
-			channels.GET("", h.handleChannels)
+			channels.GET("", h.listChannels)
 			channels.POST("", h.createChannel)
-			channels.GET("/:id", h.handleChannelByID)
+			channels.GET("/:id", h.getChannelByID)
 			channels.PUT("/:id", h.updateChannel)
 			channels.DELETE("/:id", h.deleteChannel)
 			channels.GET("/code/:code", h.getChannelByCode)

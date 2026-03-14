@@ -7,18 +7,6 @@ import (
 	"github.com/weibaohui/nanobot-go/internal/service"
 )
 
-// handleChannels 处理 GET/POST /api/v1/channels
-func (h *Handler) handleChannels(c *gin.Context) {
-	switch c.Request.Method {
-	case http.MethodGet:
-		h.listChannels(c)
-	case http.MethodPost:
-		h.createChannel(c)
-	default:
-		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "method not allowed"})
-	}
-}
-
 // listChannels 获取 Channel 列表
 func (h *Handler) listChannels(c *gin.Context) {
 	userCode := c.Query("user_code")
@@ -62,52 +50,26 @@ func (h *Handler) createChannel(c *gin.Context) {
 	c.JSON(http.StatusCreated, channel)
 }
 
-// handleChannelByID 处理 GET/PUT/DELETE /api/v1/channels/:id
-func (h *Handler) handleChannelByID(c *gin.Context) {
+// getChannelByID 获取指定 Channel
+func (h *Handler) getChannelByID(c *gin.Context) {
 	id, ok := parseID(c, "id")
 	if !ok {
 		return
 	}
 
-	switch c.Request.Method {
-	case http.MethodGet:
-		channel, err := h.channelService.GetChannel(uint(id))
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		if channel == nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "channel not found"})
-			return
-		}
-		c.JSON(http.StatusOK, channel)
-
-	case http.MethodPut:
-		var req service.UpdateChannelRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
-			return
-		}
-		channel, err := h.channelService.UpdateChannel(uint(id), req)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, channel)
-
-	case http.MethodDelete:
-		if err := h.channelService.DeleteChannel(uint(id)); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, SuccessResponse{Message: "channel deleted"})
-
-	default:
-		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "method not allowed"})
+	channel, err := h.channelService.GetChannel(uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
+	if channel == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "channel not found"})
+		return
+	}
+	c.JSON(http.StatusOK, channel)
 }
 
-// updateChannel 处理 PUT /api/v1/channels/:id
+// updateChannel 更新指定 Channel
 func (h *Handler) updateChannel(c *gin.Context) {
 	id, ok := parseID(c, "id")
 	if !ok {
@@ -129,7 +91,7 @@ func (h *Handler) updateChannel(c *gin.Context) {
 	c.JSON(http.StatusOK, channel)
 }
 
-// deleteChannel 处理 DELETE /api/v1/channels/:id
+// deleteChannel 删除指定 Channel
 func (h *Handler) deleteChannel(c *gin.Context) {
 	id, ok := parseID(c, "id")
 	if !ok {

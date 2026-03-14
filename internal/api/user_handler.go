@@ -10,46 +10,102 @@ import (
 	"github.com/weibaohui/nanobot-go/internal/service"
 )
 
-// handleUsers 处理 /api/v1/users
-func (h *Handler) handleUsers(c *gin.Context) {
-	switch c.Request.Method {
-	case http.MethodGet:
-		h.listUsers(c)
-	case http.MethodPost:
-		h.createUser(c)
-	default:
-		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "method not allowed"})
-	}
-}
-
-// handleUserByID 处理 /api/v1/users/{id}
-func (h *Handler) handleUserByID(c *gin.Context) {
+// getUserByID 获取指定用户
+func (h *Handler) getUserByID(c *gin.Context) {
 	id, ok := parseID(c, "id")
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
 		return
 	}
 
-	switch c.Request.Method {
-	case http.MethodGet:
-		h.getUser(c, uint(id))
-	case http.MethodPut:
-		h.updateUser(c, uint(id))
-	case http.MethodDelete:
-		h.deleteUser(c, uint(id))
-	default:
-		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "method not allowed"})
+	user, err := h.userService.GetUser(uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
+	if user == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, user)
 }
 
-// handleChangePassword 处理 /api/v1/users/{id}/change-password
-func (h *Handler) handleChangePassword(c *gin.Context) {
+// updateUserByID 更新指定用户
+func (h *Handler) updateUserByID(c *gin.Context) {
 	id, ok := parseID(c, "id")
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
 		return
 	}
-	h.changePassword(c, uint(id))
+
+	var req service.UpdateUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	user, err := h.userService.UpdateUser(uint(id), req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, user)
+}
+
+// deleteUserByID 删除指定用户
+func (h *Handler) deleteUserByID(c *gin.Context) {
+	id, ok := parseID(c, "id")
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	if err := h.userService.DeleteUser(uint(id)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{Message: "user deleted"})
+}
+
+// changePasswordByID 修改指定用户密码
+func (h *Handler) changePasswordByID(c *gin.Context) {
+	id, ok := parseID(c, "id")
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	var req ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	// 验证当前用户是否有权限修改此用户密码
+	currentUserID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	// 只能修改自己的密码
+	if currentUserID.(uint) != uint(id) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "can only change your own password"})
+		return
+	}
+
+	if err := h.userService.ChangePassword(uint(id), service.ChangePasswordRequest{
+		OldPassword: req.OldPassword,
+		NewPassword: req.NewPassword,
+	}); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{Message: "password changed successfully"})
 }
 
 // listUsers 获取用户列表
@@ -89,47 +145,6 @@ func (h *Handler) createUser(c *gin.Context) {
 	c.JSON(http.StatusCreated, user)
 }
 
-// getUser 获取用户
-func (h *Handler) getUser(c *gin.Context, id uint) {
-	user, err := h.userService.GetUser(id)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	if user == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-		return
-	}
-
-	c.JSON(http.StatusOK, user)
-}
-
-// updateUser 更新用户
-func (h *Handler) updateUser(c *gin.Context, id uint) {
-	var req service.UpdateUserRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
-		return
-	}
-
-	user, err := h.userService.UpdateUser(id, req)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, user)
-}
-
-// deleteUser 删除用户
-func (h *Handler) deleteUser(c *gin.Context, id uint) {
-	if err := h.userService.DeleteUser(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, SuccessResponse{Message: "user deleted"})
-}
 
 // LoginRequest 登录请求
 type LoginRequest struct {
@@ -169,7 +184,7 @@ func (h *Handler) login(c *gin.Context) {
 	c.JSON(http.StatusOK, LoginResponse{
 		Token:     token,
 		User:      user,
-		ExpiresAt: time.Now().Add(tokenDuration).Unix(),
+		ExpiresAt: time.Now().Add(getTokenDuration()).Unix(),
 	})
 }
 
@@ -198,38 +213,6 @@ func (h *Handler) getCurrentUser(c *gin.Context) {
 type ChangePasswordRequest struct {
 	OldPassword string `json:"old_password" binding:"required"`
 	NewPassword string `json:"new_password" binding:"required"`
-}
-
-// changePassword 修改密码
-func (h *Handler) changePassword(c *gin.Context, id uint) {
-	var req ChangePasswordRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
-		return
-	}
-
-	// 验证当前用户是否有权限修改此用户密码
-	currentUserID, exists := c.Get("userID")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-
-	// 只能修改自己的密码，除非是管理员（这里简化处理，后续可添加角色权限）
-	if currentUserID.(uint) != id {
-		c.JSON(http.StatusForbidden, gin.H{"error": "can only change your own password"})
-		return
-	}
-
-	if err := h.userService.ChangePassword(id, service.ChangePasswordRequest{
-		OldPassword: req.OldPassword,
-		NewPassword: req.NewPassword,
-	}); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, SuccessResponse{Message: "password changed successfully"})
 }
 
 // getUserByCode 根据 Code 获取用户

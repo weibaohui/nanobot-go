@@ -25,8 +25,8 @@ func InitMemory(cfg *config.Config, db *gorm.DB, logger *zap.Logger) *MemoryComp
 	streamRepo := repository.NewStreamMemoryRepository(db)
 	longTermRepo := repository.NewLongTermMemoryRepository(db)
 
-	// 创建 LLM 客户端
-	llmClient := service.NewSystemLLMClient(cfg, logger)
+	// 创建 LLM 客户端（传入数据库连接以获取 Provider 配置）
+	llmClient := service.NewSystemLLMClient(cfg, logger, db)
 
 	// 创建总结器
 	summarizer := service.NewMemorySummarizer(
@@ -73,8 +73,8 @@ func RunMemoryUpgrade(cfg *config.Config, db *gorm.DB, logger *zap.Logger, targe
 	streamRepo := repository.NewStreamMemoryRepository(db)
 	longTermRepo := repository.NewLongTermMemoryRepository(db)
 
-	// 创建 LLM 客户端
-	llmClient := service.NewSystemLLMClient(cfg, logger)
+	// 创建 LLM 客户端（传入数据库连接以获取 Provider 配置）
+	llmClient := service.NewSystemLLMClient(cfg, logger, db)
 
 	// 创建总结器
 	summarizer := service.NewMemorySummarizer(

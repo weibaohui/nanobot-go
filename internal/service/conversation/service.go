@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/weibaohui/nanobot-go/internal/models"
+	"github.com/weibaohui/nanobot-go/internal/utils/pagination"
 )
 
 // service 对话服务实现
@@ -35,22 +36,15 @@ func (s *service) ListBySessionKey(ctx context.Context, sessionKey string, page,
 	if sessionKey == "" {
 		return nil, fmt.Errorf("%w: sessionKey cannot be empty", ErrInvalidParameter)
 	}
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 {
-		pageSize = 20
-	}
-	if pageSize > 1000 {
-		pageSize = 1000
-	}
+
+	page, pageSize = pagination.NormalizeDefault(page, pageSize)
 
 	total, err := s.repo.CountBySessionKey(ctx, sessionKey)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrDatabaseOperation, err)
 	}
 
-	offset := (page - 1) * pageSize
+	offset := pagination.CalculateOffset(page, pageSize)
 	records, err := s.repo.FindBySessionKey(ctx, sessionKey, &models.QueryOptions{
 		OrderBy: "timestamp",
 		Order:   "ASC",
@@ -70,22 +64,14 @@ func (s *service) ListBySessionKey(ctx context.Context, sessionKey string, page,
 }
 
 func (s *service) ListByTimeRange(ctx context.Context, startTime, endTime time.Time, page, pageSize int) (*ConversationListResult, error) {
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 {
-		pageSize = 20
-	}
-	if pageSize > 1000 {
-		pageSize = 1000
-	}
+	page, pageSize = pagination.NormalizeDefault(page, pageSize)
 
 	total, err := s.repo.CountByTimeRange(ctx, startTime, endTime)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrDatabaseOperation, err)
 	}
 
-	offset := (page - 1) * pageSize
+	offset := pagination.CalculateOffset(page, pageSize)
 	records, err := s.repo.FindByTimeRange(ctx, startTime, endTime, &models.QueryOptions{
 		OrderBy: "timestamp",
 		Order:   "ASC",
@@ -105,22 +91,14 @@ func (s *service) ListByTimeRange(ctx context.Context, startTime, endTime time.T
 }
 
 func (s *service) ListRecent(ctx context.Context, page, pageSize int) (*ConversationListResult, error) {
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 {
-		pageSize = 20
-	}
-	if pageSize > 1000 {
-		pageSize = 1000
-	}
+	page, pageSize = pagination.NormalizeDefault(page, pageSize)
 
 	total, err := s.repo.Count(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrDatabaseOperation, err)
 	}
 
-	offset := (page - 1) * pageSize
+	offset := pagination.CalculateOffset(page, pageSize)
 	records, err := s.repo.FindByTimeRange(ctx, time.Time{}, time.Now(), &models.QueryOptions{
 		OrderBy: "timestamp",
 		Order:   "DESC",
