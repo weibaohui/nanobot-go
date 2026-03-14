@@ -172,6 +172,21 @@ const Conversations: React.FC = () => {
     }
   };
 
+  const fetchSessionRecordsByTrace = async (session: string, traceId: string) => {
+    setSessionLoading(true);
+    try {
+      const res = await conversationsApi.getBySession(session);
+      const items = (res as any)?.items || [];
+      // 过滤出该 trace_id 的消息
+      const filteredItems = items.filter((item: ConversationRecord) => item.trace_id === traceId);
+      setSessionRecords(filteredItems);
+    } catch (error) {
+      message.error('获取对话数据失败');
+    } finally {
+      setSessionLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchRecords();
   }, []);
@@ -420,13 +435,14 @@ const Conversations: React.FC = () => {
               }}
             />
           </Tooltip>
-          <Tooltip title="查看会话">
+          <Tooltip title="查看对话">
             <Button
               type="text"
               icon={<MessageOutlined />}
               onClick={() => {
                 setCurrentSessionKey(record.session_key);
-                fetchSessionRecords(record.session_key);
+                setCurrentTraceId(record.trace_id);
+                fetchSessionRecordsByTrace(record.session_key, record.trace_id);
                 setSessionVisible(true);
               }}
             />
@@ -624,7 +640,7 @@ const Conversations: React.FC = () => {
 
       {/* 会话对话弹窗 */}
       <Modal
-        title={`会话详情 - ${currentSessionKey}`}
+        title={`对话详情 - ${currentTraceId?.slice(0, 8) || ''}...`}
         open={sessionVisible}
         onCancel={() => {
           setSessionVisible(false);
