@@ -12,9 +12,8 @@ import {
   message,
   Popconfirm,
   Card,
-  List,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, CheckOutlined, DatabaseOutlined, StarOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, DatabaseOutlined, StarOutlined } from '@ant-design/icons';
 import { providersApi, getCurrentUserCode } from '../api';
 import type { LLMProvider, CreateProviderRequest, ModelInfo, EmbeddingModelInfo } from '../types';
 
@@ -24,7 +23,8 @@ const Providers: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingProvider, setEditingProvider] = useState<LLMProvider | null>(null);
   const [models, setModels] = useState<ModelInfo[]>([]);
-  const [modelInput, setModelInput] = useState({ id: '', name: '' });
+  const [modelInput, setModelInput] = useState({ id: '', name: '', maxTokens: 8192 });
+  const [defaultModel, setDefaultModel] = useState('');
   const [form] = Form.useForm();
 
   // 嵌入模型配置相关状态
@@ -56,11 +56,16 @@ const Providers: React.FC = () => {
   const handleCreate = async (values: CreateProviderRequest) => {
     try {
       const userCode = getCurrentUserCode() || '';
-      await providersApi.create(userCode, { ...values, supported_models: models });
+      await providersApi.create(userCode, {
+        ...values,
+        supported_models: models,
+        default_model: defaultModel,
+      });
       message.success('创建成功');
       setModalVisible(false);
       form.resetFields();
       setModels([]);
+      setDefaultModel('');
       fetchProviders();
     } catch (error) {
       message.error('创建失败');
@@ -70,12 +75,17 @@ const Providers: React.FC = () => {
   const handleUpdate = async (values: CreateProviderRequest) => {
     if (!editingProvider) return;
     try {
-      await providersApi.update(editingProvider.id, { ...values, supported_models: models });
+      await providersApi.update(editingProvider.id, {
+        ...values,
+        supported_models: models,
+        default_model: defaultModel,
+      });
       message.success('更新成功');
       setModalVisible(false);
       setEditingProvider(null);
       form.resetFields();
       setModels([]);
+      setDefaultModel('');
       fetchProviders();
     } catch (error) {
       message.error('更新失败');
@@ -107,12 +117,25 @@ const Providers: React.FC = () => {
       message.warning('请输入模型 ID 和名称');
       return;
     }
-    setModels([...models, { ...modelInput }]);
-    setModelInput({ id: '', name: '' });
+    if (models.some(m => m.id === modelInput.id)) {
+      message.warning('模型 ID 已存在');
+      return;
+    }
+    setModels([...models, { id: modelInput.id, name: modelInput.name, max_tokens: modelInput.maxTokens }]);
+    setModelInput({ id: '', name: '', maxTokens: 8192 });
   };
 
   const handleRemoveModel = (index: number) => {
+    const model = models[index];
+    if (model.id === defaultModel) {
+      setDefaultModel('');
+    }
     setModels(models.filter((_, i) => i !== index));
+  };
+
+  const handleSetDefaultModel = (modelId: string) => {
+    setDefaultModel(modelId);
+    message.success('已设为默认模型');
   };
 
   // 嵌入模型配置相关方法
@@ -178,6 +201,7 @@ const Providers: React.FC = () => {
       setEditingProvider(provider);
       const supportedModels = provider.supported_models ? JSON.parse(provider.supported_models) : [];
       setModels(supportedModels);
+      setDefaultModel(provider.default_model || '');
       form.setFieldsValue({
         provider_key: provider.provider_key,
         provider_name: provider.provider_name,
@@ -189,6 +213,7 @@ const Providers: React.FC = () => {
     } else {
       setEditingProvider(null);
       setModels([]);
+      setDefaultModel('');
       form.resetFields();
     }
     setModalVisible(true);
@@ -372,6 +397,8 @@ const Providers: React.FC = () => {
           setModalVisible(false);
           setEditingProvider(null);
           setModels([]);
+          setDefaultModel('');
+          setModelInput({ id: '', name: '', maxTokens: 8192 });
           form.resetFields();
         }}
         onOk={() => form.submit()}
@@ -403,37 +430,81 @@ const Providers: React.FC = () => {
           </Form.Item>
 
           <Form.Item label="支持的模型">
-            <Space style={{ marginBottom: 16 }}>
-              <Input
-                placeholder="模型 ID"
-                value={modelInput.id}
-                onChange={(e) => setModelInput({ ...modelInput, id: e.target.value })}
-              />
-              <Input
-                placeholder="模型名称"
-                value={modelInput.name}
-                onChange={(e) => setModelInput({ ...modelInput, name: e.target.value })}
-              />
-              <Button icon={<CheckOutlined />} onClick={handleAddModel}>
-                添加
-              </Button>
-            </Space>
-            <List
+            <Table
               size="small"
-              bordered
+              rowKey="id"
               dataSource={models}
-              renderItem={(item, index) => (
-                <List.Item
-                  actions={[
-                    <Button type="link" danger onClick={() => handleRemoveModel(index)}>
-                      删除
-                    </Button>,
-                  ]}
-                >
-                  {item.name} ({item.id})
-                </List.Item>
-              )}
+              columns={[
+                { title: '模型ID', dataIndex: 'id', ellipsis: true },
+                { title: '名称', dataIndex: 'name' },
+                { title: '最大Token', dataIndex: 'max_tokens', width: 100 },
+                {
+                  title: '默认',
+                  width: 80,
+                  render: (_: any, record: ModelInfo) =>
+                    record.id === defaultModel ? (
+                      <Tag color="gold">默认</Tag>
+                    ) : null,
+                },
+                {
+                  title: '操作',
+                  width: 180,
+                  render: (_: any, record: ModelInfo, index: number) => (
+                    <Space size="small">
+                      {record.id !== defaultModel && (
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<StarOutlined />}
+                          onClick={() => handleSetDefaultModel(record.id)}
+                        >
+                          设为默认
+                        </Button>
+                      )}
+                      <Button
+                        type="text"
+                        size="small"
+                        danger
+                        onClick={() => handleRemoveModel(index)}
+                      >
+                        删除
+                      </Button>
+                    </Space>
+                  ),
+                },
+              ]}
+              pagination={false}
+              locale={{ emptyText: '暂无模型' }}
+              style={{ marginBottom: 16 }}
             />
+
+            <div style={{ padding: 16, background: '#f5f5f5', borderRadius: 8 }}>
+              <h4 style={{ marginTop: 0 }}>添加新模型</h4>
+              <Space style={{ marginTop: 8 }}>
+                <Input
+                  placeholder="模型ID (如: claude-3-opus)"
+                  value={modelInput.id}
+                  onChange={(e) => setModelInput({ ...modelInput, id: e.target.value })}
+                  style={{ width: 220 }}
+                />
+                <Input
+                  placeholder="模型名称"
+                  value={modelInput.name}
+                  onChange={(e) => setModelInput({ ...modelInput, name: e.target.value })}
+                  style={{ width: 180 }}
+                />
+                <InputNumber
+                  placeholder="最大Token"
+                  value={modelInput.maxTokens}
+                  onChange={(value) => setModelInput({ ...modelInput, maxTokens: value || 8192 })}
+                  style={{ width: 120 }}
+                  min={1}
+                />
+                <Button type="primary" icon={<PlusOutlined />} onClick={handleAddModel}>
+                  添加
+                </Button>
+              </Space>
+            </div>
           </Form.Item>
 
           <Form.Item name="is_default" valuePropName="checked" initialValue={false}>
