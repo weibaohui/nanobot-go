@@ -175,11 +175,10 @@ const Conversations: React.FC = () => {
   const fetchSessionRecordsByTrace = async (session: string, traceId: string) => {
     setSessionLoading(true);
     try {
-      const res = await conversationsApi.getBySession(session);
-      const items = (res as any)?.items || [];
-      // 过滤出该 trace_id 的消息
-      const filteredItems = items.filter((item: ConversationRecord) => item.trace_id === traceId);
-      setSessionRecords(filteredItems);
+      // 直接使用 trace API 获取该 trace 的所有消息
+      const res = await conversationsApi.getByTrace(traceId);
+      const items = (res as any) || [];
+      setSessionRecords(items);
     } catch (error) {
       message.error('获取对话数据失败');
     } finally {
