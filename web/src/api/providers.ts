@@ -1,5 +1,5 @@
 import client from './client';
-import type { ApiResponse, ListResponse, LLMProvider, CreateProviderRequest, UpdateProviderRequest } from '../types';
+import type { ApiResponse, ListResponse, LLMProvider, CreateProviderRequest, UpdateProviderRequest, EmbeddingModelInfo } from '../types';
 
 export const providersApi = {
   // 获取 Provider 列表
@@ -37,4 +37,19 @@ export const providersApi = {
   // 测试连接
   testConnection: (id: number) =>
     client.post<any, ApiResponse<{ success: boolean; message?: string }>>(`/providers/${id}/test`),
+
+  // 获取嵌入模型配置
+  getEmbeddingModels: (id: number) =>
+    client.get<any, ApiResponse<{
+      embedding_models: EmbeddingModelInfo[];
+      default_embedding_model: string;
+      has_embedding_models: boolean;
+    }>>(`/providers/${id}/embedding`),
+
+  // 更新嵌入模型配置
+  updateEmbeddingModels: (id: number, data: {
+    embedding_models: EmbeddingModelInfo[];
+    default_embedding_model: string;
+  }) =>
+    client.put<any, ApiResponse<void>>(`/providers/${id}/embedding`, data),
 };

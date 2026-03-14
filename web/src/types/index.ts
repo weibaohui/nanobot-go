@@ -125,6 +125,8 @@ export interface LLMProvider {
   api_base?: string;
   extra_headers?: string;
   supported_models?: string;
+  embedding_models?: string;
+  default_embedding_model?: string;
   is_default: boolean;
   priority: number;
   is_active: boolean;
@@ -151,6 +153,13 @@ export interface ModelInfo {
   id: string;
   name: string;
   max_tokens?: number;
+}
+
+// Embedding Model 类型
+export interface EmbeddingModelInfo {
+  id: string;
+  name: string;
+  dimensions: number;
 }
 
 // Cron Job 类型
