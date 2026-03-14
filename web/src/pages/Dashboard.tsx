@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Row, Col, Statistic, Grid, DatePicker, Button, Space, Typography } from 'antd';
+import { Card, Row, Col, Statistic, Grid, DatePicker, Button, Space, Typography, Table } from 'antd';
 import {
   RobotOutlined,
   MessageOutlined,
@@ -138,7 +138,21 @@ const Dashboard: React.FC = () => {
     convStats?.agent_distribution.map((item) => ({
       name: item.name || item.code,
       value: item.count,
+      count: item.count,
+      tokens: item.tokens,
     })) || [];
+
+  // Agent 分布表格列定义
+  const agentColumns = [
+    { title: 'Agent', dataIndex: 'name', key: 'name' },
+    { title: '消息数', dataIndex: 'count', key: 'count' },
+    {
+      title: 'Token 数',
+      dataIndex: 'tokens',
+      key: 'tokens',
+      render: (tokens: number) => tokens?.toLocaleString() || 0,
+    },
+  ];
 
   // Channel 分布图表数据
   const channelDistData =
@@ -322,6 +336,14 @@ const Dashboard: React.FC = () => {
                   <Tooltip />
                 </PieChart>
               </ResponsiveContainer>
+              <Table
+                dataSource={agentDistData}
+                columns={agentColumns}
+                rowKey="name"
+                pagination={false}
+                size="small"
+                style={{ marginTop: 16 }}
+              />
             </Card>
           </Col>
           <Col xs={24} md={12}>
