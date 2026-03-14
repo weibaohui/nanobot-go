@@ -14,9 +14,9 @@ import {
   Card,
   List,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, CheckOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, CheckOutlined, DatabaseOutlined, StarOutlined } from '@ant-design/icons';
 import { providersApi, getCurrentUserCode } from '../api';
-import type { LLMProvider, CreateProviderRequest, ModelInfo } from '../types';
+import type { LLMProvider, CreateProviderRequest, ModelInfo, EmbeddingModelInfo } from '../types';
 
 const Providers: React.FC = () => {
   const [providers, setProviders] = useState<LLMProvider[]>([]);
@@ -26,6 +26,14 @@ const Providers: React.FC = () => {
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [modelInput, setModelInput] = useState({ id: '', name: '' });
   const [form] = Form.useForm();
+
+  // 嵌入模型配置相关状态
+  const [embeddingModalVisible, setEmbeddingModalVisible] = useState(false);
+  const [embeddingModels, setEmbeddingModels] = useState<EmbeddingModelInfo[]>([]);
+  const [defaultEmbeddingModel, setDefaultEmbeddingModel] = useState('');
+  const [embeddingProvider, setEmbeddingProvider] = useState<LLMProvider | null>(null);
+  const [embeddingInput, setEmbeddingInput] = useState({ id: '', name: '', dimensions: 1536 });
+  const [embeddingLoading, setEmbeddingLoading] = useState(false);
 
   const fetchProviders = async () => {
     setLoading(true);
@@ -107,6 +115,64 @@ const Providers: React.FC = () => {
     setModels(models.filter((_, i) => i !== index));
   };
 
+  // 嵌入模型配置相关方法
+  const openEmbeddingModal = async (provider: LLMProvider) => {
+    setEmbeddingProvider(provider);
+    setEmbeddingModalVisible(true);
+    setEmbeddingLoading(true);
+    try {
+      const res = await providersApi.getEmbeddingModels(provider.id);
+      const data = res as any;
+      setEmbeddingModels(data?.embedding_models || []);
+      setDefaultEmbeddingModel(data?.default_embedding_model || '');
+    } catch (error) {
+      message.error('获取嵌入模型配置失败');
+    } finally {
+      setEmbeddingLoading(false);
+    }
+  };
+
+  const handleAddEmbeddingModel = () => {
+    if (!embeddingInput.id || !embeddingInput.name || !embeddingInput.dimensions) {
+      message.warning('请输入模型 ID、名称和维度');
+      return;
+    }
+    if (embeddingModels.some(m => m.id === embeddingInput.id)) {
+      message.warning('模型 ID 已存在');
+      return;
+    }
+    setEmbeddingModels([...embeddingModels, { ...embeddingInput }]);
+    setEmbeddingInput({ id: '', name: '', dimensions: 1536 });
+  };
+
+  const handleRemoveEmbeddingModel = (index: number) => {
+    const model = embeddingModels[index];
+    if (model.id === defaultEmbeddingModel) {
+      setDefaultEmbeddingModel('');
+    }
+    setEmbeddingModels(embeddingModels.filter((_, i) => i !== index));
+  };
+
+  const handleSetDefaultEmbeddingModel = (modelId: string) => {
+    setDefaultEmbeddingModel(modelId);
+    message.success('已设为默认嵌入模型');
+  };
+
+  const handleSaveEmbeddingModels = async () => {
+    if (!embeddingProvider) return;
+    try {
+      await providersApi.updateEmbeddingModels(embeddingProvider.id, {
+        embedding_models: embeddingModels,
+        default_embedding_model: defaultEmbeddingModel,
+      });
+      message.success('嵌入模型配置保存成功');
+      setEmbeddingModalVisible(false);
+      fetchProviders();
+    } catch (error) {
+      message.error('保存失败');
+    }
+  };
+
   const openModal = (provider?: LLMProvider) => {
     if (provider) {
       setEditingProvider(provider);
@@ -139,6 +205,18 @@ const Providers: React.FC = () => {
       render: (priority: number) => <Tag>{priority}</Tag>,
     },
     {
+      title: '嵌入模型',
+      render: (_: any, record: LLMProvider) => {
+        const hasModels = record.embedding_models && record.embedding_models !== '[]' && record.embedding_models !== '';
+        const count = hasModels ? JSON.parse(record.embedding_models!).length : 0;
+        return (
+          <Tag color={hasModels ? 'success' : 'default'}>
+            {hasModels ? `${count} 个模型` : '未配置'}
+          </Tag>
+        );
+      },
+    },
+    {
       title: '状态',
       render: (_: any, record: LLMProvider) => (
         <Space>
@@ -151,11 +229,14 @@ const Providers: React.FC = () => {
     },
     {
       title: '操作',
-      width: 250,
+      width: 320,
       render: (_: any, record: LLMProvider) => (
         <Space>
           <Button type="text" icon={<EditOutlined />} onClick={() => openModal(record)}>
             编辑
+          </Button>
+          <Button type="text" icon={<DatabaseOutlined />} onClick={() => openEmbeddingModal(record)}>
+            嵌入模型
           </Button>
           {!record.is_default && (
             <Button type="text" onClick={() => handleSetDefault(record)}>
@@ -188,6 +269,101 @@ const Providers: React.FC = () => {
       >
         <Table rowKey="id" columns={columns} dataSource={providers} loading={loading} />
       </Card>
+
+      {/* 嵌入模型配置弹窗 */}
+      <Modal
+        title={`配置嵌入模型 - ${embeddingProvider?.provider_name || ''}`}
+        open={embeddingModalVisible}
+        onCancel={() => setEmbeddingModalVisible(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setEmbeddingModalVisible(false)}>
+            取消
+          </Button>,
+          <Button key="save" type="primary" onClick={handleSaveEmbeddingModels}>
+            保存
+          </Button>,
+        ]}
+        width={800}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <h4>嵌入模型列表</h4>
+          <Table
+            size="small"
+            rowKey="id"
+            loading={embeddingLoading}
+            dataSource={embeddingModels}
+            columns={[
+              { title: '模型ID', dataIndex: 'id', ellipsis: true },
+              { title: '名称', dataIndex: 'name' },
+              { title: '维度', dataIndex: 'dimensions', width: 100 },
+              {
+                title: '默认',
+                width: 80,
+                render: (_: any, record: EmbeddingModelInfo) =>
+                  record.id === defaultEmbeddingModel ? (
+                    <Tag color="gold">默认</Tag>
+                  ) : null,
+              },
+              {
+                title: '操作',
+                width: 180,
+                render: (_: any, record: EmbeddingModelInfo, index: number) => (
+                  <Space size="small">
+                    {record.id !== defaultEmbeddingModel && (
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<StarOutlined />}
+                        onClick={() => handleSetDefaultEmbeddingModel(record.id)}
+                      >
+                        设为默认
+                      </Button>
+                    )}
+                    <Button
+                      type="text"
+                      size="small"
+                      danger
+                      onClick={() => handleRemoveEmbeddingModel(index)}
+                    >
+                      删除
+                    </Button>
+                  </Space>
+                ),
+              },
+            ]}
+            pagination={false}
+            locale={{ emptyText: '暂无嵌入模型' }}
+          />
+        </div>
+
+        <div style={{ marginTop: 24, padding: 16, background: '#f5f5f5', borderRadius: 8 }}>
+          <h4>添加新模型</h4>
+          <Space style={{ marginTop: 8 }}>
+            <Input
+              placeholder="模型ID (如: text-embedding-3-small)"
+              value={embeddingInput.id}
+              onChange={(e) => setEmbeddingInput({ ...embeddingInput, id: e.target.value })}
+              style={{ width: 220 }}
+            />
+            <Input
+              placeholder="模型名称"
+              value={embeddingInput.name}
+              onChange={(e) => setEmbeddingInput({ ...embeddingInput, name: e.target.value })}
+              style={{ width: 180 }}
+            />
+            <InputNumber
+              placeholder="维度"
+              value={embeddingInput.dimensions}
+              onChange={(value) => setEmbeddingInput({ ...embeddingInput, dimensions: value || 1536 })}
+              style={{ width: 100 }}
+              min={1}
+            />
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAddEmbeddingModel}>
+              添加
+            </Button>
+          </Space>
+        </div>
+      </Modal>
 
       <Modal
         title={editingProvider ? '编辑提供商' : '新建提供商'}

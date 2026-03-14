@@ -72,6 +72,10 @@ git add .
 git commit -m "feat: 功能描述"
 git push origin feature/<功能名称>
 ```
+使用gh 命令 发起pr
+```bash
+gh pr create --title "feat: 功能描述" --body "实现了什么，与需求的对应关系，关键实现点，已知限制或待改进点"
+```
 
 #### 9. 提醒合并
 提醒人类进行分支合并操作。
