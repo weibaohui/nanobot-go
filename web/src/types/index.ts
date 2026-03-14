@@ -142,6 +142,7 @@ export interface CreateProviderRequest {
   api_base?: string;
   extra_headers?: Record<string, string>;
   supported_models?: ModelInfo[];
+  default_model?: string;
   is_default?: boolean;
   priority?: number;
 }
@@ -238,6 +239,7 @@ export interface ConversationRecord {
   id: number;
   trace_id: string;
   span_id: string;
+  parent_span_id?: string;
   session_key: string;
   event_type: string;
   role?: string;

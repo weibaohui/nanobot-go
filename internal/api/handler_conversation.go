@@ -4,9 +4,11 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/weibaohui/nanobot-go/internal/models"
+	"github.com/weibaohui/nanobot-go/internal/service/conversation"
 )
 
 // ConversationRecordService 对话记录服务接口
@@ -196,4 +198,103 @@ func (h *Handler) handleConversationByTrace(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, h.enrichConversationRecords(records))
+}
+
+// handleConversationStats 处理对话记录统计请求
+func (h *Handler) handleConversationStats(c *gin.Context) {
+	// 解析时间范围
+	startTimeStr := c.Query("start_time")
+	endTimeStr := c.Query("end_time")
+
+	var startTime, endTime time.Time
+	if startTimeStr != "" {
+		startTime, _ = time.Parse(time.RFC3339, startTimeStr)
+	}
+	if endTimeStr != "" {
+		endTime, _ = time.Parse(time.RFC3339, endTimeStr)
+	}
+
+	// 解析其他筛选条件
+	agentCodes := parseQueryArray(c.Query("agent_codes"))
+	channelCodes := parseQueryArray(c.Query("channel_codes"))
+	roles := parseQueryArray(c.Query("roles"))
+
+	// 如果没有指定时间范围，默认使用最近7天
+	if startTime.IsZero() {
+		startTime = time.Now().AddDate(0, 0, -7)
+	}
+	if endTime.IsZero() {
+		endTime = time.Now()
+	}
+
+	req := &conversation.StatsRequest{
+		StartTime:    startTime,
+		EndTime:      endTime,
+		AgentCodes:   agentCodes,
+		ChannelCodes: channelCodes,
+		Roles:        roles,
+	}
+
+	stats, err := h.conversationService.GetStats(c.Request.Context(), req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	// 填充 Agent 名称
+	for i := range stats.AgentDistribution {
+		if agent, err := h.agentService.GetAgentByCode(stats.AgentDistribution[i].Code); err == nil && agent != nil {
+			stats.AgentDistribution[i].Name = agent.Name
+		}
+	}
+
+	c.JSON(http.StatusOK, stats)
+}
+
+// parseQueryArray 解析逗号分隔的查询参数
+func parseQueryArray(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := make([]string, 0)
+	for _, p := range splitAndTrim(s, ",") {
+		if p != "" {
+			parts = append(parts, p)
+		}
+	}
+	return parts
+}
+
+// splitAndTrim 分割字符串并去除空白
+func splitAndTrim(s, sep string) []string {
+	parts := make([]string, 0)
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if i < len(s)-len(sep)+1 && s[i:i+len(sep)] == sep {
+			part := trimSpace(s[start:i])
+			parts = append(parts, part)
+			start = i + len(sep)
+			i += len(sep) - 1
+		}
+	}
+	if start < len(s) {
+		parts = append(parts, trimSpace(s[start:]))
+	}
+	return parts
+}
+
+// trimSpace 去除字符串两端空白
+func trimSpace(s string) string {
+	start := 0
+	end := len(s)
+	for start < end && (s[start] == ' ' || s[start] == '\t' || s[start] == '\n' || s[start] == '\r') {
+		start++
+	}
+	for end > start && (s[end-1] == ' ' || s[end-1] == '\t' || s[end-1] == '\n' || s[end-1] == '\r') {
+		end--
+	}
+	if start >= end {
+		return ""
+	}
+	return s[start:end]
 }

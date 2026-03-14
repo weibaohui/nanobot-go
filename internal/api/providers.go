@@ -29,6 +29,7 @@ type Providers struct {
 	ProviderService           ProviderService
 	CronJobService            CronJobService
 	ConversationRecordService ConversationRecordService
+	ConversationService       conversation.Service
 	StreamMemoryService       ms.StreamMemoryService
 	LongTermMemoryService     ms.LongTermMemoryService
 	SessionManager            SessionManager
@@ -56,6 +57,9 @@ func NewProviders(db *gorm.DB) *Providers {
 	streamMemoryService := ms.NewStreamMemoryService(db)
 	longTermMemoryService := ms.NewLongTermMemoryService(db)
 
+	// 创建新的对话服务（支持统计功能）
+	convService := conversation.NewService(convRepo)
+
 	return &Providers{
 		DB:                        db,
 		UserRepo:                  userRepo,
@@ -69,6 +73,7 @@ func NewProviders(db *gorm.DB) *Providers {
 		ProviderService:           providerService,
 		CronJobService:            cronJobService,
 		ConversationRecordService: conversationRecordService,
+		ConversationService:       convService,
 		StreamMemoryService:       streamMemoryService,
 		LongTermMemoryService:     longTermMemoryService,
 	}

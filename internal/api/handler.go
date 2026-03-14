@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/weibaohui/nanobot-go/internal/service"
+	"github.com/weibaohui/nanobot-go/internal/service/conversation"
 )
 
 // Handler API 处理器
@@ -17,6 +18,7 @@ type Handler struct {
 	providerService           ProviderService
 	cronJobService            CronJobService
 	conversationRecordService ConversationRecordService
+	conversationService       conversation.Service
 	streamMemoryService       StreamMemoryService
 	longTermMemoryService     LongTermMemoryService
 	sessionManager            SessionManager
@@ -31,6 +33,7 @@ func NewHandler(
 	providerService ProviderService,
 	cronJobService CronJobService,
 	conversationRecordService ConversationRecordService,
+	conversationService conversation.Service,
 	streamMemoryService StreamMemoryService,
 	longTermMemoryService LongTermMemoryService,
 	sessionManager SessionManager,
@@ -43,6 +46,7 @@ func NewHandler(
 		providerService:           providerService,
 		cronJobService:            cronJobService,
 		conversationRecordService: conversationRecordService,
+		conversationService:       conversationService,
 		streamMemoryService:       streamMemoryService,
 		longTermMemoryService:     longTermMemoryService,
 		sessionManager:            sessionManager,
@@ -151,6 +155,7 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 			conversations.DELETE("/:id", h.deleteConversationRecord)
 			conversations.GET("/session/:sessionKey", h.handleConversationBySession)
 			conversations.GET("/trace/:traceID", h.handleConversationByTrace)
+			conversations.GET("/stats", h.handleConversationStats)
 		}
 
 		// Short-term Memory API

@@ -164,3 +164,246 @@ func (r *repository) CreateBatch(ctx context.Context, records []models.Conversat
 func (r *repository) DeleteByID(ctx context.Context, id uint) error {
 	return r.db.WithContext(ctx).Delete(&models.ConversationRecord{}, id).Error
 }
+
+// buildStatsQuery 构建统计查询的基础条件
+func (r *repository) buildStatsQuery(ctx context.Context, startTime, endTime time.Time, agentCodes, channelCodes, roles []string) *gorm.DB {
+	query := r.db.WithContext(ctx).Model(&models.ConversationRecord{})
+
+	if !startTime.IsZero() {
+		query = query.Where("timestamp >= ?", startTime)
+	}
+	if !endTime.IsZero() {
+		query = query.Where("timestamp <= ?", endTime)
+	}
+	if len(agentCodes) > 0 {
+		query = query.Where("agent_code IN ?", agentCodes)
+	}
+	if len(channelCodes) > 0 {
+		query = query.Where("channel_code IN ?", channelCodes)
+	}
+	if len(roles) > 0 {
+		query = query.Where("role IN ?", roles)
+	}
+
+	return query
+}
+
+func (r *repository) GetTokenStats(ctx context.Context, startTime, endTime time.Time, agentCodes, channelCodes, roles []string) (*TokenStats, error) {
+	query := r.buildStatsQuery(ctx, startTime, endTime, agentCodes, channelCodes, roles)
+
+	var result struct {
+		TotalPromptTokens     int64
+		TotalCompletionTokens int64
+		TotalTokens           int64
+	}
+
+	if err := query.Select(
+		"COALESCE(SUM(prompt_tokens), 0) as total_prompt_tokens, " +
+			"COALESCE(SUM(completion_tokens), 0) as total_completion_tokens, " +
+			"COALESCE(SUM(total_tokens), 0) as total_tokens",
+	).Scan(&result).Error; err != nil {
+		return nil, err
+	}
+
+	stats := &TokenStats{
+		TotalPromptTokens:     result.TotalPromptTokens,
+		TotalCompletionTokens: result.TotalCompletionTokens,
+		TotalTokens:           result.TotalTokens,
+		DailyTrends:           []DailyStat{},
+	}
+
+	// 查询每日趋势（最近30天）
+	type dailyResult struct {
+		Date           string
+		PromptTokens   int64
+		CompleteTokens int64
+		TotalTokens    int64
+	}
+
+	var dailyResults []dailyResult
+	dailyQuery := r.buildStatsQuery(ctx, startTime, endTime, agentCodes, channelCodes, roles)
+	if err := dailyQuery.Select(
+		"date(timestamp) as date, " +
+			"COALESCE(SUM(prompt_tokens), 0) as prompt_tokens, " +
+			"COALESCE(SUM(completion_tokens), 0) as complete_tokens, " +
+			"COALESCE(SUM(total_tokens), 0) as total_tokens",
+	).Group("date(timestamp)").Order("date(timestamp) ASC").Scan(&dailyResults).Error; err != nil {
+		return nil, err
+	}
+
+	for _, d := range dailyResults {
+		stats.DailyTrends = append(stats.DailyTrends, DailyStat{
+			Date:           d.Date,
+			PromptTokens:   d.PromptTokens,
+			CompleteTokens: d.CompleteTokens,
+			TotalTokens:    d.TotalTokens,
+		})
+	}
+
+	return stats, nil
+}
+
+func (r *repository) GetAgentDistribution(ctx context.Context, startTime, endTime time.Time, agentCodes, channelCodes, roles []string) ([]AgentDistribution, error) {
+	query := r.buildStatsQuery(ctx, startTime, endTime, agentCodes, channelCodes, roles)
+
+	type result struct {
+		AgentCode string
+		Count     int64
+		Tokens    int64
+	}
+
+	var results []result
+	if err := query.Select(
+		"agent_code, " +
+			"COUNT(*) as count, " +
+			"COALESCE(SUM(total_tokens), 0) as tokens",
+	).Group("agent_code").Order("count DESC").Scan(&results).Error; err != nil {
+		return nil, err
+	}
+
+	distributions := make([]AgentDistribution, 0, len(results))
+	for _, r := range results {
+		distributions = append(distributions, AgentDistribution{
+			Code:   r.AgentCode,
+			Name:   r.AgentCode, // 名称由上层填充
+			Count:  r.Count,
+			Tokens: r.Tokens,
+		})
+	}
+
+	return distributions, nil
+}
+
+func (r *repository) GetChannelDistribution(ctx context.Context, startTime, endTime time.Time, agentCodes, channelCodes, roles []string) ([]ChannelDistribution, error) {
+	query := r.buildStatsQuery(ctx, startTime, endTime, agentCodes, channelCodes, roles)
+
+	type result struct {
+		ChannelType string
+		Count       int64
+	}
+
+	var results []result
+	if err := query.Select(
+		"channel_type, " +
+			"COUNT(*) as count",
+	).Group("channel_type").Order("count DESC").Scan(&results).Error; err != nil {
+		return nil, err
+	}
+
+	distributions := make([]ChannelDistribution, 0, len(results))
+	for _, r := range results {
+		distributions = append(distributions, ChannelDistribution{
+			Type:  r.ChannelType,
+			Count: r.Count,
+		})
+	}
+
+	return distributions, nil
+}
+
+func (r *repository) GetRoleDistribution(ctx context.Context, startTime, endTime time.Time, agentCodes, channelCodes, roles []string) ([]RoleDistribution, error) {
+	query := r.buildStatsQuery(ctx, startTime, endTime, agentCodes, channelCodes, roles)
+
+	type result struct {
+		Role  string
+		Count int64
+	}
+
+	var results []result
+	if err := query.Select(
+		"role, " +
+			"COUNT(*) as count",
+	).Group("role").Order("count DESC").Scan(&results).Error; err != nil {
+		return nil, err
+	}
+
+	distributions := make([]RoleDistribution, 0, len(results))
+	for _, r := range results {
+		distributions = append(distributions, RoleDistribution{
+			Role:  r.Role,
+			Count: r.Count,
+		})
+	}
+
+	return distributions, nil
+}
+
+func (r *repository) GetSessionStats(ctx context.Context, startTime, endTime time.Time, agentCodes, channelCodes, roles []string) (*SessionStats, error) {
+	query := r.buildStatsQuery(ctx, startTime, endTime, agentCodes, channelCodes, roles)
+
+	var totalSessions int64
+	if err := query.Select("COUNT(DISTINCT session_key)").Scan(&totalSessions).Error; err != nil {
+		return nil, err
+	}
+
+	// 计算平均消息数
+	type sessionMsgResult struct {
+		SessionKey string
+		MsgCount   int64
+	}
+
+	var sessionMsgs []sessionMsgResult
+	msgQuery := r.buildStatsQuery(ctx, startTime, endTime, agentCodes, channelCodes, roles)
+	if err := msgQuery.Select(
+		"session_key, " +
+			"COUNT(*) as msg_count",
+	).Group("session_key").Scan(&sessionMsgs).Error; err != nil {
+		return nil, err
+	}
+
+	var totalMessages int64
+	for _, s := range sessionMsgs {
+		totalMessages += s.MsgCount
+	}
+
+	avgMessages := float64(0)
+	if totalSessions > 0 {
+		avgMessages = float64(totalMessages) / float64(totalSessions)
+	}
+
+	// 计算平均响应时间（assistant 消息的平均时间差）
+	// 简化为：同一会话中，assistant 消息与前一条消息的时间差
+	type timeDiffResult struct {
+		SessionKey string
+		Timestamp  time.Time
+		Role       string
+	}
+
+	var records []timeDiffResult
+	timeQuery := r.buildStatsQuery(ctx, startTime, endTime, agentCodes, channelCodes, roles)
+	if err := timeQuery.Select("session_key, timestamp, role").Order("session_key, timestamp ASC").Scan(&records).Error; err != nil {
+		return nil, err
+	}
+
+	var totalResponseTime int64
+	var responseCount int64
+
+	var lastTime time.Time
+	var lastSession string
+	for _, rec := range records {
+		if rec.SessionKey != lastSession {
+			lastSession = rec.SessionKey
+			lastTime = rec.Timestamp
+			continue
+		}
+		if rec.Role == "assistant" {
+			diff := rec.Timestamp.Sub(lastTime).Milliseconds()
+			if diff > 0 && diff < 300000 { // 排除超过5分钟的异常值
+				totalResponseTime += diff
+				responseCount++
+			}
+		}
+		lastTime = rec.Timestamp
+	}
+
+	avgResponseTime := float64(0)
+	if responseCount > 0 {
+		avgResponseTime = float64(totalResponseTime) / float64(responseCount)
+	}
+
+	return &SessionStats{
+		TotalSessions:   totalSessions,
+		AvgMessages:     avgMessages,
+		AvgResponseTime: avgResponseTime,
+	}, nil
+}
