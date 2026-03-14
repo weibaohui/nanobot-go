@@ -92,6 +92,16 @@ func createHookCallback(hookSystem *hooks.HookManager, logger *zap.Logger) func(
 		if enableThinking, ok := data["enable_thinking_process"].(bool); ok {
 			ctx = trace.WithEnableThinkingProcess(ctx, enableThinking)
 		}
+		// 从 data 中提取 Code 字段并设置到 context
+		if userCode, ok := data["user_code"].(string); ok && userCode != "" {
+			ctx = trace.WithUserCode(ctx, userCode)
+		}
+		if agentCode, ok := data["agent_code"].(string); ok && agentCode != "" {
+			ctx = trace.WithAgentCode(ctx, agentCode)
+		}
+		if channelCode, ok := data["channel_code"].(string); ok && channelCode != "" {
+			ctx = trace.WithChannelCode(ctx, channelCode)
+		}
 
 		var sessionKey, channel string
 		if sk, ok := data["session_key"].(string); ok {
