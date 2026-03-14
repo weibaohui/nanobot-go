@@ -85,7 +85,7 @@ const ConversationStats: React.FC = () => {
         start_time: start.toISOString(),
         end_time: end.toISOString(),
       });
-      setStats((res as any)?.data as StatsData);
+      setStats(res as StatsData);
     } catch (error) {
       message.error('获取统计数据失败');
     } finally {
