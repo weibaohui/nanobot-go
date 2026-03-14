@@ -65,16 +65,20 @@ const Conversations: React.FC = () => {
   const columns = [
     { title: 'ID', dataIndex: 'id', width: 60 },
     {
-      title: 'Agent Code',
-      dataIndex: 'agent_code',
+      title: 'Agent',
+      dataIndex: 'agent_name',
       ellipsis: true,
-      render: (code: string) => code || '-',
+      render: (name: string, record: ConversationRecord) => (
+        <span title={record.agent_code}>{name || record.agent_code || '-'}</span>
+      ),
     },
     {
-      title: 'Channel Code',
-      dataIndex: 'channel_code',
+      title: 'Channel',
+      dataIndex: 'channel_name',
       ellipsis: true,
-      render: (code: string) => code || '-',
+      render: (name: string, record: ConversationRecord) => (
+        <span title={record.channel_code}>{name || record.channel_code || '-'}</span>
+      ),
     },
     {
       title: '角色',
@@ -159,8 +163,8 @@ const Conversations: React.FC = () => {
           <Descriptions column={1} bordered>
             <Descriptions.Item label="ID">{selectedRecord.id}</Descriptions.Item>
             <Descriptions.Item label="User Code">{selectedRecord.user_code || '-'}</Descriptions.Item>
-            <Descriptions.Item label="Agent Code">{selectedRecord.agent_code || '-'}</Descriptions.Item>
-            <Descriptions.Item label="Channel Code">{selectedRecord.channel_code || '-'}</Descriptions.Item>
+            <Descriptions.Item label="Agent">{selectedRecord.agent_name || selectedRecord.agent_code || '-'}</Descriptions.Item>
+            <Descriptions.Item label="Channel">{selectedRecord.channel_name || selectedRecord.channel_code || '-'}</Descriptions.Item>
             <Descriptions.Item label="Event Type">{selectedRecord.event_type}</Descriptions.Item>
             <Descriptions.Item label="角色">
               <Tag color={getRoleColor(selectedRecord.role)}>{selectedRecord.role}</Tag>

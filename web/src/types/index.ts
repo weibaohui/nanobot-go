@@ -239,6 +239,8 @@ export interface ConversationRecord {
   agent_code?: string;
   channel_code?: string;
   channel_type?: string;
+  agent_name?: string;
+  channel_name?: string;
   timestamp: string;
 }
 

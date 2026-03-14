@@ -20,6 +20,56 @@ type ConversationRecordService interface {
 	GetByTraceID(ctx context.Context, traceID string) ([]models.ConversationRecord, error)
 }
 
+// ConversationRecordResponse 对话记录响应（包含名称信息）
+type ConversationRecordResponse struct {
+	models.ConversationRecord
+	AgentName   string `json:"agent_name,omitempty"`
+	ChannelName string `json:"channel_name,omitempty"`
+}
+
+// enrichConversationRecords 为对话记录添加 Agent 和 Channel 名称
+func (h *Handler) enrichConversationRecords(records []models.ConversationRecord) []ConversationRecordResponse {
+	// 收集唯一的 Code
+	agentCodes := make(map[string]bool)
+	channelCodes := make(map[string]bool)
+	for _, r := range records {
+		if r.AgentCode != "" {
+			agentCodes[r.AgentCode] = true
+		}
+		if r.ChannelCode != "" {
+			channelCodes[r.ChannelCode] = true
+		}
+	}
+
+	// 批量查询名称
+	agentNames := make(map[string]string)
+	channelNames := make(map[string]string)
+
+	for code := range agentCodes {
+		if agent, err := h.agentService.GetAgentByCode(code); err == nil && agent != nil {
+			agentNames[code] = agent.Name
+		}
+	}
+
+	for code := range channelCodes {
+		if channel, err := h.channelService.GetChannelByCode(code); err == nil && channel != nil {
+			channelNames[code] = channel.Name
+		}
+	}
+
+	// 组装响应
+	result := make([]ConversationRecordResponse, len(records))
+	for i, r := range records {
+		result[i] = ConversationRecordResponse{
+			ConversationRecord: r,
+			AgentName:          agentNames[r.AgentCode],
+			ChannelName:        channelNames[r.ChannelCode],
+		}
+	}
+
+	return result
+}
+
 // === Conversation Record Handlers ===
 
 func (h *Handler) handleConversationRecords(c *gin.Context) {
@@ -40,7 +90,7 @@ func (h *Handler) handleConversationRecords(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, ListResponse{
-		Items:    records,
+		Items:    h.enrichConversationRecords(records),
 		Total:    total,
 		Page:     offset/limit + 1,
 		PageSize: limit,
@@ -129,7 +179,7 @@ func (h *Handler) handleConversationBySession(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, ListResponse{
-		Items:    records,
+		Items:    h.enrichConversationRecords(records),
 		Total:    total,
 		Page:     offset/limit + 1,
 		PageSize: limit,
@@ -145,5 +195,5 @@ func (h *Handler) handleConversationByTrace(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, records)
+	c.JSON(http.StatusOK, h.enrichConversationRecords(records))
 }
