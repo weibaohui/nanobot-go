@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -27,6 +28,10 @@ type LLMProvider struct {
 	Priority     int    `gorm:"default:0" json:"priority"`                // 优先级 (数值越大优先级越高，auto模式下使用)
 	AutoMerge    bool   `gorm:"default:true" json:"auto_merge"`           // 是否自动合并从API获取的模型列表到supported_models
 
+	// 嵌入模型配置（新增）
+	EmbeddingModels       string `gorm:"type:text" json:"embedding_models,omitempty"`       // JSON数组，包含模型ID、名称、维度
+	DefaultEmbeddingModel string `gorm:"type:text" json:"default_embedding_model,omitempty"` // 默认嵌入模型ID
+
 	IsActive  bool      `gorm:"default:true" json:"is_active"`
 	CreatedAt time.Time `gorm:"type:datetime;default:CURRENT_TIMESTAMP" json:"created_at"`
 	UpdatedAt time.Time `gorm:"type:datetime;default:CURRENT_TIMESTAMP" json:"updated_at"`
@@ -42,6 +47,21 @@ type ModelInfo struct {
 	ID        string `json:"id"`                   // 模型ID
 	Name      string `json:"name"`                 // 模型名称
 	MaxTokens int    `json:"max_tokens,omitempty"` // 最大Token数
+}
+
+// EmbeddingModelInfo 嵌入模型信息
+type EmbeddingModelInfo struct {
+	ID         string `json:"id"`         // 模型ID
+	Name       string `json:"name"`       // 模型名称
+	Dimensions int    `json:"dimensions"` // 向量维度
+}
+
+// EmbeddingModelConfig 嵌入模型完整配置
+type EmbeddingModelConfig struct {
+	APIKey     string
+	BaseURL    string
+	Model      string
+	Dimensions int
 }
 
 // GetSupportedModels 获取支持的模型列表
@@ -86,4 +106,67 @@ func (p *LLMProvider) SetExtraHeaders(headers map[string]string) error {
 	}
 	p.ExtraHeaders = string(data)
 	return nil
+}
+
+// GetEmbeddingModels 获取嵌入模型列表
+func (p *LLMProvider) GetEmbeddingModels() []EmbeddingModelInfo {
+	if p.EmbeddingModels == "" || p.EmbeddingModels == "null" {
+		return nil
+	}
+	var models []EmbeddingModelInfo
+	if err := json.Unmarshal([]byte(p.EmbeddingModels), &models); err != nil {
+		return nil
+	}
+	return models
+}
+
+// SetEmbeddingModels 设置嵌入模型列表
+func (p *LLMProvider) SetEmbeddingModels(models []EmbeddingModelInfo) error {
+	data, err := json.Marshal(models)
+	if err != nil {
+		return err
+	}
+	p.EmbeddingModels = string(data)
+	return nil
+}
+
+// GetEmbeddingConfig 获取指定嵌入模型的完整配置
+func (p *LLMProvider) GetEmbeddingConfig(modelID string) (*EmbeddingModelConfig, error) {
+	models := p.GetEmbeddingModels()
+	if len(models) == 0 {
+		return nil, fmt.Errorf("no embedding models configured")
+	}
+
+	// 查找指定模型
+	for _, m := range models {
+		if m.ID == modelID {
+			return &EmbeddingModelConfig{
+				APIKey:     p.APIKey,
+				BaseURL:    p.APIBase,
+				Model:      m.ID,
+				Dimensions: m.Dimensions,
+			}, nil
+		}
+	}
+
+	return nil, fmt.Errorf("embedding model %s not found", modelID)
+}
+
+// GetDefaultEmbeddingConfig 获取默认嵌入模型配置
+func (p *LLMProvider) GetDefaultEmbeddingConfig() (*EmbeddingModelConfig, error) {
+	modelID := p.DefaultEmbeddingModel
+	if modelID == "" {
+		// 使用第一个嵌入模型作为默认
+		models := p.GetEmbeddingModels()
+		if len(models) == 0 {
+			return nil, fmt.Errorf("no embedding models configured")
+		}
+		modelID = models[0].ID
+	}
+	return p.GetEmbeddingConfig(modelID)
+}
+
+// HasEmbeddingModels 检查是否配置了嵌入模型
+func (p *LLMProvider) HasEmbeddingModels() bool {
+	return p.EmbeddingModels != "" && p.EmbeddingModels != "null" && p.EmbeddingModels != "[]"
 }

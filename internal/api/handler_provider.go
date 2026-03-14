@@ -132,3 +132,74 @@ func (h *Handler) testProviderConnection(c *gin.Context) {
 
 	c.JSON(http.StatusOK, result)
 }
+
+// === Embedding Model Handlers ===
+
+// UpdateEmbeddingModelsRequest 更新嵌入模型请求
+type UpdateEmbeddingModelsRequest struct {
+	EmbeddingModels       []models.EmbeddingModelInfo `json:"embedding_models"`
+	DefaultEmbeddingModel string                      `json:"default_embedding_model"`
+}
+
+// updateProviderEmbeddingModels 更新 Provider 的嵌入模型配置
+func (h *Handler) updateProviderEmbeddingModels(c *gin.Context) {
+	id, ok := parseID(c, "id")
+	if !ok {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid id"})
+		return
+	}
+
+	var req UpdateEmbeddingModelsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	// 获取 Provider
+	provider, err := h.providerService.Get(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "provider not found"})
+		return
+	}
+
+	// 设置嵌入模型
+	if err := provider.SetEmbeddingModels(req.EmbeddingModels); err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+	provider.DefaultEmbeddingModel = req.DefaultEmbeddingModel
+
+	// 保存
+	updateReq := service.UpdateProviderRequest{
+		EmbeddingModels:       provider.EmbeddingModels,
+		DefaultEmbeddingModel: provider.DefaultEmbeddingModel,
+	}
+	if err := h.providerService.Update(c.Request.Context(), id, updateReq); err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{Message: "嵌入模型配置更新成功"})
+}
+
+// getProviderEmbeddingModels 获取 Provider 的嵌入模型配置
+func (h *Handler) getProviderEmbeddingModels(c *gin.Context) {
+	id, ok := parseID(c, "id")
+	if !ok {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid id"})
+		return
+	}
+
+	// 获取 Provider
+	provider, err := h.providerService.Get(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "provider not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"embedding_models":        provider.GetEmbeddingModels(),
+		"default_embedding_model": provider.DefaultEmbeddingModel,
+		"has_embedding_models":    provider.HasEmbeddingModels(),
+	})
+}

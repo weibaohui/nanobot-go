@@ -44,13 +44,13 @@ type SummarizationConfig struct {
 	LongTermPrompt     string  `json:"longTermPrompt"`     // 长期记忆提炼提示词
 }
 
-// EmbeddingConfig 向量化模型配置
+// EmbeddingConfig 向量化模型配置（简化后）
+// APIKey 和 BaseURL 现在从 LLMProvider 表读取
+// 如需指定特定模型，可设置 Model 字段，否则使用数据库中第一个启用的嵌入模型
 type EmbeddingConfig struct {
 	Enabled    bool   `json:"enabled"`    // 是否启用向量化
-	Model      string `json:"model"`      // 模型名称
-	APIKey     string `json:"apiKey"`     // API Key
-	BaseURL    string `json:"baseURL"`    // API Base URL
-	Dimensions int    `json:"dimensions"` // 向量维度
+	Model      string `json:"model"`      // 默认模型（可选，留空则从数据库读取）
+	Dimensions int    `json:"dimensions"` // 维度（可选，从数据库读取）
 }
 
 // MemoryScheduledConfig 记忆定时任务配置

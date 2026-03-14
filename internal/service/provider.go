@@ -24,16 +24,19 @@ type CreateProviderRequest struct {
 
 // UpdateProviderRequest 更新 Provider 请求
 type UpdateProviderRequest struct {
-	ProviderKey      string       `json:"provider_key,omitempty"`
-	ProviderName     string       `json:"provider_name,omitempty"`
-	APIKey           string       `json:"api_key,omitempty"`
-	APIBase          string       `json:"api_base,omitempty"`
-	ExtraHeaders     string       `json:"extra_headers,omitempty"`
-	SupportedModels  []ModelInfo  `json:"supported_models,omitempty"`
-	DefaultModel     string       `json:"default_model,omitempty"`
-	IsDefault        *bool        `json:"is_default,omitempty"`
-	Priority         *int         `json:"priority,omitempty"`
-	IsActive         *bool        `json:"is_active,omitempty"`
+	ProviderKey           string       `json:"provider_key,omitempty"`
+	ProviderName          string       `json:"provider_name,omitempty"`
+	APIKey                string       `json:"api_key,omitempty"`
+	APIBase               string       `json:"api_base,omitempty"`
+	ExtraHeaders          string       `json:"extra_headers,omitempty"`
+	SupportedModels       []ModelInfo  `json:"supported_models,omitempty"`
+	DefaultModel          string       `json:"default_model,omitempty"`
+	IsDefault             *bool        `json:"is_default,omitempty"`
+	Priority              *int         `json:"priority,omitempty"`
+	IsActive              *bool        `json:"is_active,omitempty"`
+	// 嵌入模型配置字段
+	EmbeddingModels       string `json:"embedding_models,omitempty"`        // JSON字符串
+	DefaultEmbeddingModel string `json:"default_embedding_model,omitempty"`
 }
 
 // ModelInfo 模型信息
@@ -197,6 +200,13 @@ func (s *providerService) Update(ctx context.Context, id uint, req UpdateProvide
 	}
 	if req.IsActive != nil {
 		updates["is_active"] = *req.IsActive
+	}
+	// 嵌入模型配置字段（允许设置为空字符串）
+	if req.EmbeddingModels != "" {
+		updates["embedding_models"] = req.EmbeddingModels
+	}
+	if req.DefaultEmbeddingModel != "" {
+		updates["default_embedding_model"] = req.DefaultEmbeddingModel
 	}
 
 	if len(updates) == 0 {

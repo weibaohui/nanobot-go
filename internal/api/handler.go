@@ -119,6 +119,8 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 			providers.PUT("/:id", h.updateProvider)
 			providers.DELETE("/:id", h.deleteProvider)
 			providers.POST("/:id/test", h.testProviderConnection)
+			providers.GET("/:id/embedding", h.getProviderEmbeddingModels)
+			providers.PUT("/:id/embedding", h.updateProviderEmbeddingModels)
 		}
 
 		// Cron Job API
