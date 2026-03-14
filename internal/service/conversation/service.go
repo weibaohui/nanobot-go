@@ -195,9 +195,9 @@ func (s *service) recordToDTO(record *models.ConversationRecord) ConversationDTO
 		Role:         record.Role,
 		Content:      record.Content,
 		CreatedAt:    record.CreatedAt,
-		UserID:       record.UserID,
-		AgentID:      record.AgentID,
-		ChannelID:    record.ChannelID,
+		UserCode:     record.UserCode,
+		AgentCode:    record.AgentCode,
+		ChannelCode:  record.ChannelCode,
 		ChannelType:  record.ChannelType,
 	}
 
@@ -226,9 +226,9 @@ func (s *service) dtoToRecord(dto *ConversationDTO) models.ConversationRecord {
 		Role:         dto.Role,
 		Content:      dto.Content,
 		CreatedAt:    dto.CreatedAt,
-		UserID:       dto.UserID,
-		AgentID:      dto.AgentID,
-		ChannelID:    dto.ChannelID,
+		UserCode:     dto.UserCode,
+		AgentCode:    dto.AgentCode,
+		ChannelCode:  dto.ChannelCode,
 		ChannelType:  dto.ChannelType,
 	}
 

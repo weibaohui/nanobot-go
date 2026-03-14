@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { ConfigProvider } from 'antd';
+import { ConfigProvider, Spin } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import MainLayout from './layouts/MainLayout';
 import Dashboard from './pages/Dashboard';
@@ -13,15 +13,41 @@ import Conversations from './pages/Conversations';
 import StreamMemories from './pages/StreamMemories';
 import LongTermMemories from './pages/LongTermMemories';
 import Login from './pages/Login';
-import { isAuthenticated } from './api';
+import { isAuthenticated, authApi, setCurrentUser, getCurrentUserCode } from './api';
 
 // 路由守卫组件
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const authenticated = isAuthenticated();
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // 如果已登录但没有用户信息，获取当前用户信息
+    if (authenticated && !getCurrentUserCode()) {
+      authApi.me().then((res: any) => {
+        if (res.data) {
+          setCurrentUser(res.data);
+        }
+      }).catch(() => {
+        // 获取失败不处理，后续请求会因为没有 user_code 而失败
+      }).finally(() => {
+        setLoading(false);
+      });
+    } else {
+      setLoading(false);
+    }
+  }, [authenticated]);
 
   if (!authenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (loading) {
+    return (
+      <div style={{ height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <Spin size="large" />
+      </div>
+    );
   }
 
   return <>{children}</>;

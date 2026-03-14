@@ -91,9 +91,9 @@ func (a *RecordServiceAdapter) Update(ctx context.Context, id uint, record *mode
 		return err
 	}
 	// 更新字段
-	existing.UserID = record.UserID
-	existing.AgentID = record.AgentID
-	existing.ChannelID = record.ChannelID
+	existing.UserCode = record.UserCode
+	existing.AgentCode = record.AgentCode
+	existing.ChannelCode = record.ChannelCode
 	existing.SessionKey = record.SessionKey
 	existing.TraceID = record.TraceID
 	existing.SpanID = record.SpanID

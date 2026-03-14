@@ -5,10 +5,21 @@ import (
 	"fmt"
 
 	"github.com/weibaohui/nanobot-go/internal/models"
+	"github.com/weibaohui/nanobot-go/internal/utils/codeutil"
 )
 
 // CreateAgent 创建 Agent
-func (s *service) CreateAgent(userID uint, req CreateAgentRequest) (*models.Agent, error) {
+func (s *service) CreateAgent(userCode string, req CreateAgentRequest) (*models.Agent, error) {
+	// 生成唯一 AgentCode
+	agentCode, err := codeutil.GenerateUniqueCodeWithRetry(
+		s.codeService.GenerateAgentCode,
+		s.agentRepo.CheckAgentCodeExists,
+		3,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate agent code: %w", err)
+	}
+
 	// 序列化技能列表
 	skillsJSON, err := json.Marshal(req.SkillsList)
 	if err != nil {
@@ -36,7 +47,8 @@ func (s *service) CreateAgent(userID uint, req CreateAgentRequest) (*models.Agen
 	}
 
 	agent := &models.Agent{
-		UserID:                userID,
+		UserCode:              userCode,
+		AgentCode:             agentCode,
 		Name:                  req.Name,
 		Description:           req.Description,
 		IdentityContent:       req.IdentityContent,
@@ -67,9 +79,14 @@ func (s *service) GetAgent(id uint) (*models.Agent, error) {
 	return s.agentRepo.GetByID(id)
 }
 
+// GetAgentByCode 根据 Code 获取 Agent
+func (s *service) GetAgentByCode(code string) (*models.Agent, error) {
+	return s.agentRepo.GetByAgentCode(code)
+}
+
 // GetUserAgents 获取用户的所有 Agent
-func (s *service) GetUserAgents(userID uint) ([]models.Agent, error) {
-	return s.agentRepo.GetByUserID(userID)
+func (s *service) GetUserAgents(userCode string) ([]models.Agent, error) {
+	return s.agentRepo.GetByUserCode(userCode)
 }
 
 // UpdateAgent 更新 Agent

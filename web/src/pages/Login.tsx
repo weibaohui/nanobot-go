@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Form, Input, Button, Card, message, Typography } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { authApi, setToken } from '../api';
+import { authApi, setToken, setCurrentUser } from '../api';
 
 const { Title } = Typography;
 
@@ -16,6 +16,9 @@ const Login: React.FC = () => {
       const res = await authApi.login(values) as any;
       if (res.token) {
         setToken(res.token);
+        if (res.user) {
+          setCurrentUser(res.user);
+        }
         message.success('登录成功');
         navigate('/');
       } else {

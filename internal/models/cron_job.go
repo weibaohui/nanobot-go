@@ -5,8 +5,8 @@ import "time"
 // CronJob 定时任务模型
 type CronJob struct {
 	ID          uint      `gorm:"primarykey" json:"id"`
-	UserID      uint      `gorm:"not null;index" json:"user_id"`
-	ChannelID   uint      `gorm:"not null;index" json:"channel_id"`
+	UserCode    string    `gorm:"type:varchar(16);index" json:"user_code"`
+	ChannelCode string    `gorm:"type:varchar(16);index" json:"channel_code"`
 
 	// 任务标识
 	Name        string    `gorm:"type:text;not null" json:"name"`
@@ -23,8 +23,8 @@ type CronJob struct {
 	ModelName         string `gorm:"type:text" json:"model_name,omitempty"`
 
 	// 目标配置
-	TargetChannelID *uint  `gorm:"index" json:"target_channel_id,omitempty"`
-	TargetUserID    string `gorm:"type:text" json:"target_user_id,omitempty"`
+	TargetChannelCode string `gorm:"type:varchar(16)" json:"target_channel_code,omitempty"`
+	TargetUserCode    string `gorm:"type:varchar(16)" json:"target_user_code,omitempty"`
 
 	// 状态
 	IsActive     bool       `gorm:"default:true" json:"is_active"`
@@ -37,10 +37,6 @@ type CronJob struct {
 
 	CreatedAt time.Time `gorm:"type:datetime;default:CURRENT_TIMESTAMP" json:"created_at"`
 	UpdatedAt time.Time `gorm:"type:datetime;default:CURRENT_TIMESTAMP" json:"updated_at"`
-
-	// 关联
-	User    User     `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Channel Channel  `gorm:"foreignKey:ChannelID" json:"channel,omitempty"`
 }
 
 // TableName 指定表名

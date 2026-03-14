@@ -12,6 +12,10 @@ export const usersApi = {
   get: (id: number) =>
     client.get<any, ApiResponse<User>>(`/users/${id}`),
 
+  // 根据 Code 获取用户
+  getByCode: (code: string) =>
+    client.get<any, ApiResponse<User>>(`/users/code/${code}`),
+
   // 创建用户
   create: (data: CreateUserRequest) =>
     client.post<any, ApiResponse<User>>('/users', data),

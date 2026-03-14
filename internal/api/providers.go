@@ -3,6 +3,7 @@ package api
 import (
 	"github.com/weibaohui/nanobot-go/internal/repository"
 	"github.com/weibaohui/nanobot-go/internal/service"
+	"github.com/weibaohui/nanobot-go/internal/service/codelookup"
 	"github.com/weibaohui/nanobot-go/internal/service/conversation"
 	ms "github.com/weibaohui/nanobot-go/internal/service/memory"
 	"gorm.io/gorm"
@@ -38,11 +39,12 @@ func NewProviders(db *gorm.DB) *Providers {
 	// 创建服务
 	codeService := service.NewCodeService()
 	userService := service.NewUserService(userRepo, agentRepo, codeService)
-	agentService := service.NewAgentService(agentRepo)
-	channelService := service.NewChannelService(channelRepo, agentRepo)
-	sessionService := service.NewSessionService(sessionRepo)
-	providerService := service.NewProviderService(db)
-	cronJobService := service.NewCronJobService(db)
+	agentService := service.NewAgentService(agentRepo, codeService)
+	channelService := service.NewChannelService(channelRepo, agentRepo, codeService)
+	codeLookupService := codelookup.NewService(userRepo, channelRepo, agentRepo)
+	sessionService := service.NewSessionService(sessionRepo, codeLookupService)
+	providerService := service.NewProviderService(db, codeLookupService)
+	cronJobService := service.NewCronJobService(db, codeLookupService)
 	conversationRecordService := conversation.NewRecordServiceAdapter(convRepo)
 	streamMemoryService := ms.NewStreamMemoryService(db)
 	longTermMemoryService := ms.NewLongTermMemoryService(db)

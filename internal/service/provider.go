@@ -54,34 +54,35 @@ type LLMConfig struct {
 
 // ProviderService Provider 服务接口
 type ProviderService interface {
-	List(ctx context.Context, userID uint, offset int, limit int) ([]models.LLMProvider, int64, error)
+	List(ctx context.Context, userCode string, offset int, limit int) ([]models.LLMProvider, int64, error)
 	Get(ctx context.Context, id uint) (*models.LLMProvider, error)
-	Create(ctx context.Context, userID uint, req CreateProviderRequest) (*models.LLMProvider, error)
+	Create(ctx context.Context, userCode string, req CreateProviderRequest) (*models.LLMProvider, error)
 	Update(ctx context.Context, id uint, req UpdateProviderRequest) error
 	Delete(ctx context.Context, id uint) error
-	SetDefault(ctx context.Context, userID uint, providerID uint) error
+	SetDefault(ctx context.Context, userCode string, providerID uint) error
 	GetModelConfig(ctx context.Context, id uint) (interface{}, error)
 	UpdateModelConfig(ctx context.Context, id uint, config map[string]interface{}) error
 	TestConnection(ctx context.Context, id uint) (map[string]interface{}, error)
-	GetLLMConfig(ctx context.Context, userID uint) (*LLMConfig, error)
+	GetLLMConfig(ctx context.Context, userCode string) (*LLMConfig, error)
 }
 
 // providerService Provider 服务实现
 type providerService struct {
-	db *gorm.DB
+	db        *gorm.DB
+	lookupSvc CodeLookupService
 }
 
 // NewProviderService 创建 Provider 服务
-func NewProviderService(db *gorm.DB) ProviderService {
-	return &providerService{db: db}
+func NewProviderService(db *gorm.DB, lookupSvc CodeLookupService) ProviderService {
+	return &providerService{db: db, lookupSvc: lookupSvc}
 }
 
 // List 获取 Provider 列表
-func (s *providerService) List(ctx context.Context, userID uint, offset int, limit int) ([]models.LLMProvider, int64, error) {
+func (s *providerService) List(ctx context.Context, userCode string, offset int, limit int) ([]models.LLMProvider, int64, error) {
 	var providers []models.LLMProvider
 	var total int64
 
-	query := s.db.WithContext(ctx).Where("user_id = ?", userID)
+	query := s.db.WithContext(ctx).Where("user_code = ?", userCode)
 
 	if err := query.Model(&models.LLMProvider{}).Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -104,7 +105,13 @@ func (s *providerService) Get(ctx context.Context, id uint) (*models.LLMProvider
 }
 
 // Create 创建 Provider
-func (s *providerService) Create(ctx context.Context, userID uint, req CreateProviderRequest) (*models.LLMProvider, error) {
+func (s *providerService) Create(ctx context.Context, userCode string, req CreateProviderRequest) (*models.LLMProvider, error) {
+	// 获取用户
+	user, err := s.lookupSvc.GetUserByCode(userCode)
+	if err != nil {
+		return nil, fmt.Errorf("获取用户信息失败: %w", err)
+	}
+
 	// 序列化支持的模型列表
 	var supportedModelsJSON string
 	if req.SupportedModels != nil {
@@ -116,7 +123,7 @@ func (s *providerService) Create(ctx context.Context, userID uint, req CreatePro
 	}
 
 	provider := &models.LLMProvider{
-		UserID:          userID,
+		UserCode:        user.UserCode,
 		ProviderKey:      req.ProviderKey,
 		ProviderName:     req.ProviderName,
 		APIKey:          req.APIKey,
@@ -131,7 +138,7 @@ func (s *providerService) Create(ctx context.Context, userID uint, req CreatePro
 	if req.IsDefault {
 		// 清除其他默认标记
 		s.db.WithContext(ctx).Model(&models.LLMProvider{}).
-			Where("user_id = ? AND is_default = ?", userID, true).
+			Where("user_code = ? AND is_default = ?", userCode, true).
 			Update("is_default", false)
 	}
 
@@ -180,7 +187,7 @@ func (s *providerService) Update(ctx context.Context, id uint, req UpdateProvide
 		if *req.IsDefault {
 			// 清除其他默认标记
 			s.db.WithContext(ctx).Model(&models.LLMProvider{}).
-				Where("user_id = ? AND id != ? AND is_default = ?", provider.UserID, id, true).
+				Where("user_code = ? AND id != ? AND is_default = ?", provider.UserCode, id, true).
 				Update("is_default", false)
 		}
 		updates["is_default"] = *req.IsDefault
@@ -205,16 +212,16 @@ func (s *providerService) Delete(ctx context.Context, id uint) error {
 }
 
 // SetDefault 设置默认 Provider
-func (s *providerService) SetDefault(ctx context.Context, userID uint, providerID uint) error {
+func (s *providerService) SetDefault(ctx context.Context, userCode string, providerID uint) error {
 	// 获取目标 Provider
 	var provider models.LLMProvider
-	if err := s.db.WithContext(ctx).Where("user_id = ? AND id = ?", userID, providerID).First(&provider).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("user_code = ? AND id = ?", userCode, providerID).First(&provider).Error; err != nil {
 		return err
 	}
 
 	// 清除其他默认标记
 	if err := s.db.WithContext(ctx).Model(&models.LLMProvider{}).
-		Where("user_id = ? AND is_default = ?", userID, true).
+		Where("user_code = ? AND is_default = ?", userCode, true).
 		Update("is_default", false).Error; err != nil {
 		return err
 	}
@@ -282,8 +289,8 @@ func (s *providerService) TestConnection(ctx context.Context, id uint) (map[stri
 }
 
 // GetLLMConfig 获取用于创建 LLM 客户端的配置
-// 返回系统默认 Provider 的配置信息（不限制 user_id，模型是共用的）
-func (s *providerService) GetLLMConfig(ctx context.Context, userID uint) (*LLMConfig, error) {
+// 返回系统默认 Provider 的配置信息（不限制 user_code，模型是共用的）
+func (s *providerService) GetLLMConfig(ctx context.Context, userCode string) (*LLMConfig, error) {
 	var provider models.LLMProvider
 	if err := s.db.WithContext(ctx).
 		Where("is_default = ? AND is_active = ?", true, true).

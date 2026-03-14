@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	agentsvc "github.com/weibaohui/nanobot-go/internal/service/agent"
@@ -42,19 +41,13 @@ func (h *Handler) handleAgentByID(c *gin.Context) {
 
 // listAgents 获取 Agent 列表
 func (h *Handler) listAgents(c *gin.Context) {
-	userIDStr := c.Query("user_id")
-	if userIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id is required"})
+	userCode := c.Query("user_code")
+	if userCode == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user_code is required"})
 		return
 	}
 
-	userID, err := strconv.ParseUint(userIDStr, 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user_id"})
-		return
-	}
-
-	agents, err := h.agentService.GetUserAgents(uint(userID))
+	agents, err := h.agentService.GetUserAgents(userCode)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -74,19 +67,13 @@ func (h *Handler) createAgent(c *gin.Context) {
 		return
 	}
 
-	userIDStr := c.Query("user_id")
-	if userIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id is required"})
+	userCode := c.Query("user_code")
+	if userCode == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user_code is required"})
 		return
 	}
 
-	userID, err := strconv.ParseUint(userIDStr, 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user_id"})
-		return
-	}
-
-	agent, err := h.agentService.CreateAgent(uint(userID), req)
+	agent, err := h.agentService.CreateAgent(userCode, req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -135,4 +122,25 @@ func (h *Handler) deleteAgent(c *gin.Context, id uint) {
 	}
 
 	c.JSON(http.StatusOK, SuccessResponse{Message: "agent deleted"})
+}
+
+// getAgentByCode 根据 Code 获取 Agent
+func (h *Handler) getAgentByCode(c *gin.Context) {
+	code := c.Param("code")
+	if code == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "code is required"})
+		return
+	}
+
+	agent, err := h.agentService.GetAgentByCode(code)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if agent == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "agent not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, agent)
 }

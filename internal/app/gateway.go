@@ -110,6 +110,11 @@ func (g *Gateway) InitHookSystem() {
 
 // InitAgentLoop 初始化 Agent 循环
 func (g *Gateway) InitAgentLoop() {
+	if g.Providers == nil {
+		g.Logger.Warn("Providers 未初始化，跳过 Agent Loop 初始化")
+		return
+	}
+
 	maxIter := g.Config.Agents.MaxIterations
 	if maxIter <= 0 {
 		maxIter = 15
@@ -119,8 +124,8 @@ func (g *Gateway) InitAgentLoop() {
 		if g.DB == nil || g.DB.DB == nil {
 			return nil, fmt.Errorf("数据库未初始化")
 		}
-		providerSvc := service.NewProviderService(g.DB.DB.DB())
-		svcConfig, err := providerSvc.GetLLMConfig(ctx, 0)
+		providerSvc := service.NewProviderService(g.DB.DB.DB(), nil)
+		svcConfig, err := providerSvc.GetLLMConfig(ctx, "")
 		if err != nil {
 			return nil, fmt.Errorf("获取 LLM 配置失败: %w", err)
 		}

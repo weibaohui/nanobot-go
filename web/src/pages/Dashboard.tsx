@@ -6,7 +6,7 @@ import {
   KeyOutlined,
   ClockCircleOutlined,
 } from '@ant-design/icons';
-import { agentsApi, channelsApi, providersApi, cronApi } from '../api';
+import { agentsApi, channelsApi, providersApi, cronApi, getCurrentUserCode } from '../api';
 
 const { useBreakpoint } = Grid;
 
@@ -22,11 +22,12 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
+        const userCode = getCurrentUserCode() || '';
         const [agentsRes, channelsRes, providersRes, cronRes] = await Promise.all([
-          agentsApi.list(1),
-          channelsApi.list(1),
-          providersApi.list(1),
-          cronApi.list(),
+          agentsApi.list(userCode),
+          channelsApi.list(userCode),
+          providersApi.list(userCode),
+          cronApi.list(userCode),
         ]);
 
         setStats({

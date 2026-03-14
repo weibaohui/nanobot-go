@@ -1,6 +1,7 @@
 // 用户类型
 export interface User {
   id: number;
+  user_code: string;
   username: string;
   email?: string;
   display_name?: string;
@@ -25,7 +26,8 @@ export interface UpdateUserRequest {
 // Agent 类型
 export interface Agent {
   id: number;
-  user_id: number;
+  agent_code: string;
+  user_code: string;
   name: string;
   description?: string;
   identity_content?: string;
@@ -86,8 +88,9 @@ export const ChannelTypeLabels: Record<ChannelType, string> = {
 
 export interface Channel {
   id: number;
-  user_id: number;
-  agent_id?: number;
+  channel_code: string;
+  user_code: string;
+  agent_code?: string;
   name: string;
   type: ChannelType;
   is_active: boolean;
@@ -102,7 +105,7 @@ export interface CreateChannelRequest {
   type: ChannelType;
   config?: Record<string, any>;
   allow_from?: string[];
-  agent_id?: number;
+  agent_code?: string;
 }
 
 export interface UpdateChannelRequest {
@@ -110,13 +113,13 @@ export interface UpdateChannelRequest {
   config?: Record<string, any>;
   allow_from?: string[];
   is_active?: boolean;
-  agent_id?: number;
+  agent_code?: string;
 }
 
 // LLM Provider 类型
 export interface LLMProvider {
   id: number;
-  user_id: number;
+  user_code: string;
   provider_key: string;
   provider_name?: string;
   api_base?: string;
@@ -153,8 +156,8 @@ export interface ModelInfo {
 // Cron Job 类型
 export interface CronJob {
   id: number;
-  user_id: number;
-  channel_id: number;
+  user_code: string;
+  channel_code: string;
   name: string;
   description?: string;
   cron_expression: string;
@@ -163,8 +166,8 @@ export interface CronJob {
   model_selection_mode: 'auto' | 'specific';
   model_id?: string;
   model_name?: string;
-  target_channel_id?: number;
-  target_user_id?: string;
+  target_channel_code?: string;
+  target_user_code?: string;
   is_active: boolean;
   last_run_at?: string;
   last_run_status?: 'success' | 'failed' | 'running';
@@ -179,15 +182,15 @@ export interface CronJob {
 export interface CreateCronJobRequest {
   name: string;
   description?: string;
-  channel_id: number;
+  channel_code: string;
   cron_expression: string;
   timezone?: string;
   prompt: string;
   model_selection_mode?: 'auto' | 'specific';
   model_id?: string;
   model_name?: string;
-  target_channel_id?: number;
-  target_user_id?: string;
+  target_channel_code?: string;
+  target_user_code?: string;
 }
 
 export interface UpdateCronJobRequest extends Partial<CreateCronJobRequest> {
@@ -232,9 +235,10 @@ export interface ConversationRecord {
   prompt_tokens: number;
   completion_tokens: number;
   total_tokens: number;
-  user_id?: string;
-  agent_id?: string;
-  channel_id?: string;
+  user_code?: string;
+  agent_code?: string;
+  channel_code?: string;
+  channel_type?: string;
   timestamp: string;
 }
 

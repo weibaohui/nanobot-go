@@ -2,9 +2,10 @@ package service
 
 import (
 	"crypto/rand"
-	"fmt"
 	"math/big"
 	"strings"
+
+	"github.com/weibaohui/nanobot-go/internal/utils/codeutil"
 )
 
 const (
@@ -127,26 +128,11 @@ func (s *codeService) ValidateCode(code string, prefix string) bool {
 }
 
 // GenerateUniqueCodeWithRetry 生成唯一 Code（带重试）
-// checker 函数用于检查 Code 是否已存在
+// 这是一个包装函数，实际实现在 codeutil 包中
 func GenerateUniqueCodeWithRetry(
 	generateFunc func() (string, error),
 	checker func(string) (bool, error),
 	maxRetries int,
 ) (string, error) {
-	for i := 0; i < maxRetries; i++ {
-		code, err := generateFunc()
-		if err != nil {
-			return "", err
-		}
-
-		exists, err := checker(code)
-		if err != nil {
-			return "", err
-		}
-
-		if !exists {
-			return code, nil
-		}
-	}
-	return "", fmt.Errorf("failed to generate unique code after %d retries", maxRetries)
+	return codeutil.GenerateUniqueCodeWithRetry(generateFunc, checker, maxRetries)
 }

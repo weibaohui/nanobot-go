@@ -3,19 +3,23 @@ import type { ApiResponse, ListResponse, Channel, CreateChannelRequest, UpdateCh
 
 export const channelsApi = {
   // 获取 Channel 列表
-  list: (userId?: number, page: number = 1, pageSize: number = 20) =>
+  list: (userCode?: string, page: number = 1, pageSize: number = 20) =>
     client.get<any, ApiResponse<ListResponse<Channel>>>('/channels', {
-      params: { user_id: userId, offset: (page - 1) * pageSize, limit: pageSize },
+      params: { user_code: userCode, offset: (page - 1) * pageSize, limit: pageSize },
     }),
 
   // 获取单个 Channel
   get: (id: number) =>
     client.get<any, ApiResponse<Channel>>(`/channels/${id}`),
 
+  // 根据 Code 获取 Channel
+  getByCode: (code: string) =>
+    client.get<any, ApiResponse<Channel>>(`/channels/code/${code}`),
+
   // 创建 Channel
-  create: (userId: number, data: CreateChannelRequest) =>
+  create: (userCode: string, data: CreateChannelRequest) =>
     client.post<any, ApiResponse<Channel>>('/channels', data, {
-      params: { user_id: userId },
+      params: { user_code: userCode },
     }),
 
   // 更新 Channel
@@ -27,12 +31,12 @@ export const channelsApi = {
     client.delete<any, ApiResponse<void>>(`/channels/${id}`),
 
   // 绑定 Agent
-  bindAgent: (channelId: number, agentId: number) =>
-    client.post<any, ApiResponse<void>>(`/channels/${channelId}/bind-agent`, { agent_id: agentId }),
+  bindAgent: (channelCode: string, agentCode: string) =>
+    client.post<any, ApiResponse<void>>(`/channels/${channelCode}/bind-agent`, { agent_code: agentCode }),
 
   // 解绑 Agent
-  unbindAgent: (channelId: number) =>
-    client.post<any, ApiResponse<void>>(`/channels/${channelId}/unbind-agent`),
+  unbindAgent: (channelCode: string) =>
+    client.post<any, ApiResponse<void>>(`/channels/${channelCode}/unbind-agent`),
 
   // 获取 Channel 配置
   getConfig: (id: number) =>

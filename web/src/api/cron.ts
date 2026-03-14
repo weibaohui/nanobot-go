@@ -3,9 +3,9 @@ import type { ApiResponse, ListResponse, CronJob, CreateCronJobRequest, UpdateCr
 
 export const cronApi = {
   // 获取 Cron Job 列表
-  list: (userId?: number, channelId?: number, page: number = 1, pageSize: number = 20) =>
+  list: (userCode?: string, channelCode?: string, page: number = 1, pageSize: number = 20) =>
     client.get<any, ApiResponse<ListResponse<CronJob>>>('/cron-jobs', {
-      params: { user_id: userId, channel_id: channelId, offset: (page - 1) * pageSize, limit: pageSize },
+      params: { user_code: userCode, channel_code: channelCode, offset: (page - 1) * pageSize, limit: pageSize },
     }),
 
   // 获取单个 Cron Job
@@ -13,9 +13,9 @@ export const cronApi = {
     client.get<any, ApiResponse<CronJob>>(`/cron-jobs/${id}`),
 
   // 创建 Cron Job
-  create: (userId: number, channelId: number, data: CreateCronJobRequest) =>
+  create: (userCode: string, channelCode: string, data: CreateCronJobRequest) =>
     client.post<any, ApiResponse<CronJob>>('/cron-jobs', data, {
-      params: { user_id: userId, channel_id: channelId },
+      params: { user_code: userCode, channel_code: channelCode },
     }),
 
   // 更新 Cron Job

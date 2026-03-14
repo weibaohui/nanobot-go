@@ -18,7 +18,7 @@ import {
   Divider,
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, FileTextOutlined, ToolOutlined, ThunderboltOutlined } from '@ant-design/icons';
-import { agentsApi } from '../api';
+import { agentsApi, getCurrentUserCode } from '../api';
 import type { Agent, CreateAgentRequest } from '../types';
 import type { TableColumnsType } from 'antd';
 
@@ -88,7 +88,8 @@ const Agents: React.FC = () => {
   const fetchAgents = async () => {
     setLoading(true);
     try {
-      const res = await agentsApi.list(1);
+      const userCode = getCurrentUserCode() || '';
+      const res = await agentsApi.list(userCode);
       // ListResponse 直接返回 { items, total } 结构
       setAgents((res as any)?.items || []);
     } catch (error) {
@@ -104,7 +105,8 @@ const Agents: React.FC = () => {
 
   const handleCreate = async (values: CreateAgentRequest) => {
     try {
-      await agentsApi.create(1, values);
+      const userCode = getCurrentUserCode() || '';
+      await agentsApi.create(userCode, values);
       message.success('创建成功');
       setModalVisible(false);
       form.resetFields();
@@ -140,7 +142,7 @@ const Agents: React.FC = () => {
 
   const handleSetDefault = async (agent: Agent) => {
     try {
-      await agentsApi.setDefault(agent.user_id, agent.id);
+      await agentsApi.setDefault(agent.user_code, agent.agent_code);
       message.success('已设为默认 Agent');
       fetchAgents();
     } catch (error) {

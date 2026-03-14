@@ -9,7 +9,7 @@ import (
 // 存储用户的 LLM API 密钥和配置
 type LLMProvider struct {
 	ID           uint   `gorm:"primarykey" json:"id"`
-	UserID       uint   `gorm:"not null;index" json:"user_id"`
+	UserCode     string `gorm:"type:varchar(16);index" json:"user_code"`
 	ProviderKey  string `gorm:"type:text;not null" json:"provider_key"`  // 如: 'anthropic', 'openai'
 	ProviderName string `gorm:"type:text" json:"provider_name"`          // 如: 'Anthropic', 'OpenAI'
 
@@ -30,9 +30,6 @@ type LLMProvider struct {
 	IsActive  bool      `gorm:"default:true" json:"is_active"`
 	CreatedAt time.Time `gorm:"type:datetime;default:CURRENT_TIMESTAMP" json:"created_at"`
 	UpdatedAt time.Time `gorm:"type:datetime;default:CURRENT_TIMESTAMP" json:"updated_at"`
-
-	// 关联
-	User User `gorm:"foreignKey:UserID" json:"user,omitempty"`
 }
 
 // TableName 指定表名

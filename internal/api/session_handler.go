@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -52,17 +51,12 @@ func (h *Handler) handleSessionByKey(c *gin.Context) {
 
 // listSessions 获取 Session 列表
 func (h *Handler) listSessions(c *gin.Context) {
-	// 支持按 user_id 或 channel_id 查询
-	userIDStr := c.Query("user_id")
-	channelIDStr := c.Query("channel_id")
+	// 支持按 user_code 或 channel_code 查询
+	userCode := c.Query("user_code")
+	channelCode := c.Query("channel_code")
 
-	if userIDStr != "" {
-		userID, err := strconv.ParseUint(userIDStr, 10, 32)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user_id"})
-			return
-		}
-		sessions, err := h.sessionService.GetUserSessions(uint(userID))
+	if userCode != "" {
+		sessions, err := h.sessionService.GetUserSessions(userCode)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -71,13 +65,8 @@ func (h *Handler) listSessions(c *gin.Context) {
 		return
 	}
 
-	if channelIDStr != "" {
-		channelID, err := strconv.ParseUint(channelIDStr, 10, 32)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid channel_id"})
-			return
-		}
-		sessions, err := h.sessionService.GetChannelSessions(uint(channelID))
+	if channelCode != "" {
+		sessions, err := h.sessionService.GetChannelSessions(channelCode)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -86,38 +75,38 @@ func (h *Handler) listSessions(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusBadRequest, gin.H{"error": "user_id or channel_id is required"})
+	c.JSON(http.StatusBadRequest, gin.H{"error": "user_code or channel_code is required"})
 }
 
 // createSession 创建 Session
 func (h *Handler) createSession(c *gin.Context) {
 	var req struct {
-		UserID     uint                   `json:"user_id"`
-		ChannelID  uint                   `json:"channel_id"`
-		AgentID    *uint                  `json:"agent_id,omitempty"`
-		SessionKey string                 `json:"session_key"`
-		ExternalID string                 `json:"external_id,omitempty"`
-		Metadata   map[string]interface{} `json:"metadata,omitempty"`
+		UserCode    string                 `json:"user_code"`
+		ChannelCode string                 `json:"channel_code"`
+		AgentCode   string                 `json:"agent_code,omitempty"`
+		SessionKey  string                 `json:"session_key"`
+		ExternalID  string                 `json:"external_id,omitempty"`
+		Metadata    map[string]interface{} `json:"metadata,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
 	}
 
-	if req.UserID == 0 || req.ChannelID == 0 || req.SessionKey == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id, channel_id and session_key are required"})
+	if req.UserCode == "" || req.ChannelCode == "" || req.SessionKey == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user_code, channel_code and session_key are required"})
 		return
 	}
 
 	sessionReq := service.CreateSessionRequest{
-		SessionKey: req.SessionKey,
-		ExternalID: req.ExternalID,
-		AgentID:    req.AgentID,
-		ChannelID:  req.ChannelID,
-		Metadata:   req.Metadata,
+		SessionKey:  req.SessionKey,
+		ExternalID:  req.ExternalID,
+		AgentCode:   req.AgentCode,
+		ChannelCode: req.ChannelCode,
+		Metadata:    req.Metadata,
 	}
 
-	session, err := h.sessionService.CreateSession(req.UserID, sessionReq)
+	session, err := h.sessionService.CreateSession(req.UserCode, sessionReq)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

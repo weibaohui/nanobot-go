@@ -67,6 +67,7 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 			users.PUT("/:id", h.handleUserByID)
 			users.DELETE("/:id", h.handleUserByID)
 			users.POST("/:id/change-password", h.handleChangePassword)
+			users.GET("/code/:code", h.getUserByCode)
 		}
 
 		// Agent API
@@ -77,6 +78,7 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 			agents.GET("/:id", h.handleAgentByID)
 			agents.PUT("/:id", h.handleAgentByID)
 			agents.DELETE("/:id", h.handleAgentByID)
+			agents.GET("/code/:code", h.getAgentByCode)
 		}
 
 		// Channel API
@@ -87,6 +89,7 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 			channels.GET("/:id", h.handleChannelByID)
 			channels.PUT("/:id", h.updateChannel)
 			channels.DELETE("/:id", h.deleteChannel)
+			channels.GET("/code/:code", h.getChannelByCode)
 		}
 
 		// Session API

@@ -231,3 +231,24 @@ func (h *Handler) changePassword(c *gin.Context, id uint) {
 
 	c.JSON(http.StatusOK, SuccessResponse{Message: "password changed successfully"})
 }
+
+// getUserByCode 根据 Code 获取用户
+func (h *Handler) getUserByCode(c *gin.Context) {
+	code := c.Param("code")
+	if code == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "code is required"})
+		return
+	}
+
+	user, err := h.userService.GetUserByCode(code)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if user == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, user)
+}

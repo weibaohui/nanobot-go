@@ -36,7 +36,13 @@ func NewConfigFromConfig(cfg *config.Config) *Config {
 		return DefaultConfig()
 	}
 
+	// 如果配置中的 DataDir 是相对路径，基于 Workspace 创建完整路径
+	if !filepath.IsAbs(dataDir) {
+		dataDir = filepath.Join(cfg.Agents.Defaults.Workspace, dataDir)
+	}
+
 	return &Config{
+		DataDir:      dataDir,
 		DBName:       cfg.Database.DBName,
 		MaxOpenConns: cfg.Database.MaxOpenConns,
 		MaxIdleConns: cfg.Database.MaxIdleConns,
@@ -163,10 +169,10 @@ func (c *Client) InitSchema() error {
 		"CREATE INDEX IF NOT EXISTS idx_conv_records_timestamp ON conversation_records(timestamp);",
 		"CREATE INDEX IF NOT EXISTS idx_conv_records_trace_id ON conversation_records(trace_id);",
 		"CREATE INDEX IF NOT EXISTS idx_conv_records_role ON conversation_records(role);",
-		// 新增：归属信息索引
-		"CREATE INDEX IF NOT EXISTS idx_conv_records_user_id ON conversation_records(user_id);",
-		"CREATE INDEX IF NOT EXISTS idx_conv_records_agent_id ON conversation_records(agent_id);",
-		"CREATE INDEX IF NOT EXISTS idx_conv_records_channel_id ON conversation_records(channel_id);",
+		// 新增：归属信息索引（使用 Code 字段）
+		"CREATE INDEX IF NOT EXISTS idx_conv_records_user_code ON conversation_records(user_code);",
+		"CREATE INDEX IF NOT EXISTS idx_conv_records_agent_code ON conversation_records(agent_code);",
+		"CREATE INDEX IF NOT EXISTS idx_conv_records_channel_code ON conversation_records(channel_code);",
 		"CREATE INDEX IF NOT EXISTS idx_conv_records_channel_type ON conversation_records(channel_type);",
 	}
 

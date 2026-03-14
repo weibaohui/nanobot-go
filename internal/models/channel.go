@@ -15,9 +15,9 @@ const (
 // 存储渠道配置信息和 Agent 绑定关系
 type Channel struct {
 	ID          uint   `gorm:"primarykey" json:"id"`
-	ChannelCode string `gorm:"type:varchar(16);uniqueIndex;not null" json:"channel_code"`
-	UserID      uint   `gorm:"not null;index" json:"user_id"`
-	AgentID     *uint  `gorm:"index" json:"agent_id"` // 可为空
+	ChannelCode string `gorm:"type:varchar(16);uniqueIndex" json:"channel_code"`
+	UserCode    string `gorm:"type:varchar(16);index" json:"user_code"`
+	AgentCode   string `gorm:"type:varchar(16);index" json:"agent_code"` // 可为空
 
 	Name string      `gorm:"type:text;not null" json:"name"`
 	Type ChannelType `gorm:"type:text;not null" json:"type"`
@@ -29,11 +29,6 @@ type Channel struct {
 
 	CreatedAt time.Time `gorm:"type:datetime;default:CURRENT_TIMESTAMP" json:"created_at"`
 	UpdatedAt time.Time `gorm:"type:datetime;default:CURRENT_TIMESTAMP" json:"updated_at"`
-
-	// 关联
-	User     User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Agent    *Agent    `gorm:"foreignKey:AgentID" json:"agent,omitempty"`
-	Sessions []Session `gorm:"foreignKey:ChannelID" json:"sessions,omitempty"`
 }
 
 // TableName 指定表名
