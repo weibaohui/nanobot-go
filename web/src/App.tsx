@@ -10,6 +10,7 @@ import Providers from './pages/Providers';
 import CronJobs from './pages/CronJobs';
 import Users from './pages/Users';
 import Conversations from './pages/Conversations';
+import ConversationStats from './pages/ConversationStats';
 import Sessions from './pages/Sessions';
 import StreamMemories from './pages/StreamMemories';
 import LongTermMemories from './pages/LongTermMemories';
@@ -75,6 +76,7 @@ const App: React.FC = () => {
             <Route path="cron" element={<CronJobs />} />
             <Route path="users" element={<Users />} />
             <Route path="conversations" element={<Conversations />} />
+            <Route path="conversations/stats" element={<ConversationStats />} />
             <Route path="sessions" element={<Sessions />} />
             <Route path="stream-memories" element={<StreamMemories />} />
             <Route path="long-term-memories" element={<LongTermMemories />} />

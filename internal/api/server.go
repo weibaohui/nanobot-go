@@ -28,6 +28,7 @@ func NewServer(addr string, providers *Providers, logger *zap.Logger) *Server {
 		providers.ProviderService,
 		providers.CronJobService,
 		providers.ConversationRecordService,
+		providers.ConversationService,
 		providers.StreamMemoryService,
 		providers.LongTermMemoryService,
 		providers.SessionManager,

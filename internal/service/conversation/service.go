@@ -153,6 +153,45 @@ func (s *service) CreateBatch(ctx context.Context, dtos []ConversationDTO) error
 	return nil
 }
 
+func (s *service) GetStats(ctx context.Context, req *StatsRequest) (*StatsResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("%w: request cannot be nil", ErrInvalidParameter)
+	}
+
+	tokenStats, err := s.repo.GetTokenStats(ctx, req.StartTime, req.EndTime, req.AgentCodes, req.ChannelCodes, req.Roles)
+	if err != nil {
+		return nil, fmt.Errorf("%w: failed to get token stats: %w", ErrDatabaseOperation, err)
+	}
+
+	agentDist, err := s.repo.GetAgentDistribution(ctx, req.StartTime, req.EndTime, req.AgentCodes, req.ChannelCodes, req.Roles)
+	if err != nil {
+		return nil, fmt.Errorf("%w: failed to get agent distribution: %w", ErrDatabaseOperation, err)
+	}
+
+	channelDist, err := s.repo.GetChannelDistribution(ctx, req.StartTime, req.EndTime, req.AgentCodes, req.ChannelCodes, req.Roles)
+	if err != nil {
+		return nil, fmt.Errorf("%w: failed to get channel distribution: %w", ErrDatabaseOperation, err)
+	}
+
+	roleDist, err := s.repo.GetRoleDistribution(ctx, req.StartTime, req.EndTime, req.AgentCodes, req.ChannelCodes, req.Roles)
+	if err != nil {
+		return nil, fmt.Errorf("%w: failed to get role distribution: %w", ErrDatabaseOperation, err)
+	}
+
+	sessionStats, err := s.repo.GetSessionStats(ctx, req.StartTime, req.EndTime, req.AgentCodes, req.ChannelCodes, req.Roles)
+	if err != nil {
+		return nil, fmt.Errorf("%w: failed to get session stats: %w", ErrDatabaseOperation, err)
+	}
+
+	return &StatsResponse{
+		TokenStats:          *tokenStats,
+		AgentDistribution:   agentDist,
+		ChannelDistribution: channelDist,
+		RoleDistribution:    roleDist,
+		SessionStats:        *sessionStats,
+	}, nil
+}
+
 func (s *service) recordsToDTOs(records []models.ConversationRecord) []ConversationDTO {
 	dtos := make([]ConversationDTO, 0, len(records))
 	for _, record := range records {
