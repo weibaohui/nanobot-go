@@ -198,7 +198,8 @@ const Conversations: React.FC = () => {
 
   // 构建链路树
   const buildTraceTree = (records: ConversationRecord[]): TraceNode[] => {
-    const nodeMap = new Map<string, TraceNode>();
+    const nodeMap = new Map<number, TraceNode>();
+    const spanToIdMap = new Map<string, number[]>();
     const roots: TraceNode[] = [];
 
     // 按时间排序
@@ -206,15 +207,15 @@ const Conversations: React.FC = () => {
       (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
 
-    // 创建所有节点
+    // 创建所有节点，使用 id 作为 key
     sorted.forEach((record, index) => {
       const nextRecord = sorted[index + 1];
       const duration = nextRecord
         ? new Date(nextRecord.timestamp).getTime() - new Date(record.timestamp).getTime()
         : 0;
 
-      nodeMap.set(record.span_id, {
-        key: record.span_id,
+      nodeMap.set(record.id, {
+        key: String(record.id),
         title: (
           <Space direction="vertical" size={0} style={{ width: '100%' }}>
             <Space>
@@ -241,18 +242,34 @@ const Conversations: React.FC = () => {
         duration,
         children: [],
       });
+
+      // 记录 span_id 到 id 的映射（可能有多个记录有相同的 span_id）
+      if (record.span_id) {
+        const ids = spanToIdMap.get(record.span_id) || [];
+        ids.push(record.id);
+        spanToIdMap.set(record.span_id, ids);
+      }
     });
 
     // 建立父子关系
     sorted.forEach(record => {
-      const node = nodeMap.get(record.span_id);
-      if (node && record.parent_span_id && nodeMap.has(record.parent_span_id)) {
-        const parent = nodeMap.get(record.parent_span_id)!;
-        parent.children = parent.children || [];
-        parent.children.push(node);
-      } else if (node) {
-        roots.push(node);
+      const node = nodeMap.get(record.id);
+      if (!node) return;
+
+      if (record.parent_span_id) {
+        // 找到 parent_span_id 对应的节点（取第一个）
+        const parentIds = spanToIdMap.get(record.parent_span_id);
+        if (parentIds && parentIds.length > 0) {
+          const parent = nodeMap.get(parentIds[0]);
+          if (parent) {
+            parent.children = parent.children || [];
+            parent.children.push(node);
+            return;
+          }
+        }
       }
+      // 没有 parent 或者是根节点
+      roots.push(node);
     });
 
     return roots;
