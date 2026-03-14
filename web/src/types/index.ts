@@ -268,3 +268,17 @@ export interface LongTermMemory {
   created_at: string;
   updated_at: string;
 }
+
+// Session 类型
+export interface Session {
+  id: number;
+  session_key: string;
+  user_code: string;
+  channel_code: string;
+  agent_code?: string;
+  external_id?: string;
+  metadata?: Record<string, any>;
+  last_active_at?: string;
+  created_at: string;
+  updated_at: string;
+}
