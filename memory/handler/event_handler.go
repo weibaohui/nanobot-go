@@ -89,11 +89,12 @@ func (h *MemoryEventHandler) OnConversationCompleted(ctx context.Context, event 
 		}
 	}
 
-	// 4. 准备元数据
+	// 4. 准备元数据（包含用户隔离字段）
 	metadata := map[string]interface{}{
 		"trace_id":     event.TraceID,
 		"session_key":  event.SessionKey,
 		"channel_type": event.ChannelType,
+		"user_code":    event.UserCode, // 用户隔离：将 UserCode 传递给记忆服务
 		"event_type":   "conversation_completed",
 		"summary":      summary.Summary,
 		"key_points":   summary.KeyPoints,

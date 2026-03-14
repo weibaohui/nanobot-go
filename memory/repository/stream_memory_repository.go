@@ -21,10 +21,10 @@ type StreamMemoryRepository interface {
 	FindByTraceID(ctx context.Context, traceID string) ([]models.StreamMemory, error)
 	// FindBySessionKey 根据SessionKey查询（支持分页）
 	FindBySessionKey(ctx context.Context, sessionKey string, opts *models.QueryOptions) ([]models.StreamMemory, error)
-	// FindByTimeRange 根据时间范围查询
+	// FindByTimeRange 根据时间范围查询（支持UserCode过滤）
 	FindByTimeRange(ctx context.Context, startTime, endTime time.Time, opts *models.QueryOptions) ([]models.StreamMemory, error)
-	// FindUnprocessed 查询未处理的流水记忆（用于定时升级）
-	FindUnprocessed(ctx context.Context, before time.Time, limit int) ([]models.StreamMemory, error)
+	// FindUnprocessed 查询未处理的流水记忆（支持UserCode过滤）
+	FindUnprocessed(ctx context.Context, before time.Time, limit int, opts *models.QueryOptions) ([]models.StreamMemory, error)
 	// MarkAsProcessed 标记为已处理
 	MarkAsProcessed(ctx context.Context, ids []uint64) error
 	// CountByTimeRange 统计时间范围内的数量
@@ -130,6 +130,11 @@ func (r *streamMemoryRepository) FindByTimeRange(ctx context.Context, startTime,
 		Where("created_at >= ?", startTime).
 		Where("created_at <= ?", endTime)
 
+	// 用户隔离：如果指定了 UserCode，只查询该用户的记忆
+	if opts.UserCode != "" {
+		query = query.Where("user_code = ?", opts.UserCode)
+	}
+
 	// 排序
 	orderBy := opts.OrderBy
 	if orderBy == "" {
@@ -157,15 +162,23 @@ func (r *streamMemoryRepository) FindByTimeRange(ctx context.Context, startTime,
 }
 
 // FindUnprocessed 查询未处理的流水记忆
-func (r *streamMemoryRepository) FindUnprocessed(ctx context.Context, before time.Time, limit int) ([]models.StreamMemory, error) {
+// 如果 opts.UserCode 不为空，则只查询该用户的未处理记忆（用于用户隔离）
+func (r *streamMemoryRepository) FindUnprocessed(ctx context.Context, before time.Time, limit int, opts *models.QueryOptions) ([]models.StreamMemory, error) {
 	if limit <= 0 {
 		limit = 100
 	}
 
-	var memories []models.StreamMemory
-	if err := r.db.WithContext(ctx).
+	query := r.db.WithContext(ctx).
 		Where("processed = ?", false).
-		Where("created_at < ?", before).
+		Where("created_at < ?", before)
+
+	// 用户隔离：如果指定了 UserCode，只查询该用户的记忆
+	if opts != nil && opts.UserCode != "" {
+		query = query.Where("user_code = ?", opts.UserCode)
+	}
+
+	var memories []models.StreamMemory
+	if err := query.
 		Order("created_at ASC").
 		Limit(limit).
 		Find(&memories).Error; err != nil {

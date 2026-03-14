@@ -9,8 +9,9 @@ type StreamMemory struct {
 	TraceID     string     `gorm:"type:text;index:idx_stream_trace_id;not null" json:"trace_id"`
 	SessionKey  string     `gorm:"type:text;index:idx_stream_session_key" json:"session_key"`
 	ChannelType string     `gorm:"type:text;index:idx_stream_channel" json:"channel_type"`
-	Content     string     `gorm:"type:text" json:"content"`                      // 原始对话内容摘要
-	Summary     string     `gorm:"type:text" json:"summary"`                      // AI生成的初步总结
+	UserCode    string     `gorm:"type:text;index:idx_stream_user_code;not null" json:"user_code"` // 用户隔离字段
+	Content     string     `gorm:"type:text" json:"content"`                                          // 原始对话内容摘要
+	Summary     string     `gorm:"type:text" json:"summary"`                                          // AI生成的初步总结
 	EventType   string     `gorm:"type:text;index:idx_stream_event_type" json:"event_type"`
 	CreatedAt   time.Time  `gorm:"type:datetime;index:idx_stream_created_at;not null" json:"created_at"`
 	Processed   bool       `gorm:"type:integer;default:0;index:idx_stream_processed" json:"processed"` // 是否已升级为长期记忆

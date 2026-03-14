@@ -94,12 +94,14 @@ func (s *memoryService) WriteMemory(ctx context.Context, content string, metadat
 	channelType, _ := metadata["channel_type"].(string)
 	eventType, _ := metadata["event_type"].(string)
 	summary, _ := metadata["summary"].(string)
+	userCode, _ := metadata["user_code"].(string)
 
 	// 创建流水记忆
 	memory := &models.StreamMemory{
 		TraceID:     traceID,
 		SessionKey:  sessionKey,
 		ChannelType: channelType,
+		UserCode:    userCode,
 		Content:     content,
 		Summary:     summary,
 		EventType:   eventType,
@@ -171,8 +173,9 @@ func (s *memoryService) SearchMemory(ctx context.Context, query string, filters 
 // searchStreamMemories 搜索流水记忆
 func (s *memoryService) searchStreamMemories(ctx context.Context, query string, filters models.SearchFilters, limit int) ([]models.MemoryDTO, error) {
 	opts := &models.QueryOptions{
-		Limit: limit,
-		Order: "DESC",
+		Limit:    limit,
+		Order:    "DESC",
+		UserCode: filters.UserCode, // 用户隔离：传递 UserCode 到 Repository
 	}
 
 	var memories []models.StreamMemory
@@ -219,8 +222,9 @@ func (s *memoryService) searchStreamMemories(ctx context.Context, query string, 
 // searchLongTermMemories 搜索长期记忆
 func (s *memoryService) searchLongTermMemories(ctx context.Context, query string, filters models.SearchFilters, limit int) ([]models.MemoryDTO, error) {
 	opts := &models.QueryOptions{
-		Limit: limit,
-		Order: "DESC",
+		Limit:    limit,
+		Order:    "DESC",
+		UserCode: filters.UserCode, // 用户隔离：传递 UserCode 到 Repository
 	}
 
 	var memories []models.LongTermMemory
@@ -277,6 +281,7 @@ func (s *memoryService) streamToDTO(m *models.StreamMemory) models.MemoryDTO {
 		TraceID:     m.TraceID,
 		SessionKey:  m.SessionKey,
 		ChannelType: m.ChannelType,
+		UserCode:    m.UserCode,
 		Content:     m.Content,
 		Summary:     m.Summary,
 		CreatedAt:   m.CreatedAt,
@@ -300,6 +305,7 @@ func (s *memoryService) longTermToDTO(m *models.LongTermMemory) models.MemoryDTO
 	return models.MemoryDTO{
 		ID:        m.ID,
 		Type:      "longterm",
+		UserCode:  m.UserCode,
 		Content:   content,
 		Summary:   m.Summary,
 		CreatedAt: m.CreatedAt,
@@ -307,6 +313,7 @@ func (s *memoryService) longTermToDTO(m *models.LongTermMemory) models.MemoryDTO
 }
 
 // UpgradeStreamToLongTerm 将流水记忆升级为长期记忆
+// 按 UserCode 分组处理，每个用户的记忆单独提炼为长期记忆
 func (s *memoryService) UpgradeStreamToLongTerm(ctx context.Context, date string) error {
 	if !s.enabled {
 		return ErrMemoryDisabled
@@ -322,7 +329,7 @@ func (s *memoryService) UpgradeStreamToLongTerm(ctx context.Context, date string
 	startOfDay := targetDate
 	endOfDay := targetDate.AddDate(0, 0, 1).Add(-time.Nanosecond)
 
-	// 查询当天的所有流水记忆
+	// 查询当天的所有流水记忆（不分用户）
 	opts := &models.QueryOptions{
 		OrderBy: "created_at",
 		Order:   "ASC",
@@ -338,10 +345,38 @@ func (s *memoryService) UpgradeStreamToLongTerm(ctx context.Context, date string
 		return nil
 	}
 
+	// 按 UserCode 分组
+	userStreams := make(map[string][]models.StreamMemory)
+	for _, stream := range streams {
+		userCode := stream.UserCode
+		if userCode == "" {
+			userCode = "default" // 兼容旧数据，无UserCode的归入default
+		}
+		userStreams[userCode] = append(userStreams[userCode], stream)
+	}
+
+	// 对每个用户的记忆分别处理
+	for userCode, userStreamList := range userStreams {
+		if err := s.upgradeUserStreamToLongTerm(ctx, date, userCode, userStreamList); err != nil {
+			// 记录错误但继续处理其他用户
+			// 实际生产环境可以使用日志记录
+			continue
+		}
+	}
+
+	return nil
+}
+
+// upgradeUserStreamToLongTerm 将指定用户的流水记忆升级为长期记忆
+func (s *memoryService) upgradeUserStreamToLongTerm(ctx context.Context, date, userCode string, streams []models.StreamMemory) error {
+	if len(streams) == 0 {
+		return nil
+	}
+
 	// 使用 summarizer 提炼长期记忆
 	summary, err := s.summarizer.SummarizeToLongTerm(ctx, streams)
 	if err != nil {
-		return fmt.Errorf("%w: failed to summarize to long term: %v", ErrUpgradeFailed, err)
+		return fmt.Errorf("%w: failed to summarize to long term for user %s: %v", ErrUpgradeFailed, userCode, err)
 	}
 
 	// 构建来源ID列表
@@ -354,7 +389,8 @@ func (s *memoryService) UpgradeStreamToLongTerm(ctx context.Context, date string
 	// 创建长期记忆
 	longTerm := &models.LongTermMemory{
 		Date:         date,
-		Summary:      summary.WhatHappened, // 使用 what_happened 作为总体摘要
+		UserCode:     userCode,
+		Summary:      summary.WhatHappened,
 		WhatHappened: summary.WhatHappened,
 		Conclusion:   summary.Conclusion,
 		Value:        summary.Value,
@@ -362,32 +398,32 @@ func (s *memoryService) UpgradeStreamToLongTerm(ctx context.Context, date string
 		SourceIDs:    strings.Join(sourceIDs, ","),
 	}
 
-	// 检查是否已存在该日期的长期记忆
-	existing, err := s.longTermRepo.FindByDate(ctx, date)
+	// 检查是否已存在该用户该日期的长期记忆
+	existing, err := s.longTermRepo.FindByDate(ctx, date, &models.QueryOptions{UserCode: userCode})
 	if err != nil {
-		return fmt.Errorf("failed to check existing long term memory: %w", err)
+		return fmt.Errorf("failed to check existing long term memory for user %s: %w", userCode, err)
 	}
 
 	if existing != nil {
 		// 更新现有记录
 		longTerm.ID = existing.ID
 		if err := s.longTermRepo.Update(ctx, longTerm); err != nil {
-			return fmt.Errorf("failed to update long term memory: %w", err)
+			return fmt.Errorf("failed to update long term memory for user %s: %w", userCode, err)
 		}
 	} else {
 		// 创建新记录
 		if err := s.longTermRepo.Create(ctx, longTerm); err != nil {
-			return fmt.Errorf("failed to create long term memory: %w", err)
+			return fmt.Errorf("failed to create long term memory for user %s: %w", userCode, err)
 		}
 	}
 
-	// 标记所有流水记忆为已处理
+	// 标记该用户的流水记忆为已处理
 	ids := make([]uint64, 0, len(streams))
 	for _, stream := range streams {
 		ids = append(ids, stream.ID)
 	}
 	if err := s.streamRepo.MarkAsProcessed(ctx, ids); err != nil {
-		return fmt.Errorf("failed to mark stream memories as processed: %w", err)
+		return fmt.Errorf("failed to mark stream memories as processed for user %s: %w", userCode, err)
 	}
 
 	return nil

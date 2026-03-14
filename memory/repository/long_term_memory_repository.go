@@ -15,11 +15,11 @@ type LongTermMemoryRepository interface {
 	Create(ctx context.Context, memory *models.LongTermMemory) error
 	// FindByID 根据ID查询
 	FindByID(ctx context.Context, id uint64) (*models.LongTermMemory, error)
-	// FindByDate 根据日期查询
-	FindByDate(ctx context.Context, date string) (*models.LongTermMemory, error)
-	// FindByTimeRange 根据时间范围查询
+	// FindByDate 根据日期查询（支持UserCode过滤）
+	FindByDate(ctx context.Context, date string, opts *models.QueryOptions) (*models.LongTermMemory, error)
+	// FindByTimeRange 根据时间范围查询（支持UserCode过滤）
 	FindByTimeRange(ctx context.Context, startTime, endTime time.Time, opts *models.QueryOptions) ([]models.LongTermMemory, error)
-	// SearchByKeyword 关键词搜索（使用LIKE）
+	// SearchByKeyword 关键词搜索（使用LIKE，支持UserCode过滤）
 	SearchByKeyword(ctx context.Context, keyword string, opts *models.QueryOptions) ([]models.LongTermMemory, error)
 	// Update 更新长期记忆
 	Update(ctx context.Context, memory *models.LongTermMemory) error
@@ -60,9 +60,17 @@ func (r *longTermMemoryRepository) FindByID(ctx context.Context, id uint64) (*mo
 }
 
 // FindByDate 根据日期查询长期记忆
-func (r *longTermMemoryRepository) FindByDate(ctx context.Context, date string) (*models.LongTermMemory, error) {
+// 如果 opts.UserCode 不为空，则只查询该用户的记忆（用户隔离）
+func (r *longTermMemoryRepository) FindByDate(ctx context.Context, date string, opts *models.QueryOptions) (*models.LongTermMemory, error) {
+	query := r.db.WithContext(ctx).Where("date = ?", date)
+
+	// 用户隔离：如果指定了 UserCode，只查询该用户的记忆
+	if opts != nil && opts.UserCode != "" {
+		query = query.Where("user_code = ?", opts.UserCode)
+	}
+
 	var memory models.LongTermMemory
-	if err := r.db.WithContext(ctx).Where("date = ?", date).First(&memory).Error; err != nil {
+	if err := query.First(&memory).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
@@ -72,6 +80,7 @@ func (r *longTermMemoryRepository) FindByDate(ctx context.Context, date string) 
 }
 
 // FindByTimeRange 根据时间范围查询长期记忆
+// 如果 opts.UserCode 不为空，则只查询该用户的记忆（用户隔离）
 func (r *longTermMemoryRepository) FindByTimeRange(ctx context.Context, startTime, endTime time.Time, opts *models.QueryOptions) ([]models.LongTermMemory, error) {
 	if opts == nil {
 		opts = &models.QueryOptions{}
@@ -84,6 +93,11 @@ func (r *longTermMemoryRepository) FindByTimeRange(ctx context.Context, startTim
 	query := r.db.WithContext(ctx).
 		Where("date >= ?", startDate).
 		Where("date <= ?", endDate)
+
+	// 用户隔离：如果指定了 UserCode，只查询该用户的记忆
+	if opts.UserCode != "" {
+		query = query.Where("user_code = ?", opts.UserCode)
+	}
 
 	// 排序
 	orderBy := opts.OrderBy
@@ -112,6 +126,7 @@ func (r *longTermMemoryRepository) FindByTimeRange(ctx context.Context, startTim
 }
 
 // SearchByKeyword 关键词搜索长期记忆
+// 如果 opts.UserCode 不为空，则只查询该用户的记忆（用户隔离）
 func (r *longTermMemoryRepository) SearchByKeyword(ctx context.Context, keyword string, opts *models.QueryOptions) ([]models.LongTermMemory, error) {
 	if opts == nil {
 		opts = &models.QueryOptions{}
@@ -121,6 +136,11 @@ func (r *longTermMemoryRepository) SearchByKeyword(ctx context.Context, keyword 
 	query := r.db.WithContext(ctx).
 		Where("summary LIKE ? OR what_happened LIKE ? OR conclusion LIKE ? OR value LIKE ? OR highlights LIKE ?",
 			likePattern, likePattern, likePattern, likePattern, likePattern)
+
+	// 用户隔离：如果指定了 UserCode，只查询该用户的记忆
+	if opts.UserCode != "" {
+		query = query.Where("user_code = ?", opts.UserCode)
+	}
 
 	// 排序
 	orderBy := opts.OrderBy

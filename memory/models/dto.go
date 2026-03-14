@@ -10,6 +10,7 @@ type MemoryDTO struct {
 	TraceID     string    `json:"trace_id,omitempty"`
 	SessionKey  string    `json:"session_key,omitempty"`
 	ChannelType string    `json:"channel_type,omitempty"`
+	UserCode    string    `json:"user_code,omitempty"` // 用户隔离：标识记忆所属用户
 	Content     string    `json:"content"`
 	Summary     string    `json:"summary,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -23,6 +24,7 @@ type SearchFilters struct {
 	TraceID         string     `json:"trace_id,omitempty"`
 	SessionKey      string     `json:"session_key,omitempty"`
 	ChannelType     string     `json:"channel_type,omitempty"`
+	UserCode        string     `json:"user_code,omitempty"`         // 用户隔离：只查询该用户的记忆
 	Limit           int        `json:"limit,omitempty"`             // 默认 20，最大 100
 	IncludeStream   bool       `json:"include_stream,omitempty"`    // 是否包含流水记忆，默认 true
 	IncludeLongTerm bool       `json:"include_long_term,omitempty"` // 是否包含长期记忆，默认 true
@@ -56,11 +58,12 @@ type LongTermSummary struct {
 // QueryOptions 查询选项
 // 用于 Repository 层的通用查询参数
 type QueryOptions struct {
-	OrderBy string   // 排序字段
-	Order   string   // ASC 或 DESC
-	Limit   int      // 限制数量
-	Offset  int      // 偏移量
-	Roles   []string // 筛选角色（可选）
+	OrderBy  string   // 排序字段
+	Order    string   // ASC 或 DESC
+	Limit    int      // 限制数量
+	Offset   int      // 偏移量
+	Roles    []string // 筛选角色（可选）
+	UserCode string   // 用户隔离：只查询该用户的记忆
 }
 
 // Message 对话消息
@@ -77,6 +80,7 @@ type ConversationCompletedEvent struct {
 	TraceID     string    `json:"trace_id"`
 	SessionKey  string    `json:"session_key"`
 	ChannelType string    `json:"channel_type"`
+	UserCode    string    `json:"user_code"` // 用户隔离：标识该对话所属用户
 	StartTime   time.Time `json:"start_time"`
 	EndTime     time.Time `json:"end_time"`
 	Messages    []Message `json:"messages"`
