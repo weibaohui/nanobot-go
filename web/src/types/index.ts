@@ -127,6 +127,7 @@ export interface LLMProvider {
   supported_models?: string;
   embedding_models?: string;
   default_embedding_model?: string;
+  default_model?: string;
   is_default: boolean;
   priority: number;
   is_active: boolean;
