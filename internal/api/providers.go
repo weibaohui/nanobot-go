@@ -36,7 +36,8 @@ func NewProviders(db *gorm.DB) *Providers {
 	convRepo := conversation.NewRepository(db)
 
 	// 创建服务
-	userService := service.NewUserService(userRepo, agentRepo)
+	codeService := service.NewCodeService()
+	userService := service.NewUserService(userRepo, agentRepo, codeService)
 	agentService := service.NewAgentService(agentRepo)
 	channelService := service.NewChannelService(channelRepo, agentRepo)
 	sessionService := service.NewSessionService(sessionRepo)

@@ -11,11 +11,14 @@ import (
 type UserRepository interface {
 	Create(user *models.User) error
 	GetByID(id uint) (*models.User, error)
+	GetByUserCode(code string) (*models.User, error)
 	GetByUsername(username string) (*models.User, error)
 	GetByEmail(email string) (*models.User, error)
 	Update(user *models.User) error
 	Delete(id uint) error
 	List(offset, limit int) ([]models.User, int64, error)
+	// CheckUserCodeExists 检查 UserCode 是否已存在
+	CheckUserCodeExists(code string) (bool, error)
 }
 
 // userRepository 用户仓库实现
@@ -102,4 +105,25 @@ func (r *userRepository) List(offset, limit int) ([]models.User, int64, error) {
 	}
 
 	return users, total, nil
+}
+
+// GetByUserCode 根据 UserCode 获取用户
+func (r *userRepository) GetByUserCode(code string) (*models.User, error) {
+	var user models.User
+	if err := r.db.Where("user_code = ?", code).First(&user).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("获取用户失败: %w", err)
+	}
+	return &user, nil
+}
+
+// CheckUserCodeExists 检查 UserCode 是否已存在
+func (r *userRepository) CheckUserCodeExists(code string) (bool, error) {
+	var count int64
+	if err := r.db.Model(&models.User{}).Where("user_code = ?", code).Count(&count).Error; err != nil {
+		return false, fmt.Errorf("检查 UserCode 失败: %w", err)
+	}
+	return count > 0, nil
 }

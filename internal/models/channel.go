@@ -14,9 +14,10 @@ const (
 // Channel 渠道模型
 // 存储渠道配置信息和 Agent 绑定关系
 type Channel struct {
-	ID      uint  `gorm:"primarykey" json:"id"`
-	UserID  uint  `gorm:"not null;index" json:"user_id"`
-	AgentID *uint `gorm:"index" json:"agent_id"` // 可为空
+	ID          uint   `gorm:"primarykey" json:"id"`
+	ChannelCode string `gorm:"type:varchar(16);uniqueIndex;not null" json:"channel_code"`
+	UserID      uint   `gorm:"not null;index" json:"user_id"`
+	AgentID     *uint  `gorm:"index" json:"agent_id"` // 可为空
 
 	Name string      `gorm:"type:text;not null" json:"name"`
 	Type ChannelType `gorm:"type:text;not null" json:"type"`
