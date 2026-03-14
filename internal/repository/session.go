@@ -85,7 +85,8 @@ func (r *sessionRepository) GetByUserCode(userCode string) ([]models.Session, er
 // GetActiveByUserCode 获取用户的所有活跃会话
 func (r *sessionRepository) GetActiveByUserCode(userCode string) ([]models.Session, error) {
 	var sessions []models.Session
-	if err := r.db.Where("user_code = ? AND deleted_at IS NULL", userCode).Find(&sessions).Error; err != nil {
+	// 注意：Session 模型没有 deleted_at 字段，所以不使用软删除条件
+	if err := r.db.Where("user_code = ?", userCode).Find(&sessions).Error; err != nil {
 		return nil, fmt.Errorf("获取用户活跃会话列表失败: %w", err)
 	}
 	return sessions, nil

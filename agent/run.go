@@ -45,7 +45,7 @@ func (l *Loop) Run(ctx context.Context) error {
 }
 
 // processMessage 处理单条消息
-func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) error {
+func (l *Loop) processMessage(parentCtx context.Context, msg *bus.InboundMessage) error {
 	preview := msg.Content
 	if len(preview) > 80 {
 		preview = preview[:80] + "..."
@@ -56,13 +56,26 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 		zap.String("内容", preview),
 	)
 
+	// 注入会话信息到 context，用于事件分发时获取
+	sessionKey := msg.SessionKey()
+
+	// 获取或创建会话
+	sess := l.sessions.GetOrCreate(sessionKey)
+
+	// 为当前会话创建独立的 cancellable context
+	ctx, cancel := context.WithCancel(parentCtx)
+	sess.SetContext(ctx, cancel)
+
+	// 处理完成后清理 context
+	defer func() {
+		sess.SetContext(nil, nil)
+	}()
+
 	// 为每条消息创建根 span，建立完整的调用链
 	ctx = trace.WithTraceID(ctx, trace.NewTraceID())
 	ctx = trace.WithSpanID(ctx, trace.NewSpanID())
 	// 根 span 没有 parentSpanID
 
-	// 注入会话信息到 context，用于事件分发时获取
-	sessionKey := msg.SessionKey()
 	ctx = trace.WithSessionInfo(ctx, sessionKey, msg.Channel)
 
 	// 触发收到消息事件
@@ -88,6 +101,18 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) erro
 		if IsInterruptError(err) {
 			return nil
 		}
+
+		// 检查是否是 context 取消（会话被强制停止）
+		if ctx.Err() == context.Canceled {
+			l.logger.Info("会话被取消",
+				zap.String("session_key", sessionKey),
+				zap.String("channel", msg.Channel),
+			)
+			outMsg := bus.NewOutboundMessage(msg.Channel, msg.ChatID, "对话已取消")
+			l.bus.PublishOutbound(outMsg)
+			return nil
+		}
+
 		// 非中断错误：如果 response 包含错误信息（由 interruptible 构造），直接发送
 		// 否则构造默认错误消息
 		outMsg := bus.NewOutboundMessage(msg.Channel, msg.ChatID, response)
