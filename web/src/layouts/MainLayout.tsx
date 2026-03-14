@@ -37,9 +37,9 @@ const MainLayout: React.FC = () => {
   useEffect(() => {
     const fetchCurrentUser = async () => {
       try {
-        const res = await authApi.me();
-        if (res.data) {
-          setCurrentUser(res.data);
+        const res = await authApi.me() as any;
+        if (res && res.id) {
+          setCurrentUser(res);
         }
       } catch (error) {
         console.error('获取用户信息失败:', error);

@@ -13,13 +13,13 @@ const Login: React.FC = () => {
   const handleLogin = async (values: { username: string; password: string }) => {
     setLoading(true);
     try {
-      const res = await authApi.login(values);
-      if (res.data?.token) {
-        setToken(res.data.token);
+      const res = await authApi.login(values) as any;
+      if (res.token) {
+        setToken(res.token);
         message.success('登录成功');
         navigate('/');
       } else {
-        message.error('登录失败');
+        message.error('登录失败：未获取到令牌');
       }
     } catch (error: any) {
       message.error(error.response?.data?.error || '登录失败');
