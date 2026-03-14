@@ -56,11 +56,16 @@ const Providers: React.FC = () => {
   const handleCreate = async (values: CreateProviderRequest) => {
     try {
       const userCode = getCurrentUserCode() || '';
-      await providersApi.create(userCode, { ...values, supported_models: models });
+      await providersApi.create(userCode, {
+        ...values,
+        supported_models: models,
+        default_model: defaultModel,
+      });
       message.success('创建成功');
       setModalVisible(false);
       form.resetFields();
       setModels([]);
+      setDefaultModel('');
       fetchProviders();
     } catch (error) {
       message.error('创建失败');
@@ -70,12 +75,17 @@ const Providers: React.FC = () => {
   const handleUpdate = async (values: CreateProviderRequest) => {
     if (!editingProvider) return;
     try {
-      await providersApi.update(editingProvider.id, { ...values, supported_models: models });
+      await providersApi.update(editingProvider.id, {
+        ...values,
+        supported_models: models,
+        default_model: defaultModel,
+      });
       message.success('更新成功');
       setModalVisible(false);
       setEditingProvider(null);
       form.resetFields();
       setModels([]);
+      setDefaultModel('');
       fetchProviders();
     } catch (error) {
       message.error('更新失败');
