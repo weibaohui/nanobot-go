@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Table,
   Card,
@@ -27,7 +26,6 @@ import {
   EyeOutlined,
   BranchesOutlined,
   MessageOutlined,
-  BarChartOutlined,
   FilterOutlined,
   ClearOutlined,
 } from '@ant-design/icons';
@@ -59,7 +57,6 @@ interface ChatMessage {
 }
 
 const Conversations: React.FC = () => {
-  const navigate = useNavigate();
   const [records, setRecords] = useState<ConversationRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [sessionKey, setSessionKey] = useState('');
@@ -483,9 +480,6 @@ const Conversations: React.FC = () => {
               prefix={<SearchOutlined />}
               allowClear
             />
-            <Button icon={<BarChartOutlined />} onClick={() => navigate('/conversations/stats')}>
-              统计分析
-            </Button>
           </Space>
         }
       >
