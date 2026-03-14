@@ -217,7 +217,7 @@ const Conversations: React.FC = () => {
       nodeMap.set(record.id, {
         key: String(record.id),
         title: (
-          <Space direction="vertical" size={0} style={{ width: '100%' }}>
+          <Space orientation="vertical" size={0} style={{ width: '100%' }}>
             <Space>
               <Tag color={getRoleColor(record.role)}>{getRoleLabel(record.role)}</Tag>
               <Text type="secondary" style={{ fontSize: 12 }}>
