@@ -64,8 +64,18 @@ const Conversations: React.FC = () => {
 
   const columns = [
     { title: 'ID', dataIndex: 'id', width: 60 },
-    { title: 'Trace ID', dataIndex: 'trace_id', ellipsis: true },
-    { title: 'Session', dataIndex: 'session_key', ellipsis: true },
+    {
+      title: 'Agent Code',
+      dataIndex: 'agent_code',
+      ellipsis: true,
+      render: (code: string) => code || '-',
+    },
+    {
+      title: 'Channel Code',
+      dataIndex: 'channel_code',
+      ellipsis: true,
+      render: (code: string) => code || '-',
+    },
     {
       title: '角色',
       dataIndex: 'role',
@@ -87,6 +97,11 @@ const Conversations: React.FC = () => {
       title: '时间',
       dataIndex: 'timestamp',
       render: (time: string) => time ? new Date(time).toLocaleString() : '-',
+    },
+    {
+      title: 'Trace ID',
+      dataIndex: 'trace_id',
+      ellipsis: true,
     },
     {
       title: '操作',
@@ -143,9 +158,9 @@ const Conversations: React.FC = () => {
         {selectedRecord && (
           <Descriptions column={1} bordered>
             <Descriptions.Item label="ID">{selectedRecord.id}</Descriptions.Item>
-            <Descriptions.Item label="Trace ID">{selectedRecord.trace_id}</Descriptions.Item>
-            <Descriptions.Item label="Span ID">{selectedRecord.span_id}</Descriptions.Item>
-            <Descriptions.Item label="Session Key">{selectedRecord.session_key}</Descriptions.Item>
+            <Descriptions.Item label="User Code">{selectedRecord.user_code || '-'}</Descriptions.Item>
+            <Descriptions.Item label="Agent Code">{selectedRecord.agent_code || '-'}</Descriptions.Item>
+            <Descriptions.Item label="Channel Code">{selectedRecord.channel_code || '-'}</Descriptions.Item>
             <Descriptions.Item label="Event Type">{selectedRecord.event_type}</Descriptions.Item>
             <Descriptions.Item label="角色">
               <Tag color={getRoleColor(selectedRecord.role)}>{selectedRecord.role}</Tag>
@@ -157,9 +172,8 @@ const Conversations: React.FC = () => {
               Prompt: {selectedRecord.prompt_tokens} / Completion: {selectedRecord.completion_tokens} / Total: {selectedRecord.total_tokens}
             </Descriptions.Item>
             <Descriptions.Item label="时间">{selectedRecord.timestamp}</Descriptions.Item>
-            <Descriptions.Item label="User Code">{selectedRecord.user_code}</Descriptions.Item>
-            <Descriptions.Item label="Agent Code">{selectedRecord.agent_code}</Descriptions.Item>
-            <Descriptions.Item label="Channel Code">{selectedRecord.channel_code}</Descriptions.Item>
+            <Descriptions.Item label="Span ID">{selectedRecord.span_id}</Descriptions.Item>
+            <Descriptions.Item label="Trace ID">{selectedRecord.trace_id}</Descriptions.Item>
           </Descriptions>
         )}
       </Modal>
