@@ -80,6 +80,9 @@ func (g *Gateway) InitAPI() {
 
 	g.Providers = api.NewProviders(g.DB.DB.DB())
 
+	// 注入 SessionManager 用于取消会话功能
+	g.Providers.SessionManager = g.SessionManager
+
 	if err := g.Providers.InitDefaultData(); err != nil {
 		g.Logger.Error("初始化默认数据失败", zap.Error(err))
 	} else {

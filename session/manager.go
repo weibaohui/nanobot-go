@@ -26,6 +26,11 @@ type Session struct {
 	Messages  []Message `json:"messages"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
+
+	// context 相关字段（不序列化）
+	cancel context.CancelFunc `json:"-"` // context 取消函数
+	ctx    context.Context    `json:"-"` // 当前会话的 context
+	mu     sync.RWMutex       `json:"-"` // 保护 context 相关字段
 }
 
 // AddMessage 添加消息到会话
@@ -55,6 +60,44 @@ func (s *Session) AddMessageWithTrace(role, content, traceID, spanID, parentSpan
 func (s *Session) Clear() {
 	s.Messages = nil
 	s.UpdatedAt = time.Now()
+}
+
+// SetContext 设置会话的 context 和 cancel 函数
+func (s *Session) SetContext(ctx context.Context, cancel context.CancelFunc) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ctx = ctx
+	s.cancel = cancel
+}
+
+// GetContext 获取当前会话的 context（如果已取消或不存在，返回 nil）
+func (s *Session) GetContext() context.Context {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.ctx
+}
+
+// Cancel 取消当前会话
+// 返回 true 表示成功触发取消，false 表示会话不在执行中
+func (s *Session) Cancel() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.cancel == nil {
+		return false
+	}
+
+	s.cancel()
+	s.cancel = nil
+	s.ctx = nil
+	return true
+}
+
+// IsActive 检查会话是否正在活跃处理中
+func (s *Session) IsActive() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cancel != nil
 }
 
 // ConversationRecordRepository 对话记录仓库接口
@@ -148,4 +191,38 @@ func (m *Manager) GetOrCreate(key string) *Session {
 	m.mu.Unlock()
 
 	return session
+}
+
+// CancelSession 取消指定会话
+// 返回 true 表示成功触发取消，false 表示会话不存在或不在执行中
+func (m *Manager) CancelSession(sessionKey string) bool {
+	m.mu.RLock()
+	session, ok := m.cache[sessionKey]
+	m.mu.RUnlock()
+
+	if !ok {
+		return false
+	}
+
+	return session.Cancel()
+}
+
+// GetSession 获取指定会话（不进行创建）
+func (m *Manager) GetSession(sessionKey string) *Session {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.cache[sessionKey]
+}
+
+// IsSessionActive 检查指定会话是否正在活跃处理中
+func (m *Manager) IsSessionActive(sessionKey string) bool {
+	m.mu.RLock()
+	session, ok := m.cache[sessionKey]
+	m.mu.RUnlock()
+
+	if !ok {
+		return false
+	}
+
+	return session.IsActive()
 }

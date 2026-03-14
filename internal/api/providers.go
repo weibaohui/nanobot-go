@@ -9,6 +9,12 @@ import (
 	"gorm.io/gorm"
 )
 
+// SessionManager 会话管理器接口（内存中的 session.Manager）
+type SessionManager interface {
+	CancelSession(sessionKey string) bool
+	IsSessionActive(sessionKey string) bool
+}
+
 // Providers 包含所有的服务和仓库
 type Providers struct {
 	DB                        *gorm.DB
@@ -25,6 +31,7 @@ type Providers struct {
 	ConversationRecordService ConversationRecordService
 	StreamMemoryService       ms.StreamMemoryService
 	LongTermMemoryService     ms.LongTermMemoryService
+	SessionManager            SessionManager
 }
 
 // NewProviders 创建所有服务和仓库

@@ -180,3 +180,30 @@ func (h *Handler) handleSessionMetadata(c *gin.Context, sessionKey string) {
 		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "method not allowed"})
 	}
 }
+
+// cancelSession 取消正在执行的会话
+func (h *Handler) cancelSession(c *gin.Context) {
+	sessionKey := c.Param("id")
+	if sessionKey == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "session key is required"})
+		return
+	}
+
+	if h.sessionManager == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "session manager not available"})
+		return
+	}
+
+	success := h.sessionManager.CancelSession(sessionKey)
+	if !success {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "会话不存在或不在执行中",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Message: "会话已取消",
+	})
+}

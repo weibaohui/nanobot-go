@@ -19,6 +19,7 @@ type Handler struct {
 	conversationRecordService ConversationRecordService
 	streamMemoryService       StreamMemoryService
 	longTermMemoryService     LongTermMemoryService
+	sessionManager            SessionManager
 }
 
 // NewHandler 创建 API 处理器
@@ -32,6 +33,7 @@ func NewHandler(
 	conversationRecordService ConversationRecordService,
 	streamMemoryService StreamMemoryService,
 	longTermMemoryService LongTermMemoryService,
+	sessionManager SessionManager,
 ) *Handler {
 	return &Handler{
 		userService:               userService,
@@ -43,6 +45,7 @@ func NewHandler(
 		conversationRecordService: conversationRecordService,
 		streamMemoryService:       streamMemoryService,
 		longTermMemoryService:     longTermMemoryService,
+		sessionManager:            sessionManager,
 	}
 }
 
@@ -108,6 +111,7 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 			sessions.PUT("/:id/metadata", func(c *gin.Context) {
 				h.handleSessionByKey(c)
 			})
+			sessions.POST("/:id/cancel", h.cancelSession)
 		}
 
 		// Provider API
