@@ -1,14 +1,14 @@
 package api
 
 import (
-	"github.com/weibaohui/nanobot-go/agent/provider"
+	"github.com/weibaohui/nanobot-go/pkg/agent/provider"
 	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/internal/repository"
 	"github.com/weibaohui/nanobot-go/internal/service"
 	"github.com/weibaohui/nanobot-go/internal/service/codelookup"
 	"github.com/weibaohui/nanobot-go/internal/service/conversation"
 	ms "github.com/weibaohui/nanobot-go/internal/service/memory"
-	memservice "github.com/weibaohui/nanobot-go/memory/service"
+	memservice "github.com/weibaohui/nanobot-go/internal/memory/service"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )

@@ -1,11 +1,11 @@
 package app
 
 import (
-	"github.com/weibaohui/nanobot-go/agent/provider"
+	"github.com/weibaohui/nanobot-go/pkg/agent/provider"
 	"github.com/weibaohui/nanobot-go/config"
-	"github.com/weibaohui/nanobot-go/memory/job"
-	"github.com/weibaohui/nanobot-go/memory/repository"
-	"github.com/weibaohui/nanobot-go/memory/service"
+	"github.com/weibaohui/nanobot-go/internal/memory/job"
+	"github.com/weibaohui/nanobot-go/internal/memory/repository"
+	"github.com/weibaohui/nanobot-go/internal/memory/service"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )

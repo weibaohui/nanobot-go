@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 
-	memorymodels "github.com/weibaohui/nanobot-go/memory/models"
+	memorymodels "github.com/weibaohui/nanobot-go/internal/memory/models"
 	"gorm.io/gorm"
 )
 

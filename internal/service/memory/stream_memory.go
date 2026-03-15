@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	memorymodels "github.com/weibaohui/nanobot-go/memory/models"
-	memservice "github.com/weibaohui/nanobot-go/memory/service"
+	memorymodels "github.com/weibaohui/nanobot-go/internal/memory/models"
+	memservice "github.com/weibaohui/nanobot-go/internal/memory/service"
 	"gorm.io/gorm"
 )
 

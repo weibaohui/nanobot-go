@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	memorymodels "github.com/weibaohui/nanobot-go/memory/models"
+	memorymodels "github.com/weibaohui/nanobot-go/internal/memory/models"
 )
 
 // StreamMemoryService 短期记忆服务接口

@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/weibaohui/nanobot-go/agent"
-	"github.com/weibaohui/nanobot-go/agent/provider"
+	"github.com/weibaohui/nanobot-go/pkg/agent"
+	"github.com/weibaohui/nanobot-go/pkg/agent/provider"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/channels"
 	"github.com/weibaohui/nanobot-go/config"
