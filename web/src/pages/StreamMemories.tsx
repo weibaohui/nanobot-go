@@ -10,8 +10,9 @@ import {
   Switch,
   DatePicker,
   Space,
+  Popconfirm,
 } from 'antd';
-import { EyeOutlined, CheckCircleOutlined, RocketOutlined } from '@ant-design/icons';
+import { EyeOutlined, CheckCircleOutlined, RocketOutlined, DeleteOutlined } from '@ant-design/icons';
 import { streamMemoriesApi } from '../api';
 import type { StreamMemory } from '../types';
 import dayjs from 'dayjs';
@@ -65,6 +66,16 @@ const StreamMemories: React.FC = () => {
       fetchMemories();
     } catch (error) {
       message.error('标记失败');
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      await streamMemoriesApi.delete(id);
+      message.success('删除成功');
+      fetchMemories();
+    } catch (error) {
+      message.error('删除失败');
     }
   };
 
@@ -134,7 +145,7 @@ const StreamMemories: React.FC = () => {
     },
     {
       title: '操作',
-      width: 180,
+      width: 220,
       render: (_: any, record: StreamMemory) => (
         <>
           <Button
@@ -156,6 +167,22 @@ const StreamMemories: React.FC = () => {
               标记处理
             </Button>
           )}
+          <Popconfirm
+            title="确认删除"
+            description="确定要删除这条短期记忆吗？此操作不可恢复。"
+            onConfirm={() => handleDelete(record.id)}
+            okText="删除"
+            cancelText="取消"
+            okButtonProps={{ danger: true }}
+          >
+            <Button
+              type="text"
+              danger
+              icon={<DeleteOutlined />}
+            >
+              删除
+            </Button>
+          </Popconfirm>
         </>
       ),
     },

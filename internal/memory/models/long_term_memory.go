@@ -8,7 +8,7 @@ type LongTermMemory struct {
 	ID           uint64    `gorm:"primaryKey" json:"id"`
 	Date         string    `gorm:"type:text;index:idx_longterm_date;not null" json:"date"`                           // 日期 YYYY-MM-DD
 	UserCode     string    `gorm:"type:text;index:idx_longterm_user_agent_date,unique;not null" json:"user_code"`    // 用户编码
-	AgentCode    string    `gorm:"type:text;index:idx_longterm_user_agent_date,unique;not null" json:"agent_code"`   // Agent编码，区分不同Agent
+	AgentCode    string    `gorm:"type:text;index:idx_longterm_user_agent_date,unique" json:"agent_code"`   // Agent编码，区分不同Agent，默认为空
 	Summary      string    `gorm:"type:text" json:"summary"`                                                         // 总体摘要
 	WhatHappened string    `gorm:"type:text" json:"what_happened"`                                                   // 发生了什么
 	Conclusion   string    `gorm:"type:text" json:"conclusion"`                                                      // 结论/结果

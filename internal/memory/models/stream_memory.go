@@ -7,7 +7,7 @@ import "time"
 type StreamMemory struct {
 	ID        uint64     `gorm:"primaryKey" json:"id"`
 	UserCode  string     `gorm:"type:text;index:idx_stream_user_agent_date,unique;not null" json:"user_code"` // 用户编码
-	AgentCode string     `gorm:"type:text;index:idx_stream_user_agent_date,unique;not null" json:"agent_code"` // Agent编码，区分不同Agent
+	AgentCode string     `gorm:"type:text;index:idx_stream_user_agent_date,unique" json:"agent_code"` // Agent编码，区分不同Agent，默认为空
 	Date      string     `gorm:"type:text;index:idx_stream_user_agent_date,unique;not null" json:"date"`      // 日期 YYYY-MM-DD，联合唯一索引
 	Content   string     `gorm:"type:text" json:"content"`                                              // 当天所有对话的内容聚合
 	Summary   string     `gorm:"type:text" json:"summary"`                                              // AI生成的当天总结
