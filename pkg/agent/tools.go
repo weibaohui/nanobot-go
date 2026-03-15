@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/askuser"
+	"github.com/weibaohui/nanobot-go/pkg/agent/tools/config"
 	toolcron "github.com/weibaohui/nanobot-go/pkg/agent/tools/cron"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/editfile"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/exec"
@@ -62,6 +63,14 @@ func (l *Loop) registerDefaultTools() {
 
 	// 注册通用技能工具（用于拦截后的技能调用）
 	l.tools.Register(skill.NewGenericSkillTool(l.context.GetSkillsLoader().LoadSkill))
+
+	// 注册 Agent 配置管理工具
+	if l.agentService != nil {
+		configTools := config.NewTools(l.agentService)
+		l.tools.Register(configTools.ReadAgentConfigTool)
+		l.tools.Register(configTools.UpdateAgentConfigTool)
+		l.tools.Register(configTools.ManageAgentMemoryTool)
+	}
 }
 
 // registerTaskTools 注册后台任务工具
