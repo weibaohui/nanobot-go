@@ -28,14 +28,13 @@ func NewChatModelAdapter(logger *zap.Logger, configLoader LLMConfigLoader, sessi
 		return nil, ErrNilAPIKey
 	}
 
-	modelName := cfg.DefaultModel
-	if modelName == "" {
-		modelName = "gpt-4o-mini"
+	if cfg.DefaultModel == "" {
+		return nil, fmt.Errorf("LLM 配置未设置默认模型")
 	}
 
 	chatModel, err := openai.NewChatModel(context.Background(), &openai.ChatModelConfig{
 		APIKey:  cfg.APIKey,
-		Model:   modelName,
+		Model:   cfg.DefaultModel,
 		BaseURL: cfg.APIBase,
 	})
 	if err != nil {
@@ -179,26 +178,46 @@ type dbLLMProvider struct {
 	APIBase      string
 	DefaultModel string
 	ExtraHeaders string
-	IsDefault    bool
-	IsActive     bool
+}
+
+// loadDefaultProvider 从数据库加载默认 Provider（内部函数，消除代码重复）
+func loadDefaultProvider(db *gorm.DB) (*dbLLMProvider, error) {
+	if db == nil {
+		return nil, fmt.Errorf("数据库连接不能为空")
+	}
+
+	var provider dbLLMProvider
+	err := db.Model(&dbLLMProvider{}).
+		Table("llm_providers").
+		Where("is_default = ? AND is_active = ?", true, true).
+		Select("api_key, api_base, default_model, extra_headers").
+		First(&provider).Error
+	if err != nil {
+		return nil, fmt.Errorf("获取默认 Provider 失败: %w", err)
+	}
+
+	return &provider, nil
+}
+
+// parseExtraHeaders 解析额外请求头
+func parseExtraHeaders(extraHeadersJSON string, logger *zap.Logger) map[string]string {
+	var extraHeaders map[string]string
+	if extraHeadersJSON != "" && extraHeadersJSON != "null" {
+		if err := json.Unmarshal([]byte(extraHeadersJSON), &extraHeaders); err != nil {
+			if logger != nil {
+				logger.Warn("解析 extra_headers 失败，将忽略该字段", zap.Error(err))
+			}
+		}
+	}
+	return extraHeaders
 }
 
 // NewChatModelAdapterFromDB 从数据库直接创建 ChatModelAdapter
 // 这是 Main Agent 和 Memory Summarizer 共用的 ChatModel 创建函数
 func NewChatModelAdapterFromDB(db *gorm.DB, logger *zap.Logger, sessions *session.Manager) (*ChatModelAdapter, error) {
-	if db == nil {
-		return nil, fmt.Errorf("数据库连接不能为空")
-	}
-
-	// 直接查询数据库获取默认 Provider
-	var provider dbLLMProvider
-	err := db.Model(&dbLLMProvider{}).
-		Table("llm_providers").
-		Where("is_default = ? AND is_active = ?", true, true).
-		Select("api_key, api_base, default_model, extra_headers, is_default, is_active").
-		First(&provider).Error
+	provider, err := loadDefaultProvider(db)
 	if err != nil {
-		return nil, fmt.Errorf("获取默认 Provider 失败: %w", err)
+		return nil, err
 	}
 
 	if provider.APIKey == "" {
@@ -206,20 +225,13 @@ func NewChatModelAdapterFromDB(db *gorm.DB, logger *zap.Logger, sessions *sessio
 		return nil, ErrNilAPIKey
 	}
 
-	modelName := provider.DefaultModel
-	if modelName == "" {
-		modelName = "gpt-4o-mini"
-	}
-
-	// 解析额外请求头
-	var extraHeaders map[string]string
-	if provider.ExtraHeaders != "" && provider.ExtraHeaders != "null" {
-		_ = json.Unmarshal([]byte(provider.ExtraHeaders), &extraHeaders)
+	if provider.DefaultModel == "" {
+		return nil, fmt.Errorf("默认 Provider 未配置默认模型")
 	}
 
 	chatModel, err := openai.NewChatModel(context.Background(), &openai.ChatModelConfig{
 		APIKey:  provider.APIKey,
-		Model:   modelName,
+		Model:   provider.DefaultModel,
 		BaseURL: provider.APIBase,
 	})
 	if err != nil {
@@ -239,34 +251,18 @@ func NewChatModelAdapterFromDB(db *gorm.DB, logger *zap.Logger, sessions *sessio
 
 // CreateConfigLoaderFromDB 从数据库创建 LLMConfigLoader 函数
 // 用于需要动态获取配置的场景（如 Main Agent）
-func CreateConfigLoaderFromDB(db *gorm.DB) LLMConfigLoader {
+func CreateConfigLoaderFromDB(db *gorm.DB, logger *zap.Logger) LLMConfigLoader {
 	return func(ctx context.Context) (*LLMConfig, error) {
-		if db == nil {
-			return nil, fmt.Errorf("数据库连接不能为空")
-		}
-
-		// 直接查询数据库获取默认 Provider
-		var provider dbLLMProvider
-		err := db.Model(&dbLLMProvider{}).
-			Table("llm_providers").
-			Where("is_default = ? AND is_active = ?", true, true).
-			Select("api_key, api_base, default_model, extra_headers, is_default, is_active").
-			First(&provider).Error
+		provider, err := loadDefaultProvider(db)
 		if err != nil {
-			return nil, fmt.Errorf("获取默认 Provider 失败: %w", err)
-		}
-
-		// 解析额外请求头
-		var extraHeaders map[string]string
-		if provider.ExtraHeaders != "" && provider.ExtraHeaders != "null" {
-			_ = json.Unmarshal([]byte(provider.ExtraHeaders), &extraHeaders)
+			return nil, err
 		}
 
 		return &LLMConfig{
 			APIKey:       provider.APIKey,
 			APIBase:      provider.APIBase,
 			DefaultModel: provider.DefaultModel,
-			ExtraHeaders: extraHeaders,
+			ExtraHeaders: parseExtraHeaders(provider.ExtraHeaders, logger),
 		}, nil
 	}
 }

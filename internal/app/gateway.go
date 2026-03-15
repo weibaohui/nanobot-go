@@ -124,7 +124,7 @@ func (g *Gateway) InitAgentLoop() {
 	}
 
 	// 使用公共函数从数据库创建 ConfigLoader
-	configLoader := provider.CreateConfigLoaderFromDB(g.DB.DB.DB())
+	configLoader := provider.CreateConfigLoaderFromDB(g.DB.DB.DB(), g.Logger)
 
 	g.Loop = agent.NewLoop(&agent.LoopConfig{
 		ConfigLoader:   configLoader,
