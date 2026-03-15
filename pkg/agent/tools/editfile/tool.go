@@ -1,0 +1,78 @@
+package editfile
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/cloudwego/eino/components/tool"
+	"github.com/cloudwego/eino/schema"
+	"github.com/weibaohui/nanobot-go/pkg/agent/tools/common"
+)
+
+// Tool 编辑文件工具
+type Tool struct {
+	AllowedDir string
+}
+
+// Name 返回工具名称
+func (t *Tool) Name() string {
+	return "edit_file"
+}
+
+// Info 返回工具信息
+func (t *Tool) Info(ctx context.Context) (*schema.ToolInfo, error) {
+	return &schema.ToolInfo{
+		Name: t.Name(),
+		Desc: "通过替换文本编辑文件",
+		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
+			"path": {
+				Type:     schema.DataType("string"),
+				Desc:     "文件路径",
+				Required: true,
+			},
+			"old_text": {
+				Type:     schema.DataType("string"),
+				Desc:     "要替换的文本",
+				Required: true,
+			},
+			"new_text": {
+				Type:     schema.DataType("string"),
+				Desc:     "替换成的文本",
+				Required: true,
+			},
+		}),
+	}, nil
+}
+
+// Run 执行工具逻辑
+func (t *Tool) Run(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
+	var args struct {
+		Path    string `json:"path"`
+		OldText string `json:"old_text"`
+		NewText string `json:"new_text"`
+	}
+	if err := common.DecodeArgs(argumentsInJSON, &args); err != nil {
+		return "", err
+	}
+	resolved := common.ResolvePath(args.Path, t.AllowedDir)
+	data, err := os.ReadFile(resolved)
+	if err != nil {
+		return fmt.Sprintf("错误: 文件不存在: %s", args.Path), nil
+	}
+	content := string(data)
+	if !strings.Contains(content, args.OldText) {
+		return "错误: old_text 在文件中未找到", nil
+	}
+	newContent := strings.Replace(content, args.OldText, args.NewText, 1)
+	if err := os.WriteFile(resolved, []byte(newContent), 0644); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("成功编辑 %s", args.Path), nil
+}
+
+// InvokableRun 可直接调用的执行入口
+func (t *Tool) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
+	return t.Run(ctx, argumentsInJSON, opts...)
+}

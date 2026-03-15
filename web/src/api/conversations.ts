@@ -17,6 +17,7 @@ export const conversationsApi = {
   delete: (id: number) => client.delete(`/conversations/${id}`),
   getBySession: (sessionKey: string) => client.get(`/conversations/session/${sessionKey}`),
   getByTrace: (traceID: string) => client.get(`/conversations/trace/${traceID}`),
+  getByUserAndDate: (userCode: string, date: string) => client.get(`/conversations/user/${userCode}/date/${date}`),
   getStats: (params: StatsParams) => {
     const queryParams = new URLSearchParams();
     if (params.start_time) queryParams.append('start_time', params.start_time);

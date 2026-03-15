@@ -90,6 +90,33 @@ func (s *service) ListByTimeRange(ctx context.Context, startTime, endTime time.T
 	}, nil
 }
 
+func (s *service) ListByUserAndDate(ctx context.Context, userCode string, date string) ([]ConversationDTO, error) {
+	if userCode == "" {
+		return nil, fmt.Errorf("%w: userCode cannot be empty", ErrInvalidParameter)
+	}
+	if date == "" {
+		return nil, fmt.Errorf("%w: date cannot be empty", ErrInvalidParameter)
+	}
+
+	// 解析日期
+	targetDate, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid date format, expected YYYY-MM-DD: %v", ErrInvalidParameter, err)
+	}
+
+	// 计算时间范围（当天的开始和结束）
+	startOfDay := targetDate
+	endOfDay := targetDate.AddDate(0, 0, 1).Add(-time.Nanosecond)
+
+	// 查询该用户当天的所有对话
+	records, err := s.repo.FindByUserCodeAndDate(ctx, userCode, startOfDay, endOfDay)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrDatabaseOperation, err)
+	}
+
+	return s.recordsToDTOs(records), nil
+}
+
 func (s *service) ListRecent(ctx context.Context, page, pageSize int) (*ConversationListResult, error) {
 	page, pageSize = pagination.NormalizeDefault(page, pageSize)
 

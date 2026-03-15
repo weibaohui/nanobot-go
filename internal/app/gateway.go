@@ -11,13 +11,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/weibaohui/nanobot-go/agent"
+	"github.com/weibaohui/nanobot-go/pkg/agent"
+	"github.com/weibaohui/nanobot-go/pkg/agent/provider"
 	"github.com/weibaohui/nanobot-go/bus"
 	"github.com/weibaohui/nanobot-go/channels"
 	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/internal/api"
 	"github.com/weibaohui/nanobot-go/internal/models"
-	"github.com/weibaohui/nanobot-go/internal/service"
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
 )
@@ -78,7 +78,7 @@ func (g *Gateway) InitAPI() {
 		return
 	}
 
-	g.Providers = api.NewProviders(g.DB.DB.DB())
+	g.Providers = api.NewProviders(g.DB.DB.DB(), g.Config, g.Logger)
 
 	// 注入 SessionManager 用于取消会话功能
 	g.Providers.SessionManager = g.SessionManager
@@ -123,22 +123,8 @@ func (g *Gateway) InitAgentLoop() {
 		maxIter = 15
 	}
 
-	configLoader := func(ctx context.Context) (*agent.LLMConfig, error) {
-		if g.DB == nil || g.DB.DB == nil {
-			return nil, fmt.Errorf("数据库未初始化")
-		}
-		providerSvc := service.NewProviderService(g.DB.DB.DB(), nil)
-		svcConfig, err := providerSvc.GetLLMConfig(ctx, "")
-		if err != nil {
-			return nil, fmt.Errorf("获取 LLM 配置失败: %w", err)
-		}
-		return &agent.LLMConfig{
-			APIKey:       svcConfig.APIKey,
-			APIBase:      svcConfig.APIBase,
-			DefaultModel: svcConfig.DefaultModel,
-			ExtraHeaders: svcConfig.ExtraHeaders,
-		}, nil
-	}
+	// 使用公共函数从数据库创建 ConfigLoader
+	configLoader := provider.CreateConfigLoaderFromDB(g.DB.DB.DB(), g.Logger)
 
 	g.Loop = agent.NewLoop(&agent.LoopConfig{
 		ConfigLoader:   configLoader,

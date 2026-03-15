@@ -3,20 +3,20 @@ package service
 import (
 	"context"
 
-	memorymodels "github.com/weibaohui/nanobot-go/memory/models"
+	memorymodels "github.com/weibaohui/nanobot-go/internal/memory/models"
 	"gorm.io/gorm"
 )
 
 // LongTermMemoryService 长期记忆服务接口
 type LongTermMemoryService interface {
-	List(ctx context.Context, offset int, limit int) ([]memorymodels.LongTermMemory, int64, error)
+	List(ctx context.Context, userCode string, agentCode string, offset int, limit int) ([]memorymodels.LongTermMemory, int64, error)
 	Get(ctx context.Context, id uint64) (*memorymodels.LongTermMemory, error)
-	GetByDate(ctx context.Context, date string) (*memorymodels.LongTermMemory, error)
+	GetByDate(ctx context.Context, userCode string, agentCode string, date string) (*memorymodels.LongTermMemory, error)
 	Create(ctx context.Context, memory *memorymodels.LongTermMemory) error
 	Update(ctx context.Context, id uint64, memory *memorymodels.LongTermMemory) error
 	Delete(ctx context.Context, id uint64) error
-	Search(ctx context.Context, query string, offset int, limit int) ([]memorymodels.LongTermMemory, int64, error)
-	GetRecent(ctx context.Context, days int, offset int, limit int) ([]memorymodels.LongTermMemory, int64, error)
+	Search(ctx context.Context, userCode string, agentCode string, query string, offset int, limit int) ([]memorymodels.LongTermMemory, int64, error)
+	GetRecent(ctx context.Context, userCode string, agentCode string, days int, offset int, limit int) ([]memorymodels.LongTermMemory, int64, error)
 }
 
 // longTermMemoryService 长期记忆服务实现
@@ -29,16 +29,27 @@ func NewLongTermMemoryService(db *gorm.DB) LongTermMemoryService {
 	return &longTermMemoryService{db: db}
 }
 
-// List 获取长期记忆列表
-func (s *longTermMemoryService) List(ctx context.Context, offset int, limit int) ([]memorymodels.LongTermMemory, int64, error) {
+// List 获取长期记忆列表（支持用户和Agent隔离）
+func (s *longTermMemoryService) List(ctx context.Context, userCode string, agentCode string, offset int, limit int) ([]memorymodels.LongTermMemory, int64, error) {
 	var memories []memorymodels.LongTermMemory
 	var total int64
 
-	if err := s.db.WithContext(ctx).Model(&memorymodels.LongTermMemory{}).Count(&total).Error; err != nil {
+	query := s.db.WithContext(ctx).Model(&memorymodels.LongTermMemory{})
+
+	// 用户隔离：如果指定了 UserCode，只查询该用户的记忆
+	if userCode != "" {
+		query = query.Where("user_code = ?", userCode)
+	}
+	// Agent隔离：如果指定了 AgentCode，只查询该Agent的记忆
+	if agentCode != "" {
+		query = query.Where("agent_code = ?", agentCode)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	if err := s.db.WithContext(ctx).Order("date DESC").Offset(offset).Limit(limit).Find(&memories).Error; err != nil {
+	if err := query.Order("date DESC").Offset(offset).Limit(limit).Find(&memories).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -54,10 +65,21 @@ func (s *longTermMemoryService) Get(ctx context.Context, id uint64) (*memorymode
 	return &memory, nil
 }
 
-// GetByDate 根据日期获取长期记忆
-func (s *longTermMemoryService) GetByDate(ctx context.Context, date string) (*memorymodels.LongTermMemory, error) {
+// GetByDate 根据日期获取长期记忆（支持用户和Agent隔离）
+func (s *longTermMemoryService) GetByDate(ctx context.Context, userCode string, agentCode string, date string) (*memorymodels.LongTermMemory, error) {
 	var memory memorymodels.LongTermMemory
-	if err := s.db.WithContext(ctx).Where("date = ?", date).First(&memory).Error; err != nil {
+	query := s.db.WithContext(ctx).Where("date = ?", date)
+
+	// 用户隔离：如果指定了 UserCode，只查询该用户的记忆
+	if userCode != "" {
+		query = query.Where("user_code = ?", userCode)
+	}
+	// Agent隔离：如果指定了 AgentCode，只查询该Agent的记忆
+	if agentCode != "" {
+		query = query.Where("agent_code = ?", agentCode)
+	}
+
+	if err := query.First(&memory).Error; err != nil {
 		return nil, err
 	}
 	return &memory, nil
@@ -78,8 +100,8 @@ func (s *longTermMemoryService) Delete(ctx context.Context, id uint64) error {
 	return s.db.WithContext(ctx).Delete(&memorymodels.LongTermMemory{}, id).Error
 }
 
-// Search 搜索长期记忆
-func (s *longTermMemoryService) Search(ctx context.Context, query string, offset int, limit int) ([]memorymodels.LongTermMemory, int64, error) {
+// Search 搜索长期记忆（支持用户和Agent隔离）
+func (s *longTermMemoryService) Search(ctx context.Context, userCode string, agentCode string, query string, offset int, limit int) ([]memorymodels.LongTermMemory, int64, error) {
 	var memories []memorymodels.LongTermMemory
 	var total int64
 
@@ -88,25 +110,42 @@ func (s *longTermMemoryService) Search(ctx context.Context, query string, offset
 	countQuery := s.db.WithContext(ctx).Model(&memorymodels.LongTermMemory{}).
 		Where("summary LIKE ? OR what_happened LIKE ? OR conclusion LIKE ? OR highlights LIKE ?",
 			searchQuery, searchQuery, searchQuery, searchQuery)
+
+	// 用户隔离：如果指定了 UserCode，只查询该用户的记忆
+	if userCode != "" {
+		countQuery = countQuery.Where("user_code = ?", userCode)
+	}
+	// Agent隔离：如果指定了 AgentCode，只查询该Agent的记忆
+	if agentCode != "" {
+		countQuery = countQuery.Where("agent_code = ?", agentCode)
+	}
+
 	if err := countQuery.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	if err := s.db.WithContext(ctx).
+	listQuery := s.db.WithContext(ctx).
 		Where("summary LIKE ? OR what_happened LIKE ? OR conclusion LIKE ? OR highlights LIKE ?",
-			searchQuery, searchQuery, searchQuery, searchQuery).
-		Order("date DESC").
-		Offset(offset).
-		Limit(limit).
-		Find(&memories).Error; err != nil {
+			searchQuery, searchQuery, searchQuery, searchQuery)
+
+	// 用户隔离：如果指定了 UserCode，只查询该用户的记忆
+	if userCode != "" {
+		listQuery = listQuery.Where("user_code = ?", userCode)
+	}
+	// Agent隔离：如果指定了 AgentCode，只查询该Agent的记忆
+	if agentCode != "" {
+		listQuery = listQuery.Where("agent_code = ?", agentCode)
+	}
+
+	if err := listQuery.Order("date DESC").Offset(offset).Limit(limit).Find(&memories).Error; err != nil {
 		return nil, 0, err
 	}
 
 	return memories, total, nil
 }
 
-// GetRecent 获取最近几天的长期记忆
-func (s *longTermMemoryService) GetRecent(ctx context.Context, days int, offset int, limit int) ([]memorymodels.LongTermMemory, int64, error) {
+// GetRecent 获取最近几天的长期记忆（支持用户和Agent隔离）
+func (s *longTermMemoryService) GetRecent(ctx context.Context, userCode string, agentCode string, days int, offset int, limit int) ([]memorymodels.LongTermMemory, int64, error) {
 	var memories []memorymodels.LongTermMemory
 	var total int64
 
@@ -116,6 +155,15 @@ func (s *longTermMemoryService) GetRecent(ctx context.Context, days int, offset 
 
 	query := s.db.WithContext(ctx).Model(&memorymodels.LongTermMemory{}).
 		Where("date >= DATE('now', '-' || ? || ' day')", days)
+
+	// 用户隔离：如果指定了 UserCode，只查询该用户的记忆
+	if userCode != "" {
+		query = query.Where("user_code = ?", userCode)
+	}
+	// Agent隔离：如果指定了 AgentCode，只查询该Agent的记忆
+	if agentCode != "" {
+		query = query.Where("agent_code = ?", agentCode)
+	}
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err

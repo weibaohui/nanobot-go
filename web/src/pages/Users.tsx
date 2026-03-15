@@ -11,10 +11,12 @@ import {
   message,
   Popconfirm,
   Card,
+  DatePicker,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, KeyOutlined } from '@ant-design/icons';
-import { usersApi, authApi } from '../api';
-import type { User, CreateUserRequest } from '../types';
+import { PlusOutlined, EditOutlined, DeleteOutlined, KeyOutlined, MessageOutlined } from '@ant-design/icons';
+import { usersApi, authApi, conversationsApi, streamMemoriesApi } from '../api';
+import type { User, CreateUserRequest, ConversationRecord } from '../types';
+import dayjs from 'dayjs';
 
 const Users: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -25,6 +27,16 @@ const Users: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [form] = Form.useForm();
   const [passwordForm] = Form.useForm();
+
+  // 用户对话状态（默认昨天，因为今天还在发生中）
+  const [conversationModalVisible, setConversationModalVisible] = useState(false);
+  const [conversationLoading, setConversationLoading] = useState(false);
+  const [conversationRecords, setConversationRecords] = useState<ConversationRecord[]>([]);
+  const [selectedUserForConversation, setSelectedUserForConversation] = useState<User | null>(null);
+  const [selectedDate, setSelectedDate] = useState(dayjs().subtract(1, 'day'));
+  const [organizeLoading, setOrganizeLoading] = useState(false);
+  const [organizeUserCode, setOrganizeUserCode] = useState('');
+  const [organizeDate, setOrganizeDate] = useState(dayjs().subtract(1, 'day'));
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -92,6 +104,51 @@ const Users: React.FC = () => {
     }
   };
 
+  const fetchUserConversations = async (user: User, date: dayjs.Dayjs) => {
+    setConversationLoading(true);
+    try {
+      const dateStr = date.format('YYYY-MM-DD');
+      const res = await conversationsApi.getByUserAndDate(user.code || user.username, dateStr);
+      setConversationRecords(res as any);
+    } catch (error) {
+      message.error('获取用户对话失败');
+    } finally {
+      setConversationLoading(false);
+    }
+  };
+
+  const handleOrganizeMemory = async () => {
+    if (conversationRecords.length === 0) {
+      message.warning('当前没有对话记录可整理');
+      return;
+    }
+    if (!organizeUserCode) {
+      message.warning('请输入用户编码');
+      return;
+    }
+
+    setOrganizeLoading(true);
+    try {
+      const conversationIDs = conversationRecords.map(r => String(r.id));
+      const contents = conversationRecords.map(r =>
+        `[${r.role}] ${r.content?.substring(0, 200)}${r.content?.length > 200 ? '...' : ''}`
+      );
+
+      await streamMemoriesApi.build({
+        user_code: organizeUserCode,
+        date: organizeDate.format('YYYY-MM-DD'),
+        conversation_ids: conversationIDs,
+        contents: contents,
+      });
+
+      message.success('短期记忆整理成功');
+    } catch (error: any) {
+      message.error(error?.response?.data?.error || '整理失败');
+    } finally {
+      setOrganizeLoading(false);
+    }
+  };
+
   const columns = [
     { title: 'ID', dataIndex: 'id', width: 60 },
     { title: '用户名', dataIndex: 'username' },
@@ -149,6 +206,21 @@ const Users: React.FC = () => {
               删除
             </Button>
           </Popconfirm>
+          <Button
+            type="text"
+            icon={<MessageOutlined />}
+            onClick={() => {
+              const yesterday = dayjs().subtract(1, 'day');
+              setSelectedUserForConversation(record);
+              setSelectedDate(yesterday);
+              setOrganizeDate(yesterday);
+              setOrganizeUserCode(record.code || record.username);
+              fetchUserConversations(record, yesterday);
+              setConversationModalVisible(true);
+            }}
+          >
+            查看对话
+          </Button>
         </Space>
       ),
     },
@@ -255,6 +327,96 @@ const Users: React.FC = () => {
             <Input.Password placeholder="新密码" />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* 用户对话记录弹窗 */}
+      <Modal
+        title={`${selectedUserForConversation?.display_name || selectedUserForConversation?.username || '用户'} 的对话记录`}
+        open={conversationModalVisible}
+        onCancel={() => {
+          setConversationModalVisible(false);
+          setConversationRecords([]);
+          setSelectedUserForConversation(null);
+        }}
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <Button
+              type="primary"
+              icon={<MessageOutlined />}
+              loading={organizeLoading}
+              disabled={conversationRecords.length === 0}
+              onClick={handleOrganizeMemory}
+            >
+              整理为记忆 ({conversationRecords.length})
+            </Button>
+            <Button onClick={() => setConversationModalVisible(false)}>关闭</Button>
+          </div>
+        }
+        width={900}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Space>
+            <span>选择日期：</span>
+            <DatePicker
+              value={selectedDate}
+              onChange={(date) => {
+                if (date && selectedUserForConversation) {
+                  setSelectedDate(date);
+                  setOrganizeDate(date);
+                  fetchUserConversations(selectedUserForConversation, date);
+                }
+              }}
+              format="YYYY-MM-DD"
+            />
+            <Button
+              onClick={() => {
+                if (selectedUserForConversation) {
+                  fetchUserConversations(selectedUserForConversation, selectedDate);
+                }
+              }}
+            >
+              刷新
+            </Button>
+          </Space>
+        </div>
+
+        {conversationLoading ? (
+          <div style={{ textAlign: 'center', padding: 40 }}>加载中...</div>
+        ) : conversationRecords.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 40 }}>该日期暂无对话记录</div>
+        ) : (
+          <div style={{ maxHeight: 500, overflowY: 'auto', padding: 16, background: '#f5f5f5', borderRadius: 8 }}>
+            {conversationRecords.map((record) => (
+              <div
+                key={record.id}
+                style={{
+                  display: 'flex',
+                  flexDirection: record.role === 'user' ? 'row-reverse' : 'row',
+                  marginBottom: 16,
+                  alignItems: 'flex-start',
+                }}
+              >
+                <div
+                  style={{
+                    maxWidth: '70%',
+                    padding: '12px 16px',
+                    borderRadius: record.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                    background: record.role === 'user' ? '#1890ff' : '#fff',
+                    color: record.role === 'user' ? '#fff' : '#333',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  }}
+                >
+                  <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>
+                    {record.role} · {record.timestamp ? new Date(record.timestamp).toLocaleTimeString() : '-'}
+                  </div>
+                  <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                    {record.content}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </Modal>
     </div>
   );

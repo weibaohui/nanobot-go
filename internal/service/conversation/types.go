@@ -58,6 +58,7 @@ type Service interface {
 	ListBySessionKey(ctx context.Context, sessionKey string, page, pageSize int) (*ConversationListResult, error)
 	ListByTimeRange(ctx context.Context, startTime, endTime time.Time, page, pageSize int) (*ConversationListResult, error)
 	ListRecent(ctx context.Context, page, pageSize int) (*ConversationListResult, error)
+	ListByUserAndDate(ctx context.Context, userCode string, date string) ([]ConversationDTO, error)
 	Create(ctx context.Context, dto *ConversationDTO) error
 	CreateBatch(ctx context.Context, dtos []ConversationDTO) error
 	GetStats(ctx context.Context, req *StatsRequest) (*StatsResponse, error)
@@ -130,6 +131,7 @@ type Repository interface {
 	FindByTraceID(ctx context.Context, traceID string) ([]models.ConversationRecord, error)
 	FindBySessionKey(ctx context.Context, sessionKey string, opts *models.QueryOptions) ([]models.ConversationRecord, error)
 	FindByTimeRange(ctx context.Context, startTime, endTime time.Time, opts *models.QueryOptions) ([]models.ConversationRecord, error)
+	FindByUserCodeAndDate(ctx context.Context, userCode string, startTime, endTime time.Time) ([]models.ConversationRecord, error)
 	FindByTraceIDRoleAndContent(ctx context.Context, traceID, role, content string) ([]models.ConversationRecord, error)
 	CountBySessionKey(ctx context.Context, sessionKey string) (int64, error)
 	CountByTimeRange(ctx context.Context, startTime, endTime time.Time) (int64, error)

@@ -257,22 +257,27 @@ export interface ConversationRecord {
 }
 
 // Stream Memory 类型
+// 按用户+Agent+日期聚合，每天每条Agent一条记录
 export interface StreamMemory {
   id: number;
-  trace_id: string;
-  session_key: string;
-  channel_type: string;
-  event_type: string;
+  user_code: string;
+  agent_code: string;
+  date: string;
   content: string;
   summary?: string;
+  source_ids?: string;
   processed: boolean;
   processed_at?: string;
   created_at: string;
+  updated_at: string;
 }
 
 // Long-term Memory 类型
+// 按用户+Agent+日期聚合的长期记忆
 export interface LongTermMemory {
   id: number;
+  user_code: string;
+  agent_code: string;
   memory_date: string;
   content: string;
   summary?: string;
