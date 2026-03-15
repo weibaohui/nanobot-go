@@ -236,12 +236,6 @@ func (h *Handler) handleUpgradeMemories(c *gin.Context) {
 			if m.Summary != "" {
 				summary.WriteString(fmt.Sprintf("总结: %s\n", m.Summary))
 			}
-			if m.Content != "" {
-				summary.WriteString(fmt.Sprintf("内容摘要: %s\n", truncateString(m.Content, 300)))
-			}
-			if m.SourceIDs != "" {
-				summary.WriteString(fmt.Sprintf("来源对话: %s\n", m.SourceIDs))
-			}
 			summary.WriteString("\n")
 		}
 

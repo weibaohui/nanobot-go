@@ -14,6 +14,7 @@ import {
   DatePicker,
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, KeyOutlined, MessageOutlined } from '@ant-design/icons';
+import { Tooltip } from 'antd';
 import { usersApi, authApi, conversationsApi, streamMemoriesApi } from '../api';
 import type { User, CreateUserRequest, ConversationRecord } from '../types';
 import dayjs from 'dayjs';
@@ -108,7 +109,7 @@ const Users: React.FC = () => {
     setConversationLoading(true);
     try {
       const dateStr = date.format('YYYY-MM-DD');
-      const res = await conversationsApi.getByUserAndDate(user.code || user.username, dateStr);
+      const res = await conversationsApi.getByUserAndDate(user.user_code || user.username, dateStr);
       setConversationRecords(res as any);
     } catch (error) {
       message.error('获取用户对话失败');
@@ -151,6 +152,7 @@ const Users: React.FC = () => {
 
   const columns = [
     { title: 'ID', dataIndex: 'id', width: 60 },
+    { title: '用户编码', dataIndex: 'user_code', ellipsis: true },
     { title: '用户名', dataIndex: 'username' },
     { title: '邮箱', dataIndex: 'email' },
     { title: '显示名称', dataIndex: 'display_name' },
@@ -169,58 +171,58 @@ const Users: React.FC = () => {
     },
     {
       title: '操作',
-      width: 250,
+      width: 150,
       render: (_: any, record: User) => (
-        <Space>
-          <Button
-            type="text"
-            icon={<EditOutlined />}
-            onClick={() => {
-              setEditingUser(record);
-              form.setFieldsValue({
-                email: record.email,
-                display_name: record.display_name,
-                is_active: record.is_active,
-              });
-              setModalVisible(true);
-            }}
-          >
-            编辑
-          </Button>
-          <Button
-            type="text"
-            icon={<KeyOutlined />}
-            onClick={() => {
-              setSelectedUser(record);
-              setPasswordModalVisible(true);
-            }}
-          >
-            修改密码
-          </Button>
+        <Space size={4}>
+          <Tooltip title="编辑">
+            <Button
+              type="text"
+              icon={<EditOutlined />}
+              onClick={() => {
+                setEditingUser(record);
+                form.setFieldsValue({
+                  email: record.email,
+                  display_name: record.display_name,
+                  is_active: record.is_active,
+                });
+                setModalVisible(true);
+              }}
+            />
+          </Tooltip>
+          <Tooltip title="修改密码">
+            <Button
+              type="text"
+              icon={<KeyOutlined />}
+              onClick={() => {
+                setSelectedUser(record);
+                setPasswordModalVisible(true);
+              }}
+            />
+          </Tooltip>
+          <Tooltip title="查看对话">
+            <Button
+              type="text"
+              icon={<MessageOutlined />}
+              onClick={() => {
+                const yesterday = dayjs().subtract(1, 'day');
+                setSelectedUserForConversation(record);
+                setSelectedDate(yesterday);
+                setOrganizeDate(yesterday);
+                setOrganizeUserCode(record.user_code || record.username);
+                fetchUserConversations(record, yesterday);
+                setConversationModalVisible(true);
+              }}
+            />
+          </Tooltip>
           <Popconfirm
             title="确认删除"
             description="删除后将无法恢复，是否继续？"
             onConfirm={() => handleDelete(record.id)}
           >
-            <Button type="text" danger icon={<DeleteOutlined />}>
-              删除
-            </Button>
+            <Tooltip title="删除">
+              <Button type="text" danger icon={<DeleteOutlined />} />
+            </Tooltip>
           </Popconfirm>
-          <Button
-            type="text"
-            icon={<MessageOutlined />}
-            onClick={() => {
-              const yesterday = dayjs().subtract(1, 'day');
-              setSelectedUserForConversation(record);
-              setSelectedDate(yesterday);
-              setOrganizeDate(yesterday);
-              setOrganizeUserCode(record.code || record.username);
-              fetchUserConversations(record, yesterday);
-              setConversationModalVisible(true);
-            }}
-          >
-            查看对话
-          </Button>
         </Space>
       ),
     },

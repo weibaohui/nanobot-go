@@ -257,15 +257,13 @@ export interface ConversationRecord {
 }
 
 // Stream Memory 类型
-// 按用户+Agent+日期聚合，每天每条Agent一条记录
+// 按用户+Agent+日期聚合，每天每条Agent一条记录，仅存储AI摘要
 export interface StreamMemory {
   id: number;
   user_code: string;
   agent_code: string;
   date: string;
-  content: string;
   summary?: string;
-  source_ids?: string;
   processed: boolean;
   processed_at?: string;
   created_at: string;

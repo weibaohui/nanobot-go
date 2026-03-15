@@ -116,16 +116,10 @@ const StreamMemories: React.FC = () => {
       render: (date: string) => date || '-',
     },
     {
-      title: '内容摘要',
-      dataIndex: 'content',
+      title: '摘要',
+      dataIndex: 'summary',
       ellipsis: true,
-      render: (content: string) => content?.substring(0, 50) + (content?.length > 50 ? '...' : ''),
-    },
-    {
-      title: '来源对话数',
-      dataIndex: 'source_ids',
-      width: 100,
-      render: (source_ids: string) => source_ids ? source_ids.split(',').length : 0,
+      render: (summary: string) => summary?.substring(0, 50) + (summary?.length > 50 ? '...' : '') || '-',
     },
     {
       title: '状态',
@@ -235,18 +229,6 @@ const StreamMemories: React.FC = () => {
             <Descriptions.Item label="用户编码">{selectedMemory.user_code || '-'}</Descriptions.Item>
             <Descriptions.Item label="Agent编码">{selectedMemory.agent_code || '-'}</Descriptions.Item>
             <Descriptions.Item label="日期">{selectedMemory.date || '-'}</Descriptions.Item>
-            <Descriptions.Item label="来源对话ID">
-              <div style={{ maxHeight: 100, overflow: 'auto' }}>
-                {selectedMemory.source_ids?.split(',').map((id, i) => (
-                  <div key={i}>{id}</div>
-                )) || '-'}
-              </div>
-            </Descriptions.Item>
-            <Descriptions.Item label="原始内容">
-              <pre style={{ whiteSpace: 'pre-wrap', margin: 0, maxHeight: 300, overflow: 'auto' }}>
-                {selectedMemory.content}
-              </pre>
-            </Descriptions.Item>
             <Descriptions.Item label="AI 总结">
               <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{selectedMemory.summary || '无'}</pre>
             </Descriptions.Item>

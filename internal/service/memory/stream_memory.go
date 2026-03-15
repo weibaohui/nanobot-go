@@ -137,7 +137,7 @@ func (s *streamMemoryService) GetUnprocessed(ctx context.Context) ([]memorymodel
 }
 
 // AppendConversation 追加对话内容到指定日期的短期记忆
-// 如果不存在则创建，存在则追加内容
+// 如果不存在则创建，存在则更新更新时间（短期记忆仅保留AI摘要，不存储原始内容）
 func (s *streamMemoryService) AppendConversation(ctx context.Context, userCode string, agentCode string, date string, conversationContent string, conversationID string) error {
 	if userCode == "" || date == "" {
 		return fmt.Errorf("user_code and date are required")
@@ -154,13 +154,12 @@ func (s *streamMemoryService) AppendConversation(ctx context.Context, userCode s
 	now := time.Now()
 
 	if err == gorm.ErrRecordNotFound {
-		// 不存在，创建新记录
+		// 不存在，创建新记录（短期记忆不存储原始内容，等待AI总结生成Summary）
 		memory = memorymodels.StreamMemory{
 			UserCode:  userCode,
 			AgentCode: agentCode,
 			Date:      date,
-			Content:   conversationContent,
-			SourceIDs: conversationID,
+			Summary:   "", // 初始为空，由AI总结后填充
 			CreatedAt: now,
 			UpdatedAt: now,
 			Processed: false,
@@ -170,26 +169,9 @@ func (s *streamMemoryService) AppendConversation(ctx context.Context, userCode s
 		return err
 	}
 
-	// 已存在，追加内容
-	var newContent string
-	if memory.Content != "" {
-		newContent = memory.Content + "\n\n---\n\n" + conversationContent
-	} else {
-		newContent = conversationContent
-	}
-
-	// 追加 source_ids
-	var newSourceIDs string
-	if memory.SourceIDs != "" {
-		newSourceIDs = memory.SourceIDs + "," + conversationID
-	} else {
-		newSourceIDs = conversationID
-	}
-
+	// 已存在，仅更新时间戳
 	return s.db.WithContext(ctx).Model(&memory).
 		Updates(map[string]interface{}{
-			"content":    newContent,
-			"source_ids": newSourceIDs,
 			"updated_at": now,
 		}).Error
 }
@@ -250,9 +232,7 @@ func (s *streamMemoryService) BuildFromConversations(ctx context.Context, userCo
 		summaryStr = truncateString(allContent.String(), 200)
 	}
 
-	sourceIDs := strings.Join(conversationIDs, ",")
-
-	// 保存到数据库
+	// 保存到数据库（短期记忆仅保留AI摘要，不存储原始内容和来源ID）
 	var memory memorymodels.StreamMemory
 	query := s.db.WithContext(ctx).Where("user_code = ? AND date = ?", userCode, date)
 	if agentCode != "" {
@@ -268,9 +248,7 @@ func (s *streamMemoryService) BuildFromConversations(ctx context.Context, userCo
 			UserCode:  userCode,
 			AgentCode: agentCode,
 			Date:      date,
-			Content:   allContent.String(),
 			Summary:   summaryStr,
-			SourceIDs: sourceIDs,
 			CreatedAt: now,
 			UpdatedAt: now,
 			Processed: false,
@@ -280,12 +258,10 @@ func (s *streamMemoryService) BuildFromConversations(ctx context.Context, userCo
 		return err
 	}
 
-	// 更新现有记录（覆盖内容）
+	// 更新现有记录（仅更新摘要）
 	return s.db.WithContext(ctx).Model(&memory).
 		Updates(map[string]interface{}{
-			"content":    allContent.String(),
 			"summary":    summaryStr,
-			"source_ids": sourceIDs,
 			"updated_at": now,
 			"processed":  false, // 重置处理状态
 		}).Error

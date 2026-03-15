@@ -219,13 +219,12 @@ func (s *memoryService) searchLongTermMemories(ctx context.Context, query string
 	return dtos, nil
 }
 
-// filterStreamByKeyword 按关键词过滤流水记忆
+// filterStreamByKeyword 按关键词过滤流水记忆（仅搜索摘要）
 func (s *memoryService) filterStreamByKeyword(memories []models.StreamMemory, keyword string) []models.StreamMemory {
 	keyword = strings.ToLower(keyword)
 	filtered := make([]models.StreamMemory, 0)
 	for _, m := range memories {
-		if strings.Contains(strings.ToLower(m.Content), keyword) ||
-			strings.Contains(strings.ToLower(m.Summary), keyword) {
+		if strings.Contains(strings.ToLower(m.Summary), keyword) {
 			filtered = append(filtered, m)
 		}
 	}
@@ -239,7 +238,7 @@ func (s *memoryService) streamToDTO(m *models.StreamMemory) models.MemoryDTO {
 		Type:      "stream",
 		UserCode:  m.UserCode,
 		AgentCode: m.AgentCode,
-		Content:   m.Content,
+		Content:   m.Summary, // 短期记忆仅保留摘要，Content 字段复用 Summary
 		Summary:   m.Summary,
 		CreatedAt: m.CreatedAt,
 	}

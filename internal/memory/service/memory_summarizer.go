@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/weibaohui/nanobot-go/internal/memory/models"
-	"github.com/weibaohui/nanobot-go/utils"
 )
 
 // MemorySummarizer 记忆总结器接口
@@ -127,7 +126,7 @@ func (s *memorySummarizer) SummarizeToLongTerm(ctx context.Context, streams []mo
 		}, nil
 	}
 
-	// 构建对话记录
+	// 构建对话记录（短期记忆仅保留摘要）
 	var content strings.Builder
 	for i, stream := range streams {
 		content.WriteString(fmt.Sprintf("\n--- 记录 %d ---\n", i+1))
@@ -136,7 +135,7 @@ func (s *memorySummarizer) SummarizeToLongTerm(ctx context.Context, streams []mo
 		if stream.Summary != "" {
 			content.WriteString(fmt.Sprintf("总结: %s\n", stream.Summary))
 		} else {
-			content.WriteString(fmt.Sprintf("内容: %s\n", utils.TruncateString(stream.Content, 500)))
+			content.WriteString("总结: (无)\n")
 		}
 	}
 
