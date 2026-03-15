@@ -109,7 +109,10 @@ func (t *ManageAgentMemoryTool) handleRead(agent *models.Agent) (string, error) 
 		"updated_at": agent.UpdatedAt.Format(time.RFC3339),
 	}
 
-	out, _ := json.Marshal(result)
+	out, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("marshal result failed: %w", err)
+	}
 	return string(out), nil
 }
 
@@ -153,7 +156,10 @@ func (t *ManageAgentMemoryTool) handleAppend(agent *models.Agent, content string
 		"updated_at":     time.Now().Format(time.RFC3339),
 	}
 
-	out, _ := json.Marshal(result)
+	out, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("marshal result failed: %w", err)
+	}
 	return string(out), nil
 }
 
@@ -174,7 +180,10 @@ func (t *ManageAgentMemoryTool) handleClear(agent *models.Agent) (string, error)
 		"updated_at":   time.Now().Format(time.RFC3339),
 	}
 
-	out, _ := json.Marshal(result)
+	out, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("marshal result failed: %w", err)
+	}
 	return string(out), nil
 }
 

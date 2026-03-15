@@ -70,6 +70,12 @@ func (s *service) GetMemoryByCode(agentCode string) (string, error) {
 
 // UpdateMemoryByCode 根据 AgentCode 更新长期记忆
 func (s *service) UpdateMemoryByCode(agentCode string, content string) error {
+	// 1MB 大小限制检查
+	const maxMemorySize = 1024 * 1024 // 1MB
+	if len([]byte(content)) > maxMemorySize {
+		return fmt.Errorf("memory content exceeds 1MB limit: %d bytes", len([]byte(content)))
+	}
+
 	agent, err := s.agentRepo.GetByAgentCode(agentCode)
 	if err != nil {
 		return err

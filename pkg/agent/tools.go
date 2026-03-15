@@ -70,6 +70,8 @@ func (l *Loop) registerDefaultTools() {
 		l.tools.Register(configTools.ReadAgentConfigTool)
 		l.tools.Register(configTools.UpdateAgentConfigTool)
 		l.tools.Register(configTools.ManageAgentMemoryTool)
+	} else {
+		l.logger.Warn("跳过注册 Agent 配置管理工具：agentService 未初始化")
 	}
 }
 

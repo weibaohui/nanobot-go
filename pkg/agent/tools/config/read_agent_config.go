@@ -44,16 +44,18 @@ func (t *ReadAgentConfigTool) Info(ctx context.Context) (*schema.ToolInfo, error
 	}, nil
 }
 
+// configTypeGetters 配置类型到字段 getter 的包级映射表
+var configTypeGetters = map[string]func(*models.Agent) string{
+	"identity": func(a *models.Agent) string { return a.IdentityContent },
+	"soul":     func(a *models.Agent) string { return a.SoulContent },
+	"agents":   func(a *models.Agent) string { return a.AgentsContent },
+	"tools":    func(a *models.Agent) string { return a.ToolsContent },
+	"user":     func(a *models.Agent) string { return a.UserContent },
+}
+
 // configTypeToGetter 配置类型到字段 getter 的映射
 func configTypeToGetter(configType string) func(*models.Agent) string {
-	getters := map[string]func(*models.Agent) string{
-		"identity": func(a *models.Agent) string { return a.IdentityContent },
-		"soul":     func(a *models.Agent) string { return a.SoulContent },
-		"agents":   func(a *models.Agent) string { return a.AgentsContent },
-		"tools":    func(a *models.Agent) string { return a.ToolsContent },
-		"user":     func(a *models.Agent) string { return a.UserContent },
-	}
-	return getters[configType]
+	return configTypeGetters[configType]
 }
 
 // InvokableRun 可直接调用的执行入口
@@ -102,7 +104,10 @@ func (t *ReadAgentConfigTool) InvokableRun(ctx context.Context, argumentsInJSON 
 		"size_bytes":  len(content),
 	}
 
-	out, _ := json.Marshal(result)
+	out, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("marshal result failed: %w", err)
+	}
 	return string(out), nil
 }
 

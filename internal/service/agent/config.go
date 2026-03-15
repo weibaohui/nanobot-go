@@ -75,6 +75,9 @@ func (s *service) UpdateAgentConfig(agentID uint, config *AgentConfig) error {
 
 // UpdateAgentConfigByCode 根据 Code 更新 Agent 配置
 func (s *service) UpdateAgentConfigByCode(agentCode string, config *AgentConfig) error {
+	if config == nil {
+		return fmt.Errorf("config is nil")
+	}
 	agent, err := s.agentRepo.GetByAgentCode(agentCode)
 	if err != nil {
 		return err

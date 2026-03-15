@@ -49,13 +49,13 @@ func (t *UpdateAgentConfigTool) Info(ctx context.Context) (*schema.ToolInfo, err
 	}, nil
 }
 
-// configTypeToField 配置类型到数据库字段的映射（用于验证）
-var updateConfigTypeToField = map[string]string{
-	"identity": "identity_content",
-	"soul":     "soul_content",
-	"agents":   "agents_content",
-	"tools":    "tools_content",
-	"user":     "user_content",
+// configTypeSetters 配置类型到 setter 函数的映射
+var configTypeSetters = map[string]func(*agentsvc.AgentConfig, string){
+	"identity": func(c *agentsvc.AgentConfig, v string) { c.IdentityContent = v },
+	"soul":     func(c *agentsvc.AgentConfig, v string) { c.SoulContent = v },
+	"agents":   func(c *agentsvc.AgentConfig, v string) { c.AgentsContent = v },
+	"tools":    func(c *agentsvc.AgentConfig, v string) { c.ToolsContent = v },
+	"user":     func(c *agentsvc.AgentConfig, v string) { c.UserContent = v },
 }
 
 // InvokableRun 可直接调用的执行入口
@@ -76,7 +76,7 @@ func (t *UpdateAgentConfigTool) InvokableRun(ctx context.Context, argumentsInJSO
 	}
 
 	// 3. 验证 config_type
-	_, ok := updateConfigTypeToField[args.ConfigType]
+	setter, ok := configTypeSetters[args.ConfigType]
 	if !ok {
 		return "", fmt.Errorf("invalid config_type: %s, must be one of: identity, soul, agents, tools, user", args.ConfigType)
 	}
@@ -106,18 +106,7 @@ func (t *UpdateAgentConfigTool) InvokableRun(ctx context.Context, argumentsInJSO
 	}
 
 	// 根据 config_type 更新对应字段
-	switch args.ConfigType {
-	case "identity":
-		config.IdentityContent = args.Content
-	case "soul":
-		config.SoulContent = args.Content
-	case "agents":
-		config.AgentsContent = args.Content
-	case "tools":
-		config.ToolsContent = args.Content
-	case "user":
-		config.UserContent = args.Content
-	}
+	setter(config, args.Content)
 
 	// 7. 保存到数据库
 	if err := t.agentService.UpdateAgentConfigByCode(cfgCtx.AgentCode, config); err != nil {
@@ -133,7 +122,10 @@ func (t *UpdateAgentConfigTool) InvokableRun(ctx context.Context, argumentsInJSO
 		"updated_at":    time.Now().Format(time.RFC3339),
 	}
 
-	out, _ := json.Marshal(result)
+	out, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("marshal result failed: %w", err)
+	}
 	return string(out), nil
 }
 
