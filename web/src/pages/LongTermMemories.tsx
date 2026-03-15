@@ -99,6 +99,20 @@ const LongTermMemories: React.FC = () => {
   const columns = [
     { title: 'ID', dataIndex: 'id', width: 80 },
     {
+      title: '用户',
+      dataIndex: 'user_code',
+      ellipsis: true,
+      width: 120,
+      render: (user_code: string) => user_code || '-',
+    },
+    {
+      title: 'Agent',
+      dataIndex: 'agent_code',
+      ellipsis: true,
+      width: 120,
+      render: (agent_code: string) => agent_code || '-',
+    },
+    {
       title: '日期',
       dataIndex: 'memory_date',
       render: (date: string) => date || '-',
@@ -202,6 +216,8 @@ const LongTermMemories: React.FC = () => {
         {selectedMemory && (
           <Descriptions column={1} bordered>
             <Descriptions.Item label="ID">{selectedMemory.id}</Descriptions.Item>
+            <Descriptions.Item label="用户">{selectedMemory.user_code || '-'}</Descriptions.Item>
+            <Descriptions.Item label="Agent">{selectedMemory.agent_code || '-'}</Descriptions.Item>
             <Descriptions.Item label="记忆日期">{selectedMemory.memory_date}</Descriptions.Item>
             <Descriptions.Item label="摘要">{selectedMemory.summary || '-'}</Descriptions.Item>
             <Descriptions.Item label="完整内容">

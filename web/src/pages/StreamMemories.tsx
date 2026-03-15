@@ -92,6 +92,13 @@ const StreamMemories: React.FC = () => {
       render: (user_code: string) => user_code || '-',
     },
     {
+      title: 'Agent',
+      dataIndex: 'agent_code',
+      ellipsis: true,
+      width: 120,
+      render: (agent_code: string) => agent_code || '-',
+    },
+    {
       title: '日期',
       dataIndex: 'date',
       width: 120,
@@ -199,6 +206,7 @@ const StreamMemories: React.FC = () => {
           <Descriptions column={1} bordered>
             <Descriptions.Item label="ID">{selectedMemory.id}</Descriptions.Item>
             <Descriptions.Item label="用户编码">{selectedMemory.user_code || '-'}</Descriptions.Item>
+            <Descriptions.Item label="Agent编码">{selectedMemory.agent_code || '-'}</Descriptions.Item>
             <Descriptions.Item label="日期">{selectedMemory.date || '-'}</Descriptions.Item>
             <Descriptions.Item label="来源对话ID">
               <div style={{ maxHeight: 100, overflow: 'auto' }}>

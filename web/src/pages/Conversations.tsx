@@ -94,6 +94,7 @@ const Conversations: React.FC = () => {
   const [organizeLoading, setOrganizeLoading] = useState(false);
   const [organizeDate, setOrganizeDate] = useState(dayjs());
   const [organizeUserCode, setOrganizeUserCode] = useState('');
+  const [organizeAgentCode, setOrganizeAgentCode] = useState('');
 
   const roleOptions = [
     { value: 'user', label: '用户' },
@@ -388,6 +389,7 @@ const Conversations: React.FC = () => {
 
       await streamMemoriesApi.build({
         user_code: organizeUserCode,
+        agent_code: organizeAgentCode,
         date: organizeDate.format('YYYY-MM-DD'),
         conversation_ids: conversationIDs,
         contents: contents,
@@ -694,6 +696,13 @@ const Conversations: React.FC = () => {
                 } else if (uniqueUserCodes.length > 1) {
                   setOrganizeUserCode('');
                 }
+                // 自动从当前对话记录中提取Agent编码
+                const uniqueAgentCodes = [...new Set(sessionRecords.map(r => r.agent_code).filter(Boolean))];
+                if (uniqueAgentCodes.length === 1) {
+                  setOrganizeAgentCode(uniqueAgentCodes[0]);
+                } else if (uniqueAgentCodes.length > 1) {
+                  setOrganizeAgentCode('');
+                }
                 setOrganizeVisible(true);
               }}
             >
@@ -768,6 +777,7 @@ const Conversations: React.FC = () => {
         onCancel={() => {
           setOrganizeVisible(false);
           setOrganizeUserCode('');
+          setOrganizeAgentCode('');
         }}
         confirmLoading={organizeLoading}
         okText="确认整理"
@@ -782,6 +792,13 @@ const Conversations: React.FC = () => {
               onChange={(e) => setOrganizeUserCode(e.target.value)}
             />
           </Form.Item>
+          <Form.Item label="Agent编码">
+            <Input
+              placeholder="输入Agent编码（可选，用于区分不同Agent的记忆）"
+              value={organizeAgentCode}
+              onChange={(e) => setOrganizeAgentCode(e.target.value)}
+            />
+          </Form.Item>
           <Form.Item label="日期" required>
             <DatePicker
               value={organizeDate}
@@ -792,7 +809,7 @@ const Conversations: React.FC = () => {
           </Form.Item>
         </Form>
         <p style={{ color: '#999', fontSize: 12 }}>
-          同一用户同一天的记忆会被聚合为一条记录。
+          同一用户同一Agent同一天的记忆会被聚合为一条记录。
         </p>
       </Modal>
     </div>
