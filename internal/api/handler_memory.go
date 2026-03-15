@@ -13,40 +13,41 @@ import (
 
 // StreamMemoryService 短期记忆服务接口
 type StreamMemoryService interface {
-	List(ctx context.Context, userCode string, offset int, limit int) ([]memorymodels.StreamMemory, int64, error)
+	List(ctx context.Context, userCode string, agentCode string, offset int, limit int) ([]memorymodels.StreamMemory, int64, error)
 	Get(ctx context.Context, id uint64) (*memorymodels.StreamMemory, error)
-	GetByUserAndDate(ctx context.Context, userCode string, date string) (*memorymodels.StreamMemory, error)
+	GetByUserAgentAndDate(ctx context.Context, userCode string, agentCode string, date string) (*memorymodels.StreamMemory, error)
 	Create(ctx context.Context, memory *memorymodels.StreamMemory) error
 	Update(ctx context.Context, id uint64, memory *memorymodels.StreamMemory) error
 	Delete(ctx context.Context, id uint64) error
 	MarkProcessed(ctx context.Context, id uint64) error
 	GetUnprocessed(ctx context.Context) ([]memorymodels.StreamMemory, error)
-	BuildFromConversations(ctx context.Context, userCode string, date string, conversationIDs []string, contents []string) error
+	BuildFromConversations(ctx context.Context, userCode string, agentCode string, date string, conversationIDs []string, contents []string) error
 }
 
 // LongTermMemoryService 长期记忆服务接口
 type LongTermMemoryService interface {
-	List(ctx context.Context, offset int, limit int) ([]memorymodels.LongTermMemory, int64, error)
+	List(ctx context.Context, userCode string, agentCode string, offset int, limit int) ([]memorymodels.LongTermMemory, int64, error)
 	Get(ctx context.Context, id uint64) (*memorymodels.LongTermMemory, error)
-	GetByDate(ctx context.Context, date string) (*memorymodels.LongTermMemory, error)
+	GetByDate(ctx context.Context, userCode string, agentCode string, date string) (*memorymodels.LongTermMemory, error)
 	Create(ctx context.Context, memory *memorymodels.LongTermMemory) error
 	Update(ctx context.Context, id uint64, memory *memorymodels.LongTermMemory) error
 	Delete(ctx context.Context, id uint64) error
-	Search(ctx context.Context, query string, offset int, limit int) ([]memorymodels.LongTermMemory, int64, error)
-	GetRecent(ctx context.Context, days int, offset int, limit int) ([]memorymodels.LongTermMemory, int64, error)
+	Search(ctx context.Context, userCode string, agentCode string, query string, offset int, limit int) ([]memorymodels.LongTermMemory, int64, error)
+	GetRecent(ctx context.Context, userCode string, agentCode string, days int, offset int, limit int) ([]memorymodels.LongTermMemory, int64, error)
 }
 
 // === Stream Memory Handlers ===
 
 func (h *Handler) handleStreamMemories(c *gin.Context) {
 	userCode := c.Query("user_code")
+	agentCode := c.Query("agent_code")
 	offset, _ := strconv.Atoi(c.Query("offset"))
 	limit, _ := strconv.Atoi(c.Query("limit"))
 	if limit == 0 {
 		limit = 50
 	}
 
-	memories, total, err := h.streamMemoryService.List(c.Request.Context(), userCode, offset, limit)
+	memories, total, err := h.streamMemoryService.List(c.Request.Context(), userCode, agentCode, offset, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 		return
@@ -141,10 +142,11 @@ func (h *Handler) handleUnprocessedMemories(c *gin.Context) {
 }
 
 // handleBuildStreamMemory 从对话记录构建短期记忆
-// 将选中的对话记录按用户+日期聚合为短期记忆
+// 将选中的对话记录按用户+Agent+日期聚合为短期记忆
 func (h *Handler) handleBuildStreamMemory(c *gin.Context) {
 	var req struct {
 		UserCode        string   `json:"user_code" binding:"required"`
+		AgentCode       string   `json:"agent_code"`
 		Date            string   `json:"date" binding:"required"`
 		ConversationIDs []string `json:"conversation_ids" binding:"required"`
 		Contents        []string `json:"contents" binding:"required"`
@@ -157,8 +159,8 @@ func (h *Handler) handleBuildStreamMemory(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	// 构建短期记忆（按用户+日期聚合）
-	if err := h.streamMemoryService.BuildFromConversations(ctx, req.UserCode, req.Date, req.ConversationIDs, req.Contents); err != nil {
+	// 构建短期记忆（按用户+Agent+日期聚合）
+	if err := h.streamMemoryService.BuildFromConversations(ctx, req.UserCode, req.AgentCode, req.Date, req.ConversationIDs, req.Contents); err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "构建短期记忆失败: " + err.Error()})
 		return
 	}
@@ -167,6 +169,7 @@ func (h *Handler) handleBuildStreamMemory(c *gin.Context) {
 		Message: "短期记忆构建成功",
 		Data: map[string]interface{}{
 			"user_code":        req.UserCode,
+			"agent_code":       req.AgentCode,
 			"date":             req.Date,
 			"conversation_count": len(req.ConversationIDs),
 		},
@@ -174,7 +177,7 @@ func (h *Handler) handleBuildStreamMemory(c *gin.Context) {
 }
 
 // handleUpgradeMemories 手动触发记忆升级
-// 将指定日期的未处理流水记忆升级为长期记忆
+// 将指定日期的未处理流水记忆升级为长期记忆（按用户+Agent分组）
 func (h *Handler) handleUpgradeMemories(c *gin.Context) {
 	date := c.Query("date")
 	if date == "" {
@@ -200,22 +203,31 @@ func (h *Handler) handleUpgradeMemories(c *gin.Context) {
 	totalCount := len(unprocessedMemories)
 	upgradedCount := 0
 
-	// 按 UserCode 分组（用于用户隔离）
-	userMemories := make(map[string][]memorymodels.StreamMemory)
+	// 按 UserCode + AgentCode 分组（用于用户和Agent隔离）
+	userAgentMemories := make(map[string][]memorymodels.StreamMemory)
 	for _, memory := range unprocessedMemories {
 		userCode := memory.UserCode
 		if userCode == "" {
 			userCode = "default"
 		}
-		userMemories[userCode] = append(userMemories[userCode], memory)
+		agentCode := memory.AgentCode
+		if agentCode == "" {
+			agentCode = "default"
+		}
+		key := userCode + ":" + agentCode
+		userAgentMemories[key] = append(userAgentMemories[key], memory)
 	}
 
-	// 为每个用户创建长期记忆
-	for userCode, memories := range userMemories {
+	// 为每个用户+Agent组合创建长期记忆
+	for key, memories := range userAgentMemories {
+		parts := strings.SplitN(key, ":", 2)
+		userCode, agentCode := parts[0], parts[1]
+
 		// 构建总结内容
 		var summary strings.Builder
 		summary.WriteString(fmt.Sprintf("日期: %s 的记忆汇总\n\n", date))
 		summary.WriteString(fmt.Sprintf("用户: %s\n", userCode))
+		summary.WriteString(fmt.Sprintf("Agent: %s\n", agentCode))
 		summary.WriteString(fmt.Sprintf("共 %d 条流水记忆\n\n", len(memories)))
 
 		for i, m := range memories {
@@ -237,14 +249,15 @@ func (h *Handler) handleUpgradeMemories(c *gin.Context) {
 		longTermMemory := &memorymodels.LongTermMemory{
 			Date:         date,
 			UserCode:     userCode,
+			AgentCode:    agentCode,
 			Summary:      fmt.Sprintf("%s 的记忆汇总 (%d 条)", date, len(memories)),
 			WhatHappened: summary.String(),
 			Conclusion:   fmt.Sprintf("共处理 %d 条流水记忆", len(memories)),
 			Value:        "通过手动触发升级按钮生成",
 		}
 
-		// 检查是否已存在
-		existing, err := h.longTermMemoryService.GetByDate(ctx, date)
+		// 检查是否已存在（按用户+Agent+日期）
+		existing, err := h.longTermMemoryService.GetByDate(ctx, userCode, agentCode, date)
 		if err != nil {
 			// 查询失败，继续创建新的
 		}
@@ -275,12 +288,12 @@ func (h *Handler) handleUpgradeMemories(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, SuccessResponse{
-		Message: fmt.Sprintf("记忆升级完成，共处理 %d 条流水记忆，涉及 %d 个用户", totalCount, len(userMemories)),
+		Message: fmt.Sprintf("记忆升级完成，共处理 %d 条流水记忆，涉及 %d 个用户+Agent组合", totalCount, len(userAgentMemories)),
 		Data: map[string]interface{}{
-			"date":           date,
-			"total_count":    totalCount,
-			"upgraded_count": upgradedCount,
-			"user_count":     len(userMemories),
+			"date":              date,
+			"total_count":       totalCount,
+			"upgraded_count":    upgradedCount,
+			"user_agent_count":  len(userAgentMemories),
 		},
 	})
 }
@@ -296,13 +309,15 @@ func truncateString(s string, maxLen int) string {
 // === Long-term Memory Handlers ===
 
 func (h *Handler) handleLongTermMemories(c *gin.Context) {
+	userCode := c.Query("user_code")
+	agentCode := c.Query("agent_code")
 	offset, _ := strconv.Atoi(c.Query("offset"))
 	limit, _ := strconv.Atoi(c.Query("limit"))
 	if limit == 0 {
 		limit = 50
 	}
 
-	memories, total, err := h.longTermMemoryService.List(c.Request.Context(), offset, limit)
+	memories, total, err := h.longTermMemoryService.List(c.Request.Context(), userCode, agentCode, offset, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 		return
@@ -335,8 +350,10 @@ func (h *Handler) handleLongTermMemoryByID(c *gin.Context) {
 
 func (h *Handler) handleLongTermMemoryByDate(c *gin.Context) {
 	date := c.Param("date")
+	userCode := c.Query("user_code")
+	agentCode := c.Query("agent_code")
 
-	memory, err := h.longTermMemoryService.GetByDate(c.Request.Context(), date)
+	memory, err := h.longTermMemoryService.GetByDate(c.Request.Context(), userCode, agentCode, date)
 	if err != nil {
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: err.Error()})
 		return
@@ -405,13 +422,15 @@ func (h *Handler) searchLongTermMemories(c *gin.Context) {
 		return
 	}
 
+	userCode := c.Query("user_code")
+	agentCode := c.Query("agent_code")
 	offset, _ := strconv.Atoi(c.Query("offset"))
 	limit, _ := strconv.Atoi(c.Query("limit"))
 	if limit == 0 {
 		limit = 50
 	}
 
-	memories, total, err := h.longTermMemoryService.Search(c.Request.Context(), query, offset, limit)
+	memories, total, err := h.longTermMemoryService.Search(c.Request.Context(), userCode, agentCode, query, offset, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 		return
@@ -427,13 +446,15 @@ func (h *Handler) searchLongTermMemories(c *gin.Context) {
 
 func (h *Handler) getRecentLongTermMemories(c *gin.Context) {
 	days, _ := strconv.Atoi(c.Query("days"))
+	userCode := c.Query("user_code")
+	agentCode := c.Query("agent_code")
 	offset, _ := strconv.Atoi(c.Query("offset"))
 	limit, _ := strconv.Atoi(c.Query("limit"))
 	if limit == 0 {
 		limit = 50
 	}
 
-	memories, total, err := h.longTermMemoryService.GetRecent(c.Request.Context(), days, offset, limit)
+	memories, total, err := h.longTermMemoryService.GetRecent(c.Request.Context(), userCode, agentCode, days, offset, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 		return

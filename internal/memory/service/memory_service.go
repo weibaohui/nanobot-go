@@ -134,9 +134,10 @@ func (s *memoryService) SearchMemory(ctx context.Context, query string, filters 
 // searchStreamMemories 搜索流水记忆
 func (s *memoryService) searchStreamMemories(ctx context.Context, query string, filters models.SearchFilters, limit int) ([]models.MemoryDTO, error) {
 	opts := &models.QueryOptions{
-		Limit:    limit,
-		Order:    "DESC",
-		UserCode: filters.UserCode, // 用户隔离：传递 UserCode 到 Repository
+		Limit:     limit,
+		Order:     "DESC",
+		UserCode:  filters.UserCode,  // 用户隔离：传递 UserCode 到 Repository
+		AgentCode: filters.AgentCode, // Agent隔离：传递 AgentCode 到 Repository
 	}
 
 	var memories []models.StreamMemory
@@ -179,9 +180,10 @@ func (s *memoryService) searchStreamMemories(ctx context.Context, query string, 
 // searchLongTermMemories 搜索长期记忆
 func (s *memoryService) searchLongTermMemories(ctx context.Context, query string, filters models.SearchFilters, limit int) ([]models.MemoryDTO, error) {
 	opts := &models.QueryOptions{
-		Limit:    limit,
-		Order:    "DESC",
-		UserCode: filters.UserCode, // 用户隔离：传递 UserCode 到 Repository
+		Limit:     limit,
+		Order:     "DESC",
+		UserCode:  filters.UserCode,  // 用户隔离：传递 UserCode 到 Repository
+		AgentCode: filters.AgentCode, // Agent隔离：传递 AgentCode 到 Repository
 	}
 
 	var memories []models.LongTermMemory
@@ -236,6 +238,7 @@ func (s *memoryService) streamToDTO(m *models.StreamMemory) models.MemoryDTO {
 		ID:        m.ID,
 		Type:      "stream",
 		UserCode:  m.UserCode,
+		AgentCode: m.AgentCode,
 		Content:   m.Content,
 		Summary:   m.Summary,
 		CreatedAt: m.CreatedAt,
@@ -260,6 +263,7 @@ func (s *memoryService) longTermToDTO(m *models.LongTermMemory) models.MemoryDTO
 		ID:        m.ID,
 		Type:      "longterm",
 		UserCode:  m.UserCode,
+		AgentCode: m.AgentCode,
 		Content:   content,
 		Summary:   m.Summary,
 		CreatedAt: m.CreatedAt,
@@ -267,7 +271,7 @@ func (s *memoryService) longTermToDTO(m *models.LongTermMemory) models.MemoryDTO
 }
 
 // UpgradeStreamToLongTerm 将流水记忆升级为长期记忆
-// 按 UserCode 分组处理，每个用户的记忆单独提炼为长期记忆
+// 按 UserCode + AgentCode 分组处理，每个用户+Agent的记忆单独提炼为长期记忆
 func (s *memoryService) UpgradeStreamToLongTerm(ctx context.Context, date string) error {
 	if !s.enabled {
 		return ErrMemoryDisabled
@@ -299,19 +303,26 @@ func (s *memoryService) UpgradeStreamToLongTerm(ctx context.Context, date string
 		return nil
 	}
 
-	// 按 UserCode 分组
-	userStreams := make(map[string][]models.StreamMemory)
+	// 按 UserCode + AgentCode 分组
+	userAgentStreams := make(map[string][]models.StreamMemory)
 	for _, stream := range streams {
 		userCode := stream.UserCode
 		if userCode == "" {
 			userCode = "default" // 兼容旧数据，无UserCode的归入default
 		}
-		userStreams[userCode] = append(userStreams[userCode], stream)
+		agentCode := stream.AgentCode
+		if agentCode == "" {
+			agentCode = "default" // 兼容旧数据，无AgentCode的归入default
+		}
+		key := userCode + ":" + agentCode
+		userAgentStreams[key] = append(userAgentStreams[key], stream)
 	}
 
-	// 对每个用户的记忆分别处理
-	for userCode, userStreamList := range userStreams {
-		if err := s.upgradeUserStreamToLongTerm(ctx, date, userCode, userStreamList); err != nil {
+	// 对每个用户+Agent的记忆分别处理
+	for key, userAgentStreamList := range userAgentStreams {
+		parts := strings.SplitN(key, ":", 2)
+		userCode, agentCode := parts[0], parts[1]
+		if err := s.upgradeUserAgentStreamToLongTerm(ctx, date, userCode, agentCode, userAgentStreamList); err != nil {
 			// 记录错误但继续处理其他用户
 			// 实际生产环境可以使用日志记录
 			continue
@@ -321,8 +332,8 @@ func (s *memoryService) UpgradeStreamToLongTerm(ctx context.Context, date string
 	return nil
 }
 
-// upgradeUserStreamToLongTerm 将指定用户的流水记忆升级为长期记忆
-func (s *memoryService) upgradeUserStreamToLongTerm(ctx context.Context, date, userCode string, streams []models.StreamMemory) error {
+// upgradeUserAgentStreamToLongTerm 将指定用户+Agent的流水记忆升级为长期记忆
+func (s *memoryService) upgradeUserAgentStreamToLongTerm(ctx context.Context, date, userCode, agentCode string, streams []models.StreamMemory) error {
 	if len(streams) == 0 {
 		return nil
 	}
@@ -330,7 +341,7 @@ func (s *memoryService) upgradeUserStreamToLongTerm(ctx context.Context, date, u
 	// 使用 summarizer 提炼长期记忆
 	summary, err := s.summarizer.SummarizeToLongTerm(ctx, streams)
 	if err != nil {
-		return fmt.Errorf("%w: failed to summarize to long term for user %s: %v", ErrUpgradeFailed, userCode, err)
+		return fmt.Errorf("%w: failed to summarize to long term for user %s agent %s: %v", ErrUpgradeFailed, userCode, agentCode, err)
 	}
 
 	// 构建来源ID列表
@@ -344,6 +355,7 @@ func (s *memoryService) upgradeUserStreamToLongTerm(ctx context.Context, date, u
 	longTerm := &models.LongTermMemory{
 		Date:         date,
 		UserCode:     userCode,
+		AgentCode:    agentCode,
 		Summary:      summary.WhatHappened,
 		WhatHappened: summary.WhatHappened,
 		Conclusion:   summary.Conclusion,
@@ -352,32 +364,32 @@ func (s *memoryService) upgradeUserStreamToLongTerm(ctx context.Context, date, u
 		SourceIDs:    strings.Join(sourceIDs, ","),
 	}
 
-	// 检查是否已存在该用户该日期的长期记忆
-	existing, err := s.longTermRepo.FindByDate(ctx, date, &models.QueryOptions{UserCode: userCode})
+	// 检查是否已存在该用户该Agent该日期的长期记忆
+	existing, err := s.longTermRepo.FindByDate(ctx, date, &models.QueryOptions{UserCode: userCode, AgentCode: agentCode})
 	if err != nil {
-		return fmt.Errorf("failed to check existing long term memory for user %s: %w", userCode, err)
+		return fmt.Errorf("failed to check existing long term memory for user %s agent %s: %w", userCode, agentCode, err)
 	}
 
 	if existing != nil {
 		// 更新现有记录
 		longTerm.ID = existing.ID
 		if err := s.longTermRepo.Update(ctx, longTerm); err != nil {
-			return fmt.Errorf("failed to update long term memory for user %s: %w", userCode, err)
+			return fmt.Errorf("failed to update long term memory for user %s agent %s: %w", userCode, agentCode, err)
 		}
 	} else {
 		// 创建新记录
 		if err := s.longTermRepo.Create(ctx, longTerm); err != nil {
-			return fmt.Errorf("failed to create long term memory for user %s: %w", userCode, err)
+			return fmt.Errorf("failed to create long term memory for user %s agent %s: %w", userCode, agentCode, err)
 		}
 	}
 
-	// 标记该用户的流水记忆为已处理
+	// 标记该用户+Agent的流水记忆为已处理
 	ids := make([]uint64, 0, len(streams))
 	for _, stream := range streams {
 		ids = append(ids, stream.ID)
 	}
 	if err := s.streamRepo.MarkAsProcessed(ctx, ids); err != nil {
-		return fmt.Errorf("failed to mark stream memories as processed for user %s: %w", userCode, err)
+		return fmt.Errorf("failed to mark stream memories as processed for user %s agent %s: %w", userCode, agentCode, err)
 	}
 
 	return nil

@@ -15,16 +15,16 @@ type LongTermMemoryRepository interface {
 	Create(ctx context.Context, memory *models.LongTermMemory) error
 	// FindByID 根据ID查询
 	FindByID(ctx context.Context, id uint64) (*models.LongTermMemory, error)
-	// FindByDate 根据日期查询（支持UserCode过滤）
+	// FindByDate 根据日期查询（支持UserCode/AgentCode过滤）
 	FindByDate(ctx context.Context, date string, opts *models.QueryOptions) (*models.LongTermMemory, error)
-	// FindByTimeRange 根据时间范围查询（支持UserCode过滤）
+	// FindByTimeRange 根据时间范围查询（支持UserCode/AgentCode过滤）
 	FindByTimeRange(ctx context.Context, startTime, endTime time.Time, opts *models.QueryOptions) ([]models.LongTermMemory, error)
-	// SearchByKeyword 关键词搜索（使用LIKE，支持UserCode过滤）
+	// SearchByKeyword 关键词搜索（使用LIKE，支持UserCode/AgentCode过滤）
 	SearchByKeyword(ctx context.Context, keyword string, opts *models.QueryOptions) ([]models.LongTermMemory, error)
 	// Update 更新长期记忆
 	Update(ctx context.Context, memory *models.LongTermMemory) error
-	// DeleteByDate 根据日期删除
-	DeleteByDate(ctx context.Context, date string) error
+	// DeleteByDate 根据日期删除（支持UserCode/AgentCode过滤）
+	DeleteByDate(ctx context.Context, date string, opts *models.QueryOptions) error
 }
 
 // longTermMemoryRepository 长期记忆仓储实现
@@ -61,12 +61,18 @@ func (r *longTermMemoryRepository) FindByID(ctx context.Context, id uint64) (*mo
 
 // FindByDate 根据日期查询长期记忆
 // 如果 opts.UserCode 不为空，则只查询该用户的记忆（用户隔离）
+// 如果 opts.AgentCode 不为空，则只查询该Agent的记忆（Agent隔离）
 func (r *longTermMemoryRepository) FindByDate(ctx context.Context, date string, opts *models.QueryOptions) (*models.LongTermMemory, error) {
 	query := r.db.WithContext(ctx).Where("date = ?", date)
 
 	// 用户隔离：如果指定了 UserCode，只查询该用户的记忆
 	if opts != nil && opts.UserCode != "" {
 		query = query.Where("user_code = ?", opts.UserCode)
+	}
+
+	// Agent隔离：如果指定了 AgentCode，只查询该Agent的记忆
+	if opts != nil && opts.AgentCode != "" {
+		query = query.Where("agent_code = ?", opts.AgentCode)
 	}
 
 	var memory models.LongTermMemory
@@ -97,6 +103,11 @@ func (r *longTermMemoryRepository) FindByTimeRange(ctx context.Context, startTim
 	// 用户隔离：如果指定了 UserCode，只查询该用户的记忆
 	if opts.UserCode != "" {
 		query = query.Where("user_code = ?", opts.UserCode)
+	}
+
+	// Agent隔离：如果指定了 AgentCode，只查询该Agent的记忆
+	if opts.AgentCode != "" {
+		query = query.Where("agent_code = ?", opts.AgentCode)
 	}
 
 	// 排序
@@ -142,6 +153,11 @@ func (r *longTermMemoryRepository) SearchByKeyword(ctx context.Context, keyword 
 		query = query.Where("user_code = ?", opts.UserCode)
 	}
 
+	// Agent隔离：如果指定了 AgentCode，只查询该Agent的记忆
+	if opts.AgentCode != "" {
+		query = query.Where("agent_code = ?", opts.AgentCode)
+	}
+
 	// 排序
 	orderBy := opts.OrderBy
 	if orderBy == "" {
@@ -178,8 +194,22 @@ func (r *longTermMemoryRepository) Update(ctx context.Context, memory *models.Lo
 }
 
 // DeleteByDate 根据日期删除长期记忆
-func (r *longTermMemoryRepository) DeleteByDate(ctx context.Context, date string) error {
-	if err := r.db.WithContext(ctx).Where("date = ?", date).Delete(&models.LongTermMemory{}).Error; err != nil {
+// 如果 opts.UserCode 不为空，则只删除该用户的记忆（用户隔离）
+// 如果 opts.AgentCode 不为空，则只删除该Agent的记忆（Agent隔离）
+func (r *longTermMemoryRepository) DeleteByDate(ctx context.Context, date string, opts *models.QueryOptions) error {
+	query := r.db.WithContext(ctx).Where("date = ?", date)
+
+	// 用户隔离：如果指定了 UserCode，只删除该用户的记忆
+	if opts != nil && opts.UserCode != "" {
+		query = query.Where("user_code = ?", opts.UserCode)
+	}
+
+	// Agent隔离：如果指定了 AgentCode，只删除该Agent的记忆
+	if opts != nil && opts.AgentCode != "" {
+		query = query.Where("agent_code = ?", opts.AgentCode)
+	}
+
+	if err := query.Delete(&models.LongTermMemory{}).Error; err != nil {
 		return fmt.Errorf("failed to delete long term memory by date: %w", err)
 	}
 	return nil

@@ -117,8 +117,8 @@ func (m *MockLongTermMemoryRepository) Update(ctx context.Context, memory *model
 	return args.Error(0)
 }
 
-func (m *MockLongTermMemoryRepository) DeleteByDate(ctx context.Context, date string) error {
-	args := m.Called(ctx, date)
+func (m *MockLongTermMemoryRepository) DeleteByDate(ctx context.Context, date string, opts *models.QueryOptions) error {
+	args := m.Called(ctx, date, opts)
 	return args.Error(0)
 }
 

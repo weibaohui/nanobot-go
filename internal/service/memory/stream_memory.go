@@ -14,9 +14,9 @@ import (
 // StreamMemoryService 短期记忆服务接口
 type StreamMemoryService interface {
 	// 查询方法
-	List(ctx context.Context, userCode string, offset int, limit int) ([]memorymodels.StreamMemory, int64, error)
+	List(ctx context.Context, userCode string, agentCode string, offset int, limit int) ([]memorymodels.StreamMemory, int64, error)
 	Get(ctx context.Context, id uint64) (*memorymodels.StreamMemory, error)
-	GetByUserAndDate(ctx context.Context, userCode string, date string) (*memorymodels.StreamMemory, error)
+	GetByUserAgentAndDate(ctx context.Context, userCode string, agentCode string, date string) (*memorymodels.StreamMemory, error)
 	GetUnprocessed(ctx context.Context) ([]memorymodels.StreamMemory, error)
 
 	// 管理方法
@@ -26,10 +26,10 @@ type StreamMemoryService interface {
 	MarkProcessed(ctx context.Context, id uint64) error
 
 	// 核心方法：追加对话内容到指定日期的短期记忆（自动聚合）
-	AppendConversation(ctx context.Context, userCode string, date string, conversationContent string, conversationID string) error
+	AppendConversation(ctx context.Context, userCode string, agentCode string, date string, conversationContent string, conversationID string) error
 
 	// 从对话记录创建/更新短期记忆
-	BuildFromConversations(ctx context.Context, userCode string, date string, conversationIDs []string, contents []string) error
+	BuildFromConversations(ctx context.Context, userCode string, agentCode string, date string, conversationIDs []string, contents []string) error
 }
 
 // streamMemoryService 短期记忆服务实现
@@ -43,8 +43,8 @@ func NewStreamMemoryService(db *gorm.DB, summarizer memservice.MemorySummarizer)
 	return &streamMemoryService{db: db, summarizer: summarizer}
 }
 
-// List 获取短期记忆列表（按用户+日期聚合后的记录）
-func (s *streamMemoryService) List(ctx context.Context, userCode string, offset int, limit int) ([]memorymodels.StreamMemory, int64, error) {
+// List 获取短期记忆列表（按用户+Agent+日期聚合后的记录）
+func (s *streamMemoryService) List(ctx context.Context, userCode string, agentCode string, offset int, limit int) ([]memorymodels.StreamMemory, int64, error) {
 	var memories []memorymodels.StreamMemory
 	var total int64
 
@@ -52,6 +52,9 @@ func (s *streamMemoryService) List(ctx context.Context, userCode string, offset 
 
 	if userCode != "" {
 		query = query.Where("user_code = ?", userCode)
+	}
+	if agentCode != "" {
+		query = query.Where("agent_code = ?", agentCode)
 	}
 
 	if err := query.Count(&total).Error; err != nil {
@@ -74,12 +77,14 @@ func (s *streamMemoryService) Get(ctx context.Context, id uint64) (*memorymodels
 	return &memory, nil
 }
 
-// GetByUserAndDate 根据用户和日期获取短期记忆
-func (s *streamMemoryService) GetByUserAndDate(ctx context.Context, userCode string, date string) (*memorymodels.StreamMemory, error) {
+// GetByUserAgentAndDate 根据用户、Agent和日期获取短期记忆
+func (s *streamMemoryService) GetByUserAgentAndDate(ctx context.Context, userCode string, agentCode string, date string) (*memorymodels.StreamMemory, error) {
 	var memory memorymodels.StreamMemory
-	if err := s.db.WithContext(ctx).
-		Where("user_code = ? AND date = ?", userCode, date).
-		First(&memory).Error; err != nil {
+	query := s.db.WithContext(ctx).Where("user_code = ? AND date = ?", userCode, date)
+	if agentCode != "" {
+		query = query.Where("agent_code = ?", agentCode)
+	}
+	if err := query.First(&memory).Error; err != nil {
 		return nil, err
 	}
 	return &memory, nil
@@ -133,16 +138,18 @@ func (s *streamMemoryService) GetUnprocessed(ctx context.Context) ([]memorymodel
 
 // AppendConversation 追加对话内容到指定日期的短期记忆
 // 如果不存在则创建，存在则追加内容
-func (s *streamMemoryService) AppendConversation(ctx context.Context, userCode string, date string, conversationContent string, conversationID string) error {
+func (s *streamMemoryService) AppendConversation(ctx context.Context, userCode string, agentCode string, date string, conversationContent string, conversationID string) error {
 	if userCode == "" || date == "" {
 		return fmt.Errorf("user_code and date are required")
 	}
 
-	// 查找是否已存在该用户+日期的记录
+	// 查找是否已存在该用户+Agent+日期的记录
 	var memory memorymodels.StreamMemory
-	err := s.db.WithContext(ctx).
-		Where("user_code = ? AND date = ?", userCode, date).
-		First(&memory).Error
+	query := s.db.WithContext(ctx).Where("user_code = ? AND date = ?", userCode, date)
+	if agentCode != "" {
+		query = query.Where("agent_code = ?", agentCode)
+	}
+	err := query.First(&memory).Error
 
 	now := time.Now()
 
@@ -150,6 +157,7 @@ func (s *streamMemoryService) AppendConversation(ctx context.Context, userCode s
 		// 不存在，创建新记录
 		memory = memorymodels.StreamMemory{
 			UserCode:  userCode,
+			AgentCode: agentCode,
 			Date:      date,
 			Content:   conversationContent,
 			SourceIDs: conversationID,
@@ -188,14 +196,13 @@ func (s *streamMemoryService) AppendConversation(ctx context.Context, userCode s
 
 // BuildFromConversations 从对话记录构建短期记忆
 // 使用 LLM 对对话内容进行总结，生成摘要
-func (s *streamMemoryService) BuildFromConversations(ctx context.Context, userCode string, date string, conversationIDs []string, contents []string) error {
+func (s *streamMemoryService) BuildFromConversations(ctx context.Context, userCode string, agentCode string, date string, conversationIDs []string, contents []string) error {
 	if len(conversationIDs) == 0 || len(contents) == 0 {
 		return fmt.Errorf("conversationIDs and contents are required")
 	}
 	if len(conversationIDs) != len(contents) {
 		return fmt.Errorf("conversationIDs and contents must have the same length")
 	}
-
 
 	// 构建消息列表用于 LLM 总结
 	messages := make([]memorymodels.Message, 0, len(contents))
@@ -247,9 +254,11 @@ func (s *streamMemoryService) BuildFromConversations(ctx context.Context, userCo
 
 	// 保存到数据库
 	var memory memorymodels.StreamMemory
-	err := s.db.WithContext(ctx).
-		Where("user_code = ? AND date = ?", userCode, date).
-		First(&memory).Error
+	query := s.db.WithContext(ctx).Where("user_code = ? AND date = ?", userCode, date)
+	if agentCode != "" {
+		query = query.Where("agent_code = ?", agentCode)
+	}
+	err := query.First(&memory).Error
 
 	now := time.Now()
 
@@ -257,6 +266,7 @@ func (s *streamMemoryService) BuildFromConversations(ctx context.Context, userCo
 		// 创建新记录
 		memory = memorymodels.StreamMemory{
 			UserCode:  userCode,
+			AgentCode: agentCode,
 			Date:      date,
 			Content:   allContent.String(),
 			Summary:   summaryStr,

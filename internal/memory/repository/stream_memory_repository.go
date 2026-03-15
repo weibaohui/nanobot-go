@@ -135,6 +135,11 @@ func (r *streamMemoryRepository) FindByTimeRange(ctx context.Context, startTime,
 		query = query.Where("user_code = ?", opts.UserCode)
 	}
 
+	// Agent隔离：如果指定了 AgentCode，只查询该Agent的记忆
+	if opts.AgentCode != "" {
+		query = query.Where("agent_code = ?", opts.AgentCode)
+	}
+
 	// 排序
 	orderBy := opts.OrderBy
 	if orderBy == "" {
@@ -175,6 +180,11 @@ func (r *streamMemoryRepository) FindUnprocessed(ctx context.Context, before tim
 	// 用户隔离：如果指定了 UserCode，只查询该用户的记忆
 	if opts != nil && opts.UserCode != "" {
 		query = query.Where("user_code = ?", opts.UserCode)
+	}
+
+	// Agent隔离：如果指定了 AgentCode，只查询该Agent的记忆
+	if opts != nil && opts.AgentCode != "" {
+		query = query.Where("agent_code = ?", opts.AgentCode)
 	}
 
 	var memories []models.StreamMemory

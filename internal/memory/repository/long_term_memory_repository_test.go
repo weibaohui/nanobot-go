@@ -180,7 +180,7 @@ func TestLongTermMemoryRepository_DeleteByDate(t *testing.T) {
 	}
 
 	// 删除指定日期的记录
-	err := repo.DeleteByDate(ctx, "2026-03-01")
+	err := repo.DeleteByDate(ctx, "2026-03-01", nil)
 	require.NoError(t, err)
 
 	// 验证
