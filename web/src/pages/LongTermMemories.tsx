@@ -10,8 +10,9 @@ import {
   Modal,
   DatePicker,
   Space,
+  Popconfirm,
 } from 'antd';
-import { SearchOutlined, EyeOutlined, CalendarOutlined } from '@ant-design/icons';
+import { SearchOutlined, EyeOutlined, CalendarOutlined, DeleteOutlined } from '@ant-design/icons';
 import { longTermMemoriesApi } from '../api';
 import type { LongTermMemory } from '../types';
 import dayjs from 'dayjs';
@@ -83,6 +84,16 @@ const LongTermMemories: React.FC = () => {
     }
   };
 
+  const handleDelete = async (id: number) => {
+    try {
+      await longTermMemoriesApi.delete(id);
+      message.success('删除成功');
+      fetchMemories();
+    } catch (error) {
+      message.error('删除失败');
+    }
+  };
+
   useEffect(() => {
     fetchMemories();
   }, []);
@@ -142,18 +153,36 @@ const LongTermMemories: React.FC = () => {
     },
     {
       title: '操作',
-      width: 100,
+      width: 150,
       render: (_: any, record: LongTermMemory) => (
-        <Button
-          type="text"
-          icon={<EyeOutlined />}
-          onClick={() => {
-            setSelectedMemory(record);
-            setDetailVisible(true);
-          }}
-        >
-          查看
-        </Button>
+        <>
+          <Button
+            type="text"
+            icon={<EyeOutlined />}
+            onClick={() => {
+              setSelectedMemory(record);
+              setDetailVisible(true);
+            }}
+          >
+            查看
+          </Button>
+          <Popconfirm
+            title="确认删除"
+            description="确定要删除这条长期记忆吗？此操作不可恢复。"
+            onConfirm={() => handleDelete(record.id)}
+            okText="删除"
+            cancelText="取消"
+            okButtonProps={{ danger: true }}
+          >
+            <Button
+              type="text"
+              danger
+              icon={<DeleteOutlined />}
+            >
+              删除
+            </Button>
+          </Popconfirm>
+        </>
       ),
     },
   ];
