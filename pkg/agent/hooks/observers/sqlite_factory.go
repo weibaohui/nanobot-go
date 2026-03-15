@@ -3,9 +3,8 @@ package observers
 import (
 	"github.com/weibaohui/nanobot-go/pkg/agent/hooks/observer"
 	"github.com/weibaohui/nanobot-go/config"
-	"github.com/weibaohui/nanobot-go/conversation/repository"
-	"github.com/weibaohui/nanobot-go/conversation/service"
 	"github.com/weibaohui/nanobot-go/internal/database"
+	"github.com/weibaohui/nanobot-go/internal/service/conversation"
 	"go.uber.org/zap"
 )
 
@@ -26,8 +25,8 @@ func NewSQLiteObserverFromConfig(cfg *config.Config, logger *zap.Logger, filter 
 		return nil, err
 	}
 
-	repo := repository.NewConversationRecordRepository(dbClient.DB())
-	convService := service.NewConversationService(repo)
+	repo := conversation.NewRepository(dbClient.DB())
+	convService := conversation.NewService(repo)
 
 	return NewSQLiteObserver(logger, filter,
 		WithDBClient(dbClient),
