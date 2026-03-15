@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/cloudwego/eino-ext/components/model/openai"
@@ -10,6 +11,7 @@ import (
 	"github.com/weibaohui/nanobot-go/agent/hooks/trace"
 	"github.com/weibaohui/nanobot-go/session"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 // NewChatModelAdapter 创建 ChatModel 适配器
@@ -84,6 +86,11 @@ func (a *ChatModelAdapter) isKnownSkill(name string) bool {
 	}
 	content := a.skillLoader(name)
 	return content != ""
+}
+
+// GetChatModel 获取内部的 ChatModel
+func (a *ChatModelAdapter) GetChatModel() model.ToolCallingChatModel {
+	return a.chatModel
 }
 
 // Generate produces a complete model response
@@ -164,4 +171,102 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "..."
+}
+
+// dbLLMProvider 数据库模型（简化版，避免循环依赖）
+type dbLLMProvider struct {
+	APIKey       string
+	APIBase      string
+	DefaultModel string
+	ExtraHeaders string
+	IsDefault    bool
+	IsActive     bool
+}
+
+// NewChatModelAdapterFromDB 从数据库直接创建 ChatModelAdapter
+// 这是 Main Agent 和 Memory Summarizer 共用的 ChatModel 创建函数
+func NewChatModelAdapterFromDB(db *gorm.DB, logger *zap.Logger, sessions *session.Manager) (*ChatModelAdapter, error) {
+	if db == nil {
+		return nil, fmt.Errorf("数据库连接不能为空")
+	}
+
+	// 直接查询数据库获取默认 Provider
+	var provider dbLLMProvider
+	err := db.Model(&dbLLMProvider{}).
+		Table("llm_providers").
+		Where("is_default = ? AND is_active = ?", true, true).
+		Select("api_key, api_base, default_model, extra_headers, is_default, is_active").
+		First(&provider).Error
+	if err != nil {
+		return nil, fmt.Errorf("获取默认 Provider 失败: %w", err)
+	}
+
+	if provider.APIKey == "" {
+		logger.Warn("未找到有效的 API Key")
+		return nil, ErrNilAPIKey
+	}
+
+	modelName := provider.DefaultModel
+	if modelName == "" {
+		modelName = "gpt-4o-mini"
+	}
+
+	// 解析额外请求头
+	var extraHeaders map[string]string
+	if provider.ExtraHeaders != "" && provider.ExtraHeaders != "null" {
+		_ = json.Unmarshal([]byte(provider.ExtraHeaders), &extraHeaders)
+	}
+
+	chatModel, err := openai.NewChatModel(context.Background(), &openai.ChatModelConfig{
+		APIKey:  provider.APIKey,
+		Model:   modelName,
+		BaseURL: provider.APIBase,
+	})
+	if err != nil {
+		if logger != nil {
+			logger.Error("创建 OpenAI ChatModel 失败", zap.Error(err))
+		}
+		return nil, fmt.Errorf("%w: %w", ErrCreateChatModel, err)
+	}
+
+	return &ChatModelAdapter{
+		logger:        logger,
+		chatModel:     chatModel,
+		registeredMap: make(map[string]bool),
+		sessions:      sessions,
+	}, nil
+}
+
+// CreateConfigLoaderFromDB 从数据库创建 LLMConfigLoader 函数
+// 用于需要动态获取配置的场景（如 Main Agent）
+func CreateConfigLoaderFromDB(db *gorm.DB) LLMConfigLoader {
+	return func(ctx context.Context) (*LLMConfig, error) {
+		if db == nil {
+			return nil, fmt.Errorf("数据库连接不能为空")
+		}
+
+		// 直接查询数据库获取默认 Provider
+		var provider dbLLMProvider
+		err := db.Model(&dbLLMProvider{}).
+			Table("llm_providers").
+			Where("is_default = ? AND is_active = ?", true, true).
+			Select("api_key, api_base, default_model, extra_headers, is_default, is_active").
+			First(&provider).Error
+		if err != nil {
+			return nil, fmt.Errorf("获取默认 Provider 失败: %w", err)
+		}
+
+		// 解析额外请求头
+		var extraHeaders map[string]string
+		if provider.ExtraHeaders != "" && provider.ExtraHeaders != "null" {
+			_ = json.Unmarshal([]byte(provider.ExtraHeaders), &extraHeaders)
+		}
+
+		return &LLMConfig{
+			APIKey:       provider.APIKey,
+			APIBase:      provider.APIBase,
+			DefaultModel: provider.DefaultModel,
+			ExtraHeaders: extraHeaders,
+		}, nil
+	}
 }

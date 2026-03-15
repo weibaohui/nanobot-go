@@ -140,12 +140,12 @@ func (c *systemLLMClient) getAPIConfigFromDB(modelName string) (string, string, 
 
 // EinoLLMClient 使用 Eino ChatModel 的客户端
 type EinoLLMClient struct {
-	chatModel model.ChatModel
+	chatModel model.ToolCallingChatModel
 	logger    *zap.Logger
 }
 
 // NewEinoLLMClient 创建基于 Eino ChatModel 的客户端
-func NewEinoLLMClient(chatModel model.ChatModel, logger *zap.Logger) LLMClient {
+func NewEinoLLMClient(chatModel model.ToolCallingChatModel, logger *zap.Logger) LLMClient {
 	return &EinoLLMClient{
 		chatModel: chatModel,
 		logger:    logger,

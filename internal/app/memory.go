@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/weibaohui/nanobot-go/agent/provider"
 	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/memory/job"
 	"github.com/weibaohui/nanobot-go/memory/repository"
@@ -25,15 +26,22 @@ func InitMemory(cfg *config.Config, db *gorm.DB, logger *zap.Logger) *MemoryComp
 	streamRepo := repository.NewStreamMemoryRepository(db)
 	longTermRepo := repository.NewLongTermMemoryRepository(db)
 
-	// 创建 LLM 客户端（传入数据库连接以获取 Provider 配置）
-	llmClient := service.NewSystemLLMClient(cfg, logger, db)
+	// 创建总结器（使用公共函数直接从数据库创建 ChatModelAdapter）
+	var summarizer service.MemorySummarizer
 
-	// 创建总结器
-	summarizer := service.NewMemorySummarizer(
-		llmClient,
-		cfg.Memory.Summarization.ConversationPrompt,
-		cfg.Memory.Summarization.LongTermPrompt,
-	)
+	// 使用公共函数直接创建 ChatModelAdapter
+	adapter, err := provider.NewChatModelAdapterFromDB(db, logger, nil)
+	if err != nil {
+		logger.Warn("创建 ChatModelAdapter 失败，记忆总结功能将不可用", zap.Error(err))
+	} else {
+		// 获取 adapter 内部的 ChatModel
+		llmClient := service.NewEinoLLMClient(adapter.GetChatModel(), logger)
+		summarizer = service.NewMemorySummarizer(
+			llmClient,
+			cfg.Memory.Summarization.ConversationPrompt,
+			cfg.Memory.Summarization.LongTermPrompt,
+		)
+	}
 
 	// 创建记忆服务
 	memoryService := service.NewMemoryService(
@@ -73,15 +81,22 @@ func RunMemoryUpgrade(cfg *config.Config, db *gorm.DB, logger *zap.Logger, targe
 	streamRepo := repository.NewStreamMemoryRepository(db)
 	longTermRepo := repository.NewLongTermMemoryRepository(db)
 
-	// 创建 LLM 客户端（传入数据库连接以获取 Provider 配置）
-	llmClient := service.NewSystemLLMClient(cfg, logger, db)
+	// 创建总结器（使用公共函数直接从数据库创建 ChatModelAdapter）
+	var summarizer service.MemorySummarizer
 
-	// 创建总结器
-	summarizer := service.NewMemorySummarizer(
-		llmClient,
-		cfg.Memory.Summarization.ConversationPrompt,
-		cfg.Memory.Summarization.LongTermPrompt,
-	)
+	// 使用公共函数直接创建 ChatModelAdapter
+	adapter, err := provider.NewChatModelAdapterFromDB(db, logger, nil)
+	if err != nil {
+		logger.Warn("创建 ChatModelAdapter 失败，记忆升级功能将不可用", zap.Error(err))
+	} else {
+		// 获取 adapter 内部的 ChatModel
+		llmClient := service.NewEinoLLMClient(adapter.GetChatModel(), logger)
+		summarizer = service.NewMemorySummarizer(
+			llmClient,
+			cfg.Memory.Summarization.ConversationPrompt,
+			cfg.Memory.Summarization.LongTermPrompt,
+		)
+	}
 
 	// 创建记忆服务
 	memoryService := service.NewMemoryService(

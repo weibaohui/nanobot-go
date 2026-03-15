@@ -28,8 +28,9 @@ import {
   MessageOutlined,
   FilterOutlined,
   ClearOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
-import { conversationsApi } from '../api';
+import { conversationsApi, streamMemoriesApi } from '../api';
 import type { ConversationRecord } from '../types';
 import dayjs from 'dayjs';
 
@@ -87,6 +88,12 @@ const Conversations: React.FC = () => {
   // Agent 和 Channel 选项
   const [agentOptions, setAgentOptions] = useState<{ code: string; name: string }[]>([]);
   const [channelOptions, setChannelOptions] = useState<{ code: string; name: string }[]>([]);
+
+  // 整理为记忆状态
+  const [organizeVisible, setOrganizeVisible] = useState(false);
+  const [organizeLoading, setOrganizeLoading] = useState(false);
+  const [organizeDate, setOrganizeDate] = useState(dayjs());
+  const [organizeUserCode, setOrganizeUserCode] = useState('');
 
   const roleOptions = [
     { value: 'user', label: '用户' },
@@ -359,6 +366,40 @@ const Conversations: React.FC = () => {
     }
 
     setRecords(filtered);
+  };
+
+  // 处理整理为记忆
+  const handleOrganizeMemory = async () => {
+    if (sessionRecords.length === 0) {
+      message.warning('当前没有对话记录可整理');
+      return;
+    }
+    if (!organizeUserCode) {
+      message.warning('请输入用户编码');
+      return;
+    }
+
+    setOrganizeLoading(true);
+    try {
+      const conversationIDs = sessionRecords.map(r => String(r.id));
+      const contents = sessionRecords.map(r =>
+        `[${r.role}] ${r.content?.substring(0, 200)}${r.content?.length > 200 ? '...' : ''}`
+      );
+
+      await streamMemoriesApi.build({
+        user_code: organizeUserCode,
+        date: organizeDate.format('YYYY-MM-DD'),
+        conversation_ids: conversationIDs,
+        contents: contents,
+      });
+
+      message.success('短期记忆整理成功');
+      setOrganizeVisible(false);
+    } catch (error: any) {
+      message.error(error?.response?.data?.error || '整理失败');
+    } finally {
+      setOrganizeLoading(false);
+    }
   };
 
   const columns = [
@@ -639,7 +680,28 @@ const Conversations: React.FC = () => {
           setSessionVisible(false);
           setSessionRecords([]);
         }}
-        footer={null}
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <Button
+              type="primary"
+              icon={<FileTextOutlined />}
+              loading={organizeLoading}
+              onClick={() => {
+                // 自动从当前对话记录中提取用户编码
+                const uniqueUserCodes = [...new Set(sessionRecords.map(r => r.user_code).filter(Boolean))];
+                if (uniqueUserCodes.length === 1) {
+                  setOrganizeUserCode(uniqueUserCodes[0]);
+                } else if (uniqueUserCodes.length > 1) {
+                  setOrganizeUserCode('');
+                }
+                setOrganizeVisible(true);
+              }}
+            >
+              整理为记忆
+            </Button>
+            <Button onClick={() => setSessionVisible(false)}>关闭</Button>
+          </div>
+        }
         width={800}
       >
         {sessionLoading ? (
@@ -696,6 +758,42 @@ const Conversations: React.FC = () => {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* 整理为记忆弹窗 */}
+      <Modal
+        title="整理为短期记忆"
+        open={organizeVisible}
+        onOk={handleOrganizeMemory}
+        onCancel={() => {
+          setOrganizeVisible(false);
+          setOrganizeUserCode('');
+        }}
+        confirmLoading={organizeLoading}
+        okText="确认整理"
+        cancelText="取消"
+      >
+        <p>将当前对话的 {sessionRecords.length} 条记录整理为短期记忆。</p>
+        <Form layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item label="用户编码" required>
+            <Input
+              placeholder="输入用户编码"
+              value={organizeUserCode}
+              onChange={(e) => setOrganizeUserCode(e.target.value)}
+            />
+          </Form.Item>
+          <Form.Item label="日期" required>
+            <DatePicker
+              value={organizeDate}
+              onChange={(date) => date && setOrganizeDate(date)}
+              format="YYYY-MM-DD"
+              style={{ width: '100%' }}
+            />
+          </Form.Item>
+        </Form>
+        <p style={{ color: '#999', fontSize: 12 }}>
+          同一用户同一天的记忆会被聚合为一条记录。
+        </p>
       </Modal>
     </div>
   );

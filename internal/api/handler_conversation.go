@@ -200,6 +200,100 @@ func (h *Handler) handleConversationByTrace(c *gin.Context) {
 	c.JSON(http.StatusOK, h.enrichConversationRecords(records))
 }
 
+// handleConversationByUserAndDate 根据用户编码和日期查询对话记录
+func (h *Handler) handleConversationByUserAndDate(c *gin.Context) {
+	userCode := c.Param("userCode")
+	date := c.Param("date")
+
+	if userCode == "" || date == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "userCode and date are required"})
+		return
+	}
+
+	records, err := h.conversationService.ListByUserAndDate(c.Request.Context(), userCode, date)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	// Convert ConversationDTO slice to ConversationRecordResponse slice
+	recordDTOs := make([]ConversationDTO, len(records))
+	for i, r := range records {
+		recordDTOs[i] = ConversationDTO(r)
+	}
+
+	// Enrich with agent and channel names
+	c.JSON(http.StatusOK, h.enrichConversationDTOs(recordDTOs))
+}
+
+// enrichConversationDTOs 为对话DTO添加 Agent 和 Channel 名称
+func (h *Handler) enrichConversationDTOs(dtos []conversation.ConversationDTO) []ConversationRecordResponse {
+	// Collect unique Codes
+	agentCodes := make(map[string]bool)
+	channelCodes := make(map[string]bool)
+	for _, r := range dtos {
+		if r.AgentCode != "" {
+			agentCodes[r.AgentCode] = true
+		}
+		if r.ChannelCode != "" {
+			channelCodes[r.ChannelCode] = true
+		}
+	}
+
+	// Batch query names
+	agentNames := make(map[string]string)
+	channelNames := make(map[string]string)
+
+	for code := range agentCodes {
+		if agent, err := h.agentService.GetAgentByCode(code); err == nil && agent != nil {
+			agentNames[code] = agent.Name
+		}
+	}
+
+	for code := range channelCodes {
+		if channel, err := h.channelService.GetChannelByCode(code); err == nil && channel != nil {
+			channelNames[code] = channel.Name
+		}
+	}
+
+	// Assemble response
+	result := make([]ConversationRecordResponse, len(dtos))
+	for i, r := range dtos {
+		result[i] = ConversationRecordResponse{
+			ConversationRecord: models.ConversationRecord{
+				ID:           r.ID,
+				TraceID:      r.TraceID,
+				SpanID:       r.SpanID,
+				ParentSpanID: r.ParentSpanID,
+				EventType:    r.EventType,
+				Timestamp:    r.Timestamp,
+				SessionKey:   r.SessionKey,
+				Role:         r.Role,
+				Content:      r.Content,
+				CreatedAt:    r.CreatedAt,
+				UserCode:     r.UserCode,
+				AgentCode:    r.AgentCode,
+				ChannelCode:  r.ChannelCode,
+				ChannelType:  r.ChannelType,
+			},
+			AgentName:   agentNames[r.AgentCode],
+			ChannelName: channelNames[r.ChannelCode],
+		}
+		if r.TokenUsage != nil {
+			result[i].PromptTokens = r.TokenUsage.PromptTokens
+			result[i].CompletionTokens = r.TokenUsage.CompletionTokens
+			result[i].TotalTokens = r.TokenUsage.TotalTokens
+			result[i].ReasoningTokens = r.TokenUsage.ReasoningTokens
+			result[i].CachedTokens = r.TokenUsage.CachedTokens
+		}
+	}
+
+	return result
+}
+
+// ConversationDTO is an alias for conversation.ConversationDTO for local usage
+type ConversationDTO = conversation.ConversationDTO
+
 // handleConversationStats 处理对话记录统计请求
 func (h *Handler) handleConversationStats(c *gin.Context) {
 	// 解析时间范围

@@ -2,8 +2,10 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	memorymodels "github.com/weibaohui/nanobot-go/memory/models"
@@ -11,13 +13,15 @@ import (
 
 // StreamMemoryService 短期记忆服务接口
 type StreamMemoryService interface {
-	List(ctx context.Context, sessionKey string, eventType string, offset int, limit int) ([]memorymodels.StreamMemory, int64, error)
+	List(ctx context.Context, userCode string, offset int, limit int) ([]memorymodels.StreamMemory, int64, error)
 	Get(ctx context.Context, id uint64) (*memorymodels.StreamMemory, error)
+	GetByUserAndDate(ctx context.Context, userCode string, date string) (*memorymodels.StreamMemory, error)
 	Create(ctx context.Context, memory *memorymodels.StreamMemory) error
 	Update(ctx context.Context, id uint64, memory *memorymodels.StreamMemory) error
 	Delete(ctx context.Context, id uint64) error
 	MarkProcessed(ctx context.Context, id uint64) error
 	GetUnprocessed(ctx context.Context) ([]memorymodels.StreamMemory, error)
+	BuildFromConversations(ctx context.Context, userCode string, date string, conversationIDs []string, contents []string) error
 }
 
 // LongTermMemoryService 长期记忆服务接口
@@ -35,15 +39,14 @@ type LongTermMemoryService interface {
 // === Stream Memory Handlers ===
 
 func (h *Handler) handleStreamMemories(c *gin.Context) {
-	sessionKey := c.Query("session_key")
-	eventType := c.Query("event_type")
+	userCode := c.Query("user_code")
 	offset, _ := strconv.Atoi(c.Query("offset"))
 	limit, _ := strconv.Atoi(c.Query("limit"))
 	if limit == 0 {
 		limit = 50
 	}
 
-	memories, total, err := h.streamMemoryService.List(c.Request.Context(), sessionKey, eventType, offset, limit)
+	memories, total, err := h.streamMemoryService.List(c.Request.Context(), userCode, offset, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 		return
@@ -135,6 +138,159 @@ func (h *Handler) handleUnprocessedMemories(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, memories)
+}
+
+// handleBuildStreamMemory 从对话记录构建短期记忆
+// 将选中的对话记录按用户+日期聚合为短期记忆
+func (h *Handler) handleBuildStreamMemory(c *gin.Context) {
+	var req struct {
+		UserCode        string   `json:"user_code" binding:"required"`
+		Date            string   `json:"date" binding:"required"`
+		ConversationIDs []string `json:"conversation_ids" binding:"required"`
+		Contents        []string `json:"contents" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid request: " + err.Error()})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// 构建短期记忆（按用户+日期聚合）
+	if err := h.streamMemoryService.BuildFromConversations(ctx, req.UserCode, req.Date, req.ConversationIDs, req.Contents); err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "构建短期记忆失败: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Message: "短期记忆构建成功",
+		Data: map[string]interface{}{
+			"user_code":        req.UserCode,
+			"date":             req.Date,
+			"conversation_count": len(req.ConversationIDs),
+		},
+	})
+}
+
+// handleUpgradeMemories 手动触发记忆升级
+// 将指定日期的未处理流水记忆升级为长期记忆
+func (h *Handler) handleUpgradeMemories(c *gin.Context) {
+	date := c.Query("date")
+	if date == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "date parameter is required, format: YYYY-MM-DD"})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// 获取未处理的流水记忆
+	unprocessedMemories, err := h.streamMemoryService.GetUnprocessed(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "获取未处理记忆失败: " + err.Error()})
+		return
+	}
+
+	if len(unprocessedMemories) == 0 {
+		c.JSON(http.StatusOK, SuccessResponse{Message: "没有需要升级的记忆"})
+		return
+	}
+
+	// 统计信息
+	totalCount := len(unprocessedMemories)
+	upgradedCount := 0
+
+	// 按 UserCode 分组（用于用户隔离）
+	userMemories := make(map[string][]memorymodels.StreamMemory)
+	for _, memory := range unprocessedMemories {
+		userCode := memory.UserCode
+		if userCode == "" {
+			userCode = "default"
+		}
+		userMemories[userCode] = append(userMemories[userCode], memory)
+	}
+
+	// 为每个用户创建长期记忆
+	for userCode, memories := range userMemories {
+		// 构建总结内容
+		var summary strings.Builder
+		summary.WriteString(fmt.Sprintf("日期: %s 的记忆汇总\n\n", date))
+		summary.WriteString(fmt.Sprintf("用户: %s\n", userCode))
+		summary.WriteString(fmt.Sprintf("共 %d 条流水记忆\n\n", len(memories)))
+
+		for i, m := range memories {
+			summary.WriteString(fmt.Sprintf("--- 记忆 %d ---\n", i+1))
+			summary.WriteString(fmt.Sprintf("日期: %s\n", m.Date))
+			if m.Summary != "" {
+				summary.WriteString(fmt.Sprintf("总结: %s\n", m.Summary))
+			}
+			if m.Content != "" {
+				summary.WriteString(fmt.Sprintf("内容摘要: %s\n", truncateString(m.Content, 300)))
+			}
+			if m.SourceIDs != "" {
+				summary.WriteString(fmt.Sprintf("来源对话: %s\n", m.SourceIDs))
+			}
+			summary.WriteString("\n")
+		}
+
+		// 创建长期记忆
+		longTermMemory := &memorymodels.LongTermMemory{
+			Date:         date,
+			UserCode:     userCode,
+			Summary:      fmt.Sprintf("%s 的记忆汇总 (%d 条)", date, len(memories)),
+			WhatHappened: summary.String(),
+			Conclusion:   fmt.Sprintf("共处理 %d 条流水记忆", len(memories)),
+			Value:        "通过手动触发升级按钮生成",
+		}
+
+		// 检查是否已存在
+		existing, err := h.longTermMemoryService.GetByDate(ctx, date)
+		if err != nil {
+			// 查询失败，继续创建新的
+		}
+
+		if existing != nil {
+			// 更新现有记录
+			longTermMemory.ID = existing.ID
+			if err := h.longTermMemoryService.Update(ctx, existing.ID, longTermMemory); err != nil {
+				c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "更新长期记忆失败: " + err.Error()})
+				return
+			}
+		} else {
+			// 创建新记录
+			if err := h.longTermMemoryService.Create(ctx, longTermMemory); err != nil {
+				c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "创建长期记忆失败: " + err.Error()})
+				return
+			}
+		}
+
+		// 标记流水记忆为已处理
+		for _, m := range memories {
+			if err := h.streamMemoryService.MarkProcessed(ctx, m.ID); err != nil {
+				// 记录错误但继续处理
+			}
+		}
+
+		upgradedCount += len(memories)
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Message: fmt.Sprintf("记忆升级完成，共处理 %d 条流水记忆，涉及 %d 个用户", totalCount, len(userMemories)),
+		Data: map[string]interface{}{
+			"date":           date,
+			"total_count":    totalCount,
+			"upgraded_count": upgradedCount,
+			"user_count":     len(userMemories),
+		},
+	})
+}
+
+// truncateString 截断字符串
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
 
 // === Long-term Memory Handlers ===

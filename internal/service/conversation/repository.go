@@ -106,6 +106,19 @@ func (r *repository) FindByTimeRange(ctx context.Context, startTime, endTime tim
 	return records, nil
 }
 
+func (r *repository) FindByUserCodeAndDate(ctx context.Context, userCode string, startTime, endTime time.Time) ([]models.ConversationRecord, error) {
+	var records []models.ConversationRecord
+	if err := r.db.WithContext(ctx).
+		Where("user_code = ?", userCode).
+		Where("timestamp >= ?", startTime).
+		Where("timestamp <= ?", endTime).
+		Order("timestamp ASC").
+		Find(&records).Error; err != nil {
+		return nil, err
+	}
+	return records, nil
+}
+
 func (r *repository) FindByTraceIDRoleAndContent(ctx context.Context, traceID, role, content string) ([]models.ConversationRecord, error) {
 	var records []models.ConversationRecord
 	if err := r.db.WithContext(ctx).

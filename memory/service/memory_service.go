@@ -65,54 +65,15 @@ func NewMemoryService(
 	}
 }
 
-// WriteMemory 写入流水记忆
+// WriteMemory 写入流水记忆（已弃用，使用 BuildFromConversations 替代）
+// 暂时保留此函数以兼容现有调用，但不再实际写入数据库
 func (s *memoryService) WriteMemory(ctx context.Context, content string, metadata map[string]interface{}) error {
 	if !s.enabled {
 		return ErrMemoryDisabled
 	}
 
-	if content == "" {
-		return fmt.Errorf("%w: content cannot be empty", ErrInvalidMetadata)
-	}
-
-	// 从 metadata 中提取必要字段
-	traceID, _ := metadata["trace_id"].(string)
-	if traceID == "" {
-		return fmt.Errorf("%w: trace_id is required", ErrInvalidMetadata)
-	}
-
-	// 幂等检查：检查是否已存在该 trace_id 的流水记忆
-	existing, err := s.streamRepo.FindByTraceID(ctx, traceID)
-	if err != nil {
-		return fmt.Errorf("failed to check existing memory: %w", err)
-	}
-	if len(existing) > 0 {
-		return ErrDuplicateTraceID
-	}
-
-	sessionKey, _ := metadata["session_key"].(string)
-	channelType, _ := metadata["channel_type"].(string)
-	eventType, _ := metadata["event_type"].(string)
-	summary, _ := metadata["summary"].(string)
-	userCode, _ := metadata["user_code"].(string)
-
-	// 创建流水记忆
-	memory := &models.StreamMemory{
-		TraceID:     traceID,
-		SessionKey:  sessionKey,
-		ChannelType: channelType,
-		UserCode:    userCode,
-		Content:     content,
-		Summary:     summary,
-		EventType:   eventType,
-		CreatedAt:   time.Now(),
-		Processed:   false,
-	}
-
-	if err := s.streamRepo.Create(ctx, memory); err != nil {
-		return fmt.Errorf("failed to write stream memory: %w", err)
-	}
-
+	// 新的模型结构下，短期记忆需要从对话列表手动整理
+	// 此自动写入方法不再适用，直接返回 nil 避免影响业务流程
 	return nil
 }
 
@@ -183,10 +144,6 @@ func (s *memoryService) searchStreamMemories(ctx context.Context, query string, 
 
 	// 根据过滤条件选择查询方式
 	switch {
-	case filters.TraceID != "":
-		memories, err = s.streamRepo.FindByTraceID(ctx, filters.TraceID)
-	case filters.SessionKey != "":
-		memories, err = s.streamRepo.FindBySessionKey(ctx, filters.SessionKey, opts)
 	case filters.StartTime != nil && filters.EndTime != nil:
 		memories, err = s.streamRepo.FindByTimeRange(ctx, *filters.StartTime, *filters.EndTime, opts)
 	case filters.StartTime != nil:
@@ -276,15 +233,12 @@ func (s *memoryService) filterStreamByKeyword(memories []models.StreamMemory, ke
 // streamToDTO 将 StreamMemory 转换为 MemoryDTO
 func (s *memoryService) streamToDTO(m *models.StreamMemory) models.MemoryDTO {
 	return models.MemoryDTO{
-		ID:          m.ID,
-		Type:        "stream",
-		TraceID:     m.TraceID,
-		SessionKey:  m.SessionKey,
-		ChannelType: m.ChannelType,
-		UserCode:    m.UserCode,
-		Content:     m.Content,
-		Summary:     m.Summary,
-		CreatedAt:   m.CreatedAt,
+		ID:        m.ID,
+		Type:      "stream",
+		UserCode:  m.UserCode,
+		Content:   m.Content,
+		Summary:   m.Summary,
+		CreatedAt: m.CreatedAt,
 	}
 }
 

@@ -3,18 +3,17 @@ package models
 import "time"
 
 // StreamMemory 流水记忆（短期记忆）
-// 存储对话的初步总结，按日期归类，直到被定时任务升级为长期记忆
+// 按用户+日期聚合，每天一条记录，包含当天所有对话的摘要
 type StreamMemory struct {
-	ID          uint64     `gorm:"primaryKey" json:"id"`
-	TraceID     string     `gorm:"type:text;index:idx_stream_trace_id;not null" json:"trace_id"`
-	SessionKey  string     `gorm:"type:text;index:idx_stream_session_key" json:"session_key"`
-	ChannelType string     `gorm:"type:text;index:idx_stream_channel" json:"channel_type"`
-	UserCode    string     `gorm:"type:text;index:idx_stream_user_code;not null" json:"user_code"` // 用户隔离字段
-	Content     string     `gorm:"type:text" json:"content"`                                          // 原始对话内容摘要
-	Summary     string     `gorm:"type:text" json:"summary"`                                          // AI生成的初步总结
-	EventType   string     `gorm:"type:text;index:idx_stream_event_type" json:"event_type"`
-	CreatedAt   time.Time  `gorm:"type:datetime;index:idx_stream_created_at;not null" json:"created_at"`
-	Processed   bool       `gorm:"type:integer;default:0;index:idx_stream_processed" json:"processed"` // 是否已升级为长期记忆
+	ID        uint64     `gorm:"primaryKey" json:"id"`
+	UserCode  string     `gorm:"type:text;index:idx_stream_user_date,unique;not null" json:"user_code"` // 用户编码
+	Date      string     `gorm:"type:text;index:idx_stream_user_date,unique;not null" json:"date"`      // 日期 YYYY-MM-DD，联合唯一索引
+	Content   string     `gorm:"type:text" json:"content"`                                              // 当天所有对话的内容聚合
+	Summary   string     `gorm:"type:text" json:"summary"`                                              // AI生成的当天总结
+	SourceIDs string     `gorm:"type:text" json:"source_ids"`                                           // 来源对话ID列表，逗号分隔
+	CreatedAt time.Time  `gorm:"type:datetime;not null" json:"created_at"`
+	UpdatedAt time.Time  `gorm:"type:datetime" json:"updated_at"`
+	Processed bool       `gorm:"type:integer;default:0;index:idx_stream_processed" json:"processed"` // 是否已升级为长期记忆
 	ProcessedAt *time.Time `gorm:"type:datetime" json:"processed_at,omitempty"`
 }
 

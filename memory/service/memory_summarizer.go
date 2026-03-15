@@ -131,8 +131,8 @@ func (s *memorySummarizer) SummarizeToLongTerm(ctx context.Context, streams []mo
 	var content strings.Builder
 	for i, stream := range streams {
 		content.WriteString(fmt.Sprintf("\n--- 记录 %d ---\n", i+1))
-		content.WriteString(fmt.Sprintf("时间: %s\n", stream.CreatedAt.Format("15:04:05")))
-		content.WriteString(fmt.Sprintf("会话: %s\n", stream.SessionKey))
+		content.WriteString(fmt.Sprintf("日期: %s\n", stream.Date))
+		content.WriteString(fmt.Sprintf("用户: %s\n", stream.UserCode))
 		if stream.Summary != "" {
 			content.WriteString(fmt.Sprintf("总结: %s\n", stream.Summary))
 		} else {

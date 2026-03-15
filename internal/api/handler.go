@@ -155,6 +155,7 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 			conversations.DELETE("/:id", h.deleteConversationRecord)
 			conversations.GET("/session/:sessionKey", h.handleConversationBySession)
 			conversations.GET("/trace/:traceID", h.handleConversationByTrace)
+		conversations.GET("/user/:userCode/date/:date", h.handleConversationByUserAndDate)
 			conversations.GET("/stats", h.handleConversationStats)
 		}
 
@@ -167,6 +168,8 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 			streamMemories.PUT("/:id", h.updateStreamMemory)
 			streamMemories.DELETE("/:id", h.deleteStreamMemory)
 			streamMemories.GET("/unprocessed", h.handleUnprocessedMemories)
+		streamMemories.POST("/build", h.handleBuildStreamMemory)
+		streamMemories.POST("/upgrade", h.handleUpgradeMemories)
 		}
 
 		// Long-term Memory API
