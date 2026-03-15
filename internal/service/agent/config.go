@@ -72,3 +72,26 @@ func (s *service) UpdateAgentConfig(agentID uint, config *AgentConfig) error {
 
 	return s.agentRepo.Update(agent)
 }
+
+// UpdateAgentConfigByCode 根据 Code 更新 Agent 配置
+func (s *service) UpdateAgentConfigByCode(agentCode string, config *AgentConfig) error {
+	agent, err := s.agentRepo.GetByAgentCode(agentCode)
+	if err != nil {
+		return err
+	}
+	if agent == nil {
+		return fmt.Errorf("agent not found")
+	}
+
+	agent.IdentityContent = config.IdentityContent
+	agent.SoulContent = config.SoulContent
+	agent.AgentsContent = config.AgentsContent
+	agent.UserContent = config.UserContent
+	agent.ToolsContent = config.ToolsContent
+	agent.Model = config.Model
+	agent.MaxTokens = config.MaxTokens
+	agent.Temperature = config.Temperature
+	agent.MaxIterations = config.MaxIterations
+
+	return s.agentRepo.Update(agent)
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/weibaohui/nanobot-go/pkg/agent/hooks/trace"
+	configtools "github.com/weibaohui/nanobot-go/pkg/agent/tools/config"
 	"github.com/weibaohui/nanobot-go/bus"
 	"go.uber.org/zap"
 )
@@ -199,6 +200,13 @@ func (l *Loop) loadChannelAgentConfig(ctx context.Context, msg *bus.InboundMessa
 		ctx = trace.WithChannelCode(ctx, channel.ChannelCode)
 		// 通过 Channel 反推 UserCode
 		ctx = trace.WithUserCode(ctx, channel.UserCode)
+		// 注入配置工具上下文（未绑定 Agent，config tools 会因缺少 AgentCode 而失败）
+		cfgCtx := &configtools.AgentConfigContext{
+			UserCode:    channel.UserCode,
+			AgentCode:   "",
+			ChannelCode: channel.ChannelCode,
+		}
+		ctx = configtools.WithAgentConfigContext(ctx, cfgCtx)
 		return ctx, nil
 	}
 
@@ -239,6 +247,14 @@ func (l *Loop) loadChannelAgentConfig(ctx context.Context, msg *bus.InboundMessa
 		zap.String("agent_name", agent.Name),
 		zap.Bool("enable_thinking_process", agent.EnableThinkingProcess),
 	)
+
+	// 注入配置工具上下文（供 config tools 使用）
+	cfgCtx := &configtools.AgentConfigContext{
+		UserCode:    agent.UserCode,
+		AgentCode:   agent.AgentCode,
+		ChannelCode: channel.ChannelCode,
+	}
+	ctx = configtools.WithAgentConfigContext(ctx, cfgCtx)
 
 	return ctx, nil
 }

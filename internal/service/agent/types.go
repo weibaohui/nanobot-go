@@ -71,10 +71,13 @@ type Service interface {
 	GetAgentConfig(agentID uint) (*AgentConfig, error)
 	GetAgentConfigByCode(agentCode string) (*AgentConfig, error)
 	UpdateAgentConfig(agentID uint, config *AgentConfig) error
+	UpdateAgentConfigByCode(agentCode string, config *AgentConfig) error
 
 	// 记忆管理
 	GetMemory(agentID uint) (string, error)
+	GetMemoryByCode(agentCode string) (string, error)
 	UpdateMemory(agentID uint, content string) error
+	UpdateMemoryByCode(agentCode string, content string) error
 	GetMemorySummary(agentID uint) (string, error)
 	UpdateMemorySummary(agentID uint, summary string) error
 
