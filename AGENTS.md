@@ -73,6 +73,8 @@ make setup
 make build
 ```
 
+* 构建没有问题后，调用`gh pr create`命令创建pr
+
 * 任务完成后要提醒人类进行分支合并操作。合并完成后，删除该 worktree
 
 ```bash

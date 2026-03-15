@@ -34,6 +34,7 @@ make setup
 make build
 ```
 
+
 #### 3. 编写需求文档
 在 `docs/` 目录下创建：
 - 需求说明文档（描述要解决的问题、功能目标）
@@ -67,11 +68,7 @@ make build
 - 已知限制或待改进点
 
 #### 8. 提交代码
-```bash
-git add .
-git commit -m "feat: 功能描述"
-git push origin feature/<功能名称>
-```
+
 使用gh 命令 发起pr
 ```bash
 gh pr create --title "feat: 功能描述" --body "实现了什么，与需求的对应关系，关键实现点，已知限制或待改进点"
