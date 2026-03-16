@@ -17,6 +17,7 @@ import LongTermMemories from './pages/LongTermMemories';
 import MCPServers from './pages/MCPServers';
 import Login from './pages/Login';
 import Skills from './pages/Skills';
+import Tasks from './pages/Tasks';
 import { isAuthenticated, authApi, setCurrentUser, getCurrentUserCode } from './api';
 
 // 路由守卫组件
@@ -84,6 +85,7 @@ const App: React.FC = () => {
             <Route path="long-term-memories" element={<LongTermMemories />} />
             <Route path="mcp-servers" element={<MCPServers />} />
             <Route path="skills" element={<Skills />} />
+            <Route path="tasks" element={<Tasks />} />
           </Route>
 
           {/* 未匹配路由重定向 */}

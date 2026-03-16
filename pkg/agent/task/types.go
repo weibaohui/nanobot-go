@@ -26,6 +26,12 @@ type Info struct {
 	ID            string
 	Status        Status
 	ResultSummary string
+	Work          string
+	Channel       string
+	ChatID        string
+	CreatedAt     time.Time
+	CompletedAt   time.Time
+	LastLogs      []string
 }
 
 // ManagerConfig 任务管理器配置

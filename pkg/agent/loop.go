@@ -162,3 +162,8 @@ func (l *Loop) GetMasterAgent() *MasterAgent {
 	}
 	return l.masterAgent
 }
+
+// GetTaskManager 获取任务管理器
+func (l *Loop) GetTaskManager() *task.Manager {
+	return l.taskManager
+}

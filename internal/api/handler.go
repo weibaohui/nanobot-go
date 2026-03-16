@@ -27,6 +27,7 @@ type Handler struct {
 	sessionManager            SessionManager
 	mcpService                MCPService
 	skillService              skillsvc.Service
+	taskService               TaskService
 }
 
 // NewHandler 创建 API 处理器
@@ -44,6 +45,7 @@ func NewHandler(
 	sessionManager SessionManager,
 	mcpService MCPService,
 	skillService skillsvc.Service,
+	taskService TaskService,
 ) *Handler {
 	return &Handler{
 		userService:               userService,
@@ -59,6 +61,7 @@ func NewHandler(
 		sessionManager:            sessionManager,
 		mcpService:                mcpService,
 		skillService:              skillService,
+		taskService:               taskService,
 	}
 }
 
@@ -222,6 +225,14 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 		{
 			skills.GET("", h.listSkills)
 			skills.GET("/:name", h.getSkill)
+		}
+
+		// Tasks API
+		tasks := authorized.Group("/tasks")
+		{
+			tasks.GET("", h.listTasks)
+			tasks.GET("/:id", h.getTask)
+			tasks.POST("/:id/stop", h.stopTask)
 		}
 	}
 }
