@@ -256,7 +256,7 @@ const StreamMemories: React.FC = () => {
         cancelText="取消"
       >
         <p>选择要升级的日期，系统将把所有未处理的短期记忆汇总为长期记忆。</p>
-        <Space direction="vertical" style={{ marginTop: 16 }}>
+        <Space orientation="vertical" style={{ marginTop: 16 }}>
           <span>选择日期：</span>
           <DatePicker
             value={upgradeDate}
