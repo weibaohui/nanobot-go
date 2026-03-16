@@ -2,7 +2,6 @@ package config
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/cloudwego/eino/components/tool"
@@ -12,15 +11,24 @@ import (
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/common"
 )
 
+// configTypeGetters 配置类型到字段 getter 的包级映射表
+var configTypeGetters = map[string]func(*models.Agent) string{
+	"identity": func(a *models.Agent) string { return a.IdentityContent },
+	"soul":     func(a *models.Agent) string { return a.SoulContent },
+	"agents":   func(a *models.Agent) string { return a.AgentsContent },
+	"tools":    func(a *models.Agent) string { return a.ToolsContent },
+	"user":     func(a *models.Agent) string { return a.UserContent },
+}
+
 // ReadAgentConfigTool 读取 Agent 配置工具
 type ReadAgentConfigTool struct {
-	agentService agentsvc.Service
+	baseTool
 }
 
 // NewReadAgentConfigTool 创建读取配置工具实例
 func NewReadAgentConfigTool(agentService agentsvc.Service) *ReadAgentConfigTool {
 	return &ReadAgentConfigTool{
-		agentService: agentService,
+		baseTool: baseTool{agentService: agentService},
 	}
 }
 
@@ -44,27 +52,9 @@ func (t *ReadAgentConfigTool) Info(ctx context.Context) (*schema.ToolInfo, error
 	}, nil
 }
 
-// configTypeToGetter 配置类型到字段 getter 的映射
-func configTypeToGetter(configType string) func(*models.Agent) string {
-	getters := map[string]func(*models.Agent) string{
-		"identity": func(a *models.Agent) string { return a.IdentityContent },
-		"soul":     func(a *models.Agent) string { return a.SoulContent },
-		"agents":   func(a *models.Agent) string { return a.AgentsContent },
-		"tools":    func(a *models.Agent) string { return a.ToolsContent },
-		"user":     func(a *models.Agent) string { return a.UserContent },
-	}
-	return getters[configType]
-}
-
 // InvokableRun 可直接调用的执行入口
 func (t *ReadAgentConfigTool) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
-	// 1. 强制提取并验证上下文
-	cfgCtx, err := GetAgentConfigContext(ctx)
-	if err != nil {
-		return "", fmt.Errorf("security check failed: %w", err)
-	}
-
-	// 2. 解析参数
+	// 1. 解析参数
 	var args struct {
 		ConfigType string `json:"config_type"`
 	}
@@ -72,38 +62,29 @@ func (t *ReadAgentConfigTool) InvokableRun(ctx context.Context, argumentsInJSON 
 		return "", fmt.Errorf("invalid arguments: %w", err)
 	}
 
-	// 3. 验证 config_type
-	getter := configTypeToGetter(args.ConfigType)
-	if getter == nil {
+	// 2. 验证 config_type
+	getter, ok := configTypeGetters[args.ConfigType]
+	if !ok {
 		return "", fmt.Errorf("invalid config_type: %s, must be one of: identity, soul, agents, tools, user", args.ConfigType)
 	}
 
-	// 4. 权限检查：Agent 存在且属于当前用户
-	agent, err := t.agentService.GetAgentByCode(cfgCtx.AgentCode)
+	// 3. 验证权限并获取 Agent
+	_, agent, err := t.validatePermission(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to get agent: %w", err)
-	}
-	if agent == nil {
-		return "", fmt.Errorf("agent not found: %s", cfgCtx.AgentCode)
-	}
-	if agent.UserCode != cfgCtx.UserCode {
-		return "", fmt.Errorf("access denied: agent %s does not belong to user %s", cfgCtx.AgentCode, cfgCtx.UserCode)
+		return "", err
 	}
 
-	// 5. 获取配置内容
+	// 4. 获取配置内容
 	content := getter(agent)
 
-	// 6. 构造返回结果
-	result := map[string]interface{}{
+	// 5. 构造返回结果
+	return jsonResponse(map[string]interface{}{
 		"success":     true,
 		"config_type": args.ConfigType,
 		"content":     content,
 		"updated_at":  agent.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		"size_bytes":  len(content),
-	}
-
-	out, _ := json.Marshal(result)
-	return string(out), nil
+	})
 }
 
 // Run 执行工具逻辑（兼容接口）

@@ -2,7 +2,6 @@ package config
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -12,15 +11,24 @@ import (
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/common"
 )
 
+// configTypeSetters 配置类型到 setter 函数的映射
+var configTypeSetters = map[string]func(*agentsvc.AgentConfig, string){
+	"identity": func(c *agentsvc.AgentConfig, v string) { c.IdentityContent = v },
+	"soul":     func(c *agentsvc.AgentConfig, v string) { c.SoulContent = v },
+	"agents":   func(c *agentsvc.AgentConfig, v string) { c.AgentsContent = v },
+	"tools":    func(c *agentsvc.AgentConfig, v string) { c.ToolsContent = v },
+	"user":     func(c *agentsvc.AgentConfig, v string) { c.UserContent = v },
+}
+
 // UpdateAgentConfigTool 更新 Agent 配置工具
 type UpdateAgentConfigTool struct {
-	agentService agentsvc.Service
+	baseTool
 }
 
 // NewUpdateAgentConfigTool 创建更新配置工具实例
 func NewUpdateAgentConfigTool(agentService agentsvc.Service) *UpdateAgentConfigTool {
 	return &UpdateAgentConfigTool{
-		agentService: agentService,
+		baseTool: baseTool{agentService: agentService},
 	}
 }
 
@@ -49,24 +57,9 @@ func (t *UpdateAgentConfigTool) Info(ctx context.Context) (*schema.ToolInfo, err
 	}, nil
 }
 
-// configTypeToField 配置类型到数据库字段的映射（用于验证）
-var updateConfigTypeToField = map[string]string{
-	"identity": "identity_content",
-	"soul":     "soul_content",
-	"agents":   "agents_content",
-	"tools":    "tools_content",
-	"user":     "user_content",
-}
-
 // InvokableRun 可直接调用的执行入口
 func (t *UpdateAgentConfigTool) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
-	// 1. 强制提取并验证上下文
-	cfgCtx, err := GetAgentConfigContext(ctx)
-	if err != nil {
-		return "", fmt.Errorf("security check failed: %w", err)
-	}
-
-	// 2. 解析参数
+	// 1. 解析参数
 	var args struct {
 		ConfigType string `json:"config_type"`
 		Content    string `json:"content"`
@@ -75,49 +68,32 @@ func (t *UpdateAgentConfigTool) InvokableRun(ctx context.Context, argumentsInJSO
 		return "", fmt.Errorf("invalid arguments: %w", err)
 	}
 
-	// 3. 验证 config_type
-	_, ok := updateConfigTypeToField[args.ConfigType]
+	// 2. 验证 config_type
+	setter, ok := configTypeSetters[args.ConfigType]
 	if !ok {
 		return "", fmt.Errorf("invalid config_type: %s, must be one of: identity, soul, agents, tools, user", args.ConfigType)
 	}
 
-	// 4. 验证内容大小（1MB限制）
+	// 3. 验证内容大小（1MB限制）
 	const maxContentSize = 1024 * 1024 // 1MB
 	if len(args.Content) > maxContentSize {
 		return "", fmt.Errorf("content too large: %d bytes, max allowed is %d bytes", len(args.Content), maxContentSize)
 	}
 
-	// 5. 权限检查：Agent 存在且属于当前用户
-	agent, err := t.agentService.GetAgentByCode(cfgCtx.AgentCode)
+	// 4. 验证权限并获取上下文
+	cfgCtx, _, err := t.validatePermission(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to get agent: %w", err)
-	}
-	if agent == nil {
-		return "", fmt.Errorf("agent not found: %s", cfgCtx.AgentCode)
-	}
-	if agent.UserCode != cfgCtx.UserCode {
-		return "", fmt.Errorf("access denied: agent %s does not belong to user %s", cfgCtx.AgentCode, cfgCtx.UserCode)
+		return "", err
 	}
 
-	// 6. 获取当前配置，修改指定字段
+	// 5. 获取当前配置，修改指定字段
 	config, err := t.agentService.GetAgentConfigByCode(cfgCtx.AgentCode)
 	if err != nil {
 		return "", fmt.Errorf("failed to get agent config: %w", err)
 	}
 
-	// 根据 config_type 更新对应字段
-	switch args.ConfigType {
-	case "identity":
-		config.IdentityContent = args.Content
-	case "soul":
-		config.SoulContent = args.Content
-	case "agents":
-		config.AgentsContent = args.Content
-	case "tools":
-		config.ToolsContent = args.Content
-	case "user":
-		config.UserContent = args.Content
-	}
+	// 6. 根据 config_type 更新对应字段
+	setter(config, args.Content)
 
 	// 7. 保存到数据库
 	if err := t.agentService.UpdateAgentConfigByCode(cfgCtx.AgentCode, config); err != nil {
@@ -125,16 +101,13 @@ func (t *UpdateAgentConfigTool) InvokableRun(ctx context.Context, argumentsInJSO
 	}
 
 	// 8. 构造返回结果
-	result := map[string]interface{}{
+	return jsonResponse(map[string]interface{}{
 		"success":       true,
 		"message":       "配置已更新",
 		"config_type":   args.ConfigType,
 		"bytes_written": len(args.Content),
 		"updated_at":    time.Now().Format(time.RFC3339),
-	}
-
-	out, _ := json.Marshal(result)
-	return string(out), nil
+	})
 }
 
 // Run 执行工具逻辑（兼容接口）

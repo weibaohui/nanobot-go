@@ -2,7 +2,6 @@ package config
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -16,13 +15,13 @@ import (
 
 // ManageAgentMemoryTool 管理 Agent 记忆工具
 type ManageAgentMemoryTool struct {
-	agentService agentsvc.Service
+	baseTool
 }
 
 // NewManageAgentMemoryTool 创建记忆管理工具实例
 func NewManageAgentMemoryTool(agentService agentsvc.Service) *ManageAgentMemoryTool {
 	return &ManageAgentMemoryTool{
-		agentService: agentService,
+		baseTool: baseTool{agentService: agentService},
 	}
 }
 
@@ -53,13 +52,7 @@ func (t *ManageAgentMemoryTool) Info(ctx context.Context) (*schema.ToolInfo, err
 
 // InvokableRun 可直接调用的执行入口
 func (t *ManageAgentMemoryTool) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
-	// 1. 强制提取并验证上下文
-	cfgCtx, err := GetAgentConfigContext(ctx)
-	if err != nil {
-		return "", fmt.Errorf("security check failed: %w", err)
-	}
-
-	// 2. 解析参数
+	// 1. 解析参数
 	var args struct {
 		Action  string `json:"action"`
 		Content string `json:"content"`
@@ -68,25 +61,19 @@ func (t *ManageAgentMemoryTool) InvokableRun(ctx context.Context, argumentsInJSO
 		return "", fmt.Errorf("invalid arguments: %w", err)
 	}
 
-	// 3. 验证 action
+	// 2. 验证 action
 	action := strings.ToLower(args.Action)
 	if action != "read" && action != "append" && action != "clear" {
 		return "", fmt.Errorf("invalid action: %s, must be one of: read, append, clear", args.Action)
 	}
 
-	// 4. 权限检查：Agent 存在且属于当前用户
-	agent, err := t.agentService.GetAgentByCode(cfgCtx.AgentCode)
+	// 3. 验证权限并获取 Agent
+	_, agent, err := t.validatePermission(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to get agent: %w", err)
-	}
-	if agent == nil {
-		return "", fmt.Errorf("agent not found: %s", cfgCtx.AgentCode)
-	}
-	if agent.UserCode != cfgCtx.UserCode {
-		return "", fmt.Errorf("access denied: agent %s does not belong to user %s", cfgCtx.AgentCode, cfgCtx.UserCode)
+		return "", err
 	}
 
-	// 5. 执行具体操作
+	// 4. 执行具体操作
 	switch action {
 	case "read":
 		return t.handleRead(agent)
@@ -101,16 +88,13 @@ func (t *ManageAgentMemoryTool) InvokableRun(ctx context.Context, argumentsInJSO
 
 // handleRead 读取记忆
 func (t *ManageAgentMemoryTool) handleRead(agent *models.Agent) (string, error) {
-	result := map[string]interface{}{
+	return jsonResponse(map[string]interface{}{
 		"success":    true,
 		"action":     "read",
 		"content":    agent.MemoryContent,
 		"size_bytes": len(agent.MemoryContent),
 		"updated_at": agent.UpdatedAt.Format(time.RFC3339),
-	}
-
-	out, _ := json.Marshal(result)
-	return string(out), nil
+	})
 }
 
 // handleAppend 追加记忆
@@ -144,17 +128,14 @@ func (t *ManageAgentMemoryTool) handleAppend(agent *models.Agent, content string
 		return "", fmt.Errorf("failed to append memory: %w", err)
 	}
 
-	result := map[string]interface{}{
+	return jsonResponse(map[string]interface{}{
 		"success":        true,
 		"action":         "append",
 		"message":        "记忆已追加",
 		"bytes_appended": len(content),
 		"total_size":     len(newContent),
 		"updated_at":     time.Now().Format(time.RFC3339),
-	}
-
-	out, _ := json.Marshal(result)
-	return string(out), nil
+	})
 }
 
 // handleClear 清空记忆
@@ -166,16 +147,13 @@ func (t *ManageAgentMemoryTool) handleClear(agent *models.Agent) (string, error)
 		return "", fmt.Errorf("failed to clear memory: %w", err)
 	}
 
-	result := map[string]interface{}{
+	return jsonResponse(map[string]interface{}{
 		"success":      true,
 		"action":       "clear",
 		"message":      "记忆已清空",
 		"cleared_size": oldSize,
 		"updated_at":   time.Now().Format(time.RFC3339),
-	}
-
-	out, _ := json.Marshal(result)
-	return string(out), nil
+	})
 }
 
 // Run 执行工具逻辑（兼容接口）

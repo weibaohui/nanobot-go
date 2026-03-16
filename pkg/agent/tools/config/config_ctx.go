@@ -29,8 +29,8 @@ func GetAgentConfigContext(ctx context.Context) (*AgentConfigContext, error) {
 		return nil, fmt.Errorf("agent config context required: must provide UserCode, AgentCode, ChannelCode via context")
 	}
 	acc, ok := v.(*AgentConfigContext)
-	if !ok {
-		return nil, fmt.Errorf("invalid agent config context type")
+	if !ok || acc == nil {
+		return nil, fmt.Errorf("invalid or nil agent config context")
 	}
 	if acc.UserCode == "" || acc.AgentCode == "" || acc.ChannelCode == "" {
 		return nil, fmt.Errorf("agent config context incomplete: UserCode, AgentCode, ChannelCode are all required")
