@@ -17,9 +17,9 @@ import {
   Collapse,
   Divider,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, FileTextOutlined, ToolOutlined, ThunderboltOutlined } from '@ant-design/icons';
-import { agentsApi, getCurrentUserCode } from '../api';
-import type { Agent, CreateAgentRequest } from '../types';
+import { PlusOutlined, EditOutlined, DeleteOutlined, FileTextOutlined, ToolOutlined, ThunderboltOutlined, ApiOutlined } from '@ant-design/icons';
+import { agentsApi, mcpServersApi, getCurrentUserCode } from '../api';
+import type { Agent, CreateAgentRequest, MCPServer, AgentMCPBinding } from '../types';
 import type { TableColumnsType } from 'antd';
 
 // 可用技能列表
@@ -83,6 +83,14 @@ const Agents: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [form] = Form.useForm();
+
+  // MCP 绑定相关状态
+  const [mcpModalVisible, setMcpModalVisible] = useState(false);
+  const [mcpBindingAgent, setMcpBindingAgent] = useState<Agent | null>(null);
+  const [mcpBindings, setMcpBindings] = useState<AgentMCPBinding[]>([]);
+  const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
+  const [mcpLoading, setMcpLoading] = useState(false);
+  const [mcpForm] = Form.useForm();
 
   const fetchAgents = async () => {
     setLoading(true);
@@ -303,6 +311,15 @@ const Agents: React.FC = () => {
           >
             {screens.xs ? '' : '编辑'}
           </Button>
+          {!screens.xs && (
+            <Button
+              type="text"
+              icon={<ApiOutlined />}
+              onClick={() => openMCPModal(record)}
+            >
+              MCP
+            </Button>
+          )}
           {!record.is_default && !screens.xs && (
             <Button type="text" onClick={() => handleSetDefault(record)}>
               默认
@@ -328,6 +345,70 @@ const Agents: React.FC = () => {
   ];
 
   const modalWidth = screens.xs ? '100%' : screens.sm ? 600 : 800;
+
+  // MCP 绑定相关函数
+  const openMCPModal = async (agent: Agent) => {
+    setMcpBindingAgent(agent);
+    setMcpModalVisible(true);
+    setMcpLoading(true);
+    try {
+      const [bindingsRes, serversRes] = await Promise.all([
+        mcpServersApi.getAgentBindings(agent.id),
+        mcpServersApi.list(),
+      ]);
+      setMcpBindings((bindingsRes.data?.data?.items || []) as AgentMCPBinding[]);
+      setMcpServers((serversRes.data?.data?.items || []) as MCPServer[]);
+    } catch (error) {
+      message.error('获取 MCP 绑定信息失败');
+    } finally {
+      setMcpLoading(false);
+    }
+  };
+
+  const handleCreateMcpBinding = async (values: { mcp_server_id: number }) => {
+    if (!mcpBindingAgent) return;
+    try {
+      await mcpServersApi.createAgentBinding(mcpBindingAgent.id, {
+        mcp_server_id: values.mcp_server_id,
+        is_active: true,
+      });
+      message.success('绑定成功');
+      mcpForm.resetFields();
+      // 刷新绑定列表
+      const res = await mcpServersApi.getAgentBindings(mcpBindingAgent.id);
+      setMcpBindings((res.data?.data?.items || []) as AgentMCPBinding[]);
+    } catch (error: any) {
+      message.error(error?.response?.data?.error || '绑定失败');
+    }
+  };
+
+  const handleDeleteMcpBinding = async (bindingId: number) => {
+    if (!mcpBindingAgent) return;
+    try {
+      await mcpServersApi.deleteAgentBinding(mcpBindingAgent.id, bindingId);
+      message.success('解绑成功');
+      // 刷新绑定列表
+      const res = await mcpServersApi.getAgentBindings(mcpBindingAgent.id);
+      setMcpBindings((res.data?.data?.items || []) as AgentMCPBinding[]);
+    } catch (error: any) {
+      message.error(error?.response?.data?.error || '解绑失败');
+    }
+  };
+
+  const handleToggleMcpBinding = async (binding: AgentMCPBinding) => {
+    if (!mcpBindingAgent) return;
+    try {
+      await mcpServersApi.updateAgentBinding(mcpBindingAgent.id, binding.id, {
+        is_active: !binding.is_active,
+      });
+      message.success(binding.is_active ? '已禁用' : '已启用');
+      // 刷新绑定列表
+      const res = await mcpServersApi.getAgentBindings(mcpBindingAgent.id);
+      setMcpBindings((res.data?.data?.items || []) as AgentMCPBinding[]);
+    } catch (error: any) {
+      message.error(error?.response?.data?.error || '操作失败');
+    }
+  };
 
   return (
     <div>
@@ -532,6 +613,100 @@ const Agents: React.FC = () => {
             ]}
           />
         </Form>
+      </Modal>
+
+      {/* MCP 绑定配置 Modal */}
+      <Modal
+        title={`配置 MCP - ${mcpBindingAgent?.name || ''}`}
+        open={mcpModalVisible}
+        onCancel={() => {
+          setMcpModalVisible(false);
+          setMcpBindingAgent(null);
+          setMcpBindings([]);
+          setMcpServers([]);
+          mcpForm.resetFields();
+        }}
+        footer={null}
+        width={screens.xs ? '100%' : 600}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Title level={5}>添加 MCP Server 绑定</Title>
+          <Form
+            form={mcpForm}
+            layout="inline"
+            onFinish={handleCreateMcpBinding}
+            style={{ display: 'flex', gap: 8 }}
+          >
+            <Form.Item
+              name="mcp_server_id"
+              rules={[{ required: true, message: '请选择 MCP Server' }]}
+              style={{ flex: 1, marginBottom: 0 }}
+            >
+              <Select
+                placeholder="选择 MCP Server"
+                options={mcpServers
+                  .filter(s => !mcpBindings.some(b => b.mcp_server_id === s.id))
+                  .map(s => ({ value: s.id, label: `${s.name} (${s.code})` }))}
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
+            <Button type="primary" onClick={() => mcpForm.submit()}>
+              绑定
+            </Button>
+          </Form>
+        </div>
+
+        <Divider />
+
+        <div>
+          <Title level={5}>已绑定的 MCP Servers</Title>
+          <Table
+            dataSource={mcpBindings}
+            rowKey="id"
+            loading={mcpLoading}
+            size="small"
+            pagination={false}
+            columns={[
+              {
+                title: 'MCP Server',
+                render: (_, record: AgentMCPBinding) => (
+                  <span>{record.mcp_server?.name || record.mcp_server_id}</span>
+                ),
+              },
+              {
+                title: '状态',
+                width: 80,
+                render: (_, record: AgentMCPBinding) => (
+                  <Tag color={record.is_active ? 'success' : 'default'}>
+                    {record.is_active ? '启用' : '禁用'}
+                  </Tag>
+                ),
+              },
+              {
+                title: '操作',
+                width: 120,
+                render: (_, record: AgentMCPBinding) => (
+                  <Space size="small">
+                    <Switch
+                      size="small"
+                      checked={record.is_active}
+                      onChange={() => handleToggleMcpBinding(record)}
+                    />
+                    <Popconfirm
+                      title="确认解绑"
+                      description="确定要解绑这个 MCP Server 吗？"
+                      onConfirm={() => handleDeleteMcpBinding(record.id)}
+                    >
+                      <Button type="text" danger size="small">
+                        解绑
+                      </Button>
+                    </Popconfirm>
+                  </Space>
+                ),
+              },
+            ]}
+          />
+        </div>
       </Modal>
     </div>
   );
