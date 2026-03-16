@@ -6,7 +6,7 @@ import (
 
 	"github.com/cloudwego/eino/components/model"
 	"github.com/weibaohui/nanobot-go/pkg/agent/hooks/events"
-	"github.com/weibaohui/nanobot-go/session"
+	"github.com/weibaohui/nanobot-go/pkg/session"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )

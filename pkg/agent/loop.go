@@ -8,11 +8,11 @@ import (
 	"github.com/weibaohui/nanobot-go/pkg/agent/interrupt"
 	"github.com/weibaohui/nanobot-go/pkg/agent/task"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools"
-	"github.com/weibaohui/nanobot-go/bus"
-	"github.com/weibaohui/nanobot-go/cron"
+	"github.com/weibaohui/nanobot-go/pkg/bus"
+	"github.com/weibaohui/nanobot-go/pkg/cron"
 	"github.com/weibaohui/nanobot-go/internal/service"
 	agentsvc "github.com/weibaohui/nanobot-go/internal/service/agent"
-	"github.com/weibaohui/nanobot-go/session"
+	"github.com/weibaohui/nanobot-go/pkg/session"
 	"go.uber.org/zap"
 )
 

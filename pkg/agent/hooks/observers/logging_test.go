@@ -11,7 +11,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/pkg/agent/hooks/events"
 	hooksobserver "github.com/weibaohui/nanobot-go/pkg/agent/hooks/observer"
-	"github.com/weibaohui/nanobot-go/bus"
+	"github.com/weibaohui/nanobot-go/pkg/bus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	zapobserver "go.uber.org/zap/zaptest/observer"

@@ -53,7 +53,6 @@ const AVAILABLE_TOOLS = [
 
 const { useBreakpoint } = Grid;
 const { Title } = Typography;
-const { Panel } = Collapse;
 
 // 安全解析 JSON 数组，返回数组长度或 0
 const getArrayLength = (jsonStr: string | null | undefined): number => {
@@ -287,7 +286,7 @@ const Agents: React.FC = () => {
       title: '操作',
       width: screens.xs ? 100 : 250,
       render: (_: any, record: Agent) => (
-        <Space size="small" direction={screens.xs ? 'vertical' : 'horizontal'}>
+        <Space size="small" orientation={screens.xs ? 'vertical' : 'horizontal'}>
           <Button
             type="text"
             icon={<EditOutlined />}
@@ -348,7 +347,7 @@ const Agents: React.FC = () => {
             {screens.xs ? '新建' : '新建 Agent'}
           </Button>
         }
-        bodyStyle={{ padding: screens.xs ? 12 : 24 }}
+        styles={{ body: { padding: screens.xs ? 12 : 24 } }}
       >
         <Table
           rowKey="id"
@@ -371,8 +370,8 @@ const Agents: React.FC = () => {
         onOk={() => form.submit()}
         width={modalWidth}
         style={{ top: screens.xs ? 0 : 100 }}
-        bodyStyle={{ padding: screens.xs ? 12 : 24 }}
-        destroyOnClose
+        styles={{ body: { padding: screens.xs ? 12 : 24 } }}
+        destroyOnHidden
       >
         <Form
           form={form}
@@ -480,49 +479,58 @@ const Agents: React.FC = () => {
             />
           </Form.Item>
 
-          <Collapse ghost>
-            <Panel header={<span><FileTextOutlined /> 配置文件编辑</span>} key="1">
-              <Form.Item name="identity_content" label="IDENTITY.md">
-                <Input.TextArea
-                  rows={6}
-                  placeholder="Agent 身份定义..."
-                  style={{ fontFamily: 'monospace', fontSize: '12px' }}
-                />
-              </Form.Item>
+          <Collapse
+            ghost
+            items={[
+              {
+                key: '1',
+                label: <span><FileTextOutlined /> 配置文件编辑</span>,
+                children: (
+                  <>
+                    <Form.Item name="identity_content" label="IDENTITY.md">
+                      <Input.TextArea
+                        rows={6}
+                        placeholder="Agent 身份定义..."
+                        style={{ fontFamily: 'monospace', fontSize: '12px' }}
+                      />
+                    </Form.Item>
 
-              <Form.Item name="soul_content" label="SOUL.md">
-                <Input.TextArea
-                  rows={6}
-                  placeholder="Agent 灵魂/核心定义..."
-                  style={{ fontFamily: 'monospace', fontSize: '12px' }}
-                />
-              </Form.Item>
+                    <Form.Item name="soul_content" label="SOUL.md">
+                      <Input.TextArea
+                        rows={6}
+                        placeholder="Agent 灵魂/核心定义..."
+                        style={{ fontFamily: 'monospace', fontSize: '12px' }}
+                      />
+                    </Form.Item>
 
-              <Form.Item name="agents_content" label="AGENTS.md">
-                <Input.TextArea
-                  rows={6}
-                  placeholder="可用 Agents 定义..."
-                  style={{ fontFamily: 'monospace', fontSize: '12px' }}
-                />
-              </Form.Item>
+                    <Form.Item name="agents_content" label="AGENTS.md">
+                      <Input.TextArea
+                        rows={6}
+                        placeholder="可用 Agents 定义..."
+                        style={{ fontFamily: 'monospace', fontSize: '12px' }}
+                      />
+                    </Form.Item>
 
-              <Form.Item name="tools_content" label="TOOLS.md">
-                <Input.TextArea
-                  rows={6}
-                  placeholder="可用工具定义..."
-                  style={{ fontFamily: 'monospace', fontSize: '12px' }}
-                />
-              </Form.Item>
+                    <Form.Item name="tools_content" label="TOOLS.md">
+                      <Input.TextArea
+                        rows={6}
+                        placeholder="可用工具定义..."
+                        style={{ fontFamily: 'monospace', fontSize: '12px' }}
+                      />
+                    </Form.Item>
 
-              <Form.Item name="user_content" label="USER.md">
-                <Input.TextArea
-                  rows={6}
-                  placeholder="用户信息/上下文..."
-                  style={{ fontFamily: 'monospace', fontSize: '12px' }}
-                />
-              </Form.Item>
-            </Panel>
-          </Collapse>
+                    <Form.Item name="user_content" label="USER.md">
+                      <Input.TextArea
+                        rows={6}
+                        placeholder="用户信息/上下文..."
+                        style={{ fontFamily: 'monospace', fontSize: '12px' }}
+                      />
+                    </Form.Item>
+                  </>
+                ),
+              },
+            ]}
+          />
         </Form>
       </Modal>
     </div>

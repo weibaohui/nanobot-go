@@ -13,7 +13,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/weibaohui/nanobot-go/pkg/agent/hooks"
-	"github.com/weibaohui/nanobot-go/session"
+	"github.com/weibaohui/nanobot-go/pkg/session"
 	"go.uber.org/zap"
 )
 

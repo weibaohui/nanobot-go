@@ -5,8 +5,10 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/weibaohui/nanobot-go/internal/models"
 	"github.com/weibaohui/nanobot-go/internal/service"
 	"github.com/weibaohui/nanobot-go/internal/service/conversation"
+	mcpsvc "github.com/weibaohui/nanobot-go/internal/service/mcp"
 )
 
 // Handler API 处理器
@@ -22,6 +24,7 @@ type Handler struct {
 	streamMemoryService       StreamMemoryService
 	longTermMemoryService     LongTermMemoryService
 	sessionManager            SessionManager
+	mcpService                MCPService
 }
 
 // NewHandler 创建 API 处理器
@@ -37,6 +40,7 @@ func NewHandler(
 	streamMemoryService StreamMemoryService,
 	longTermMemoryService LongTermMemoryService,
 	sessionManager SessionManager,
+	mcpService MCPService,
 ) *Handler {
 	return &Handler{
 		userService:               userService,
@@ -50,6 +54,7 @@ func NewHandler(
 		streamMemoryService:       streamMemoryService,
 		longTermMemoryService:     longTermMemoryService,
 		sessionManager:            sessionManager,
+		mcpService:                mcpService,
 	}
 }
 
@@ -184,7 +189,48 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 			longTermMemories.GET("/search", h.searchLongTermMemories)
 			longTermMemories.GET("/recent", h.getRecentLongTermMemories)
 		}
+
+		// MCP Server API
+		mcpServers := authorized.Group("/mcp-servers")
+		{
+			mcpServers.GET("", h.listMCPServers)
+			mcpServers.POST("", h.createMCPServer)
+			mcpServers.GET("/:id", h.getMCPServer)
+			mcpServers.PUT("/:id", h.updateMCPServer)
+			mcpServers.DELETE("/:id", h.deleteMCPServer)
+			mcpServers.POST("/:id/test", h.testMCPServer)
+			mcpServers.POST("/:id/refresh", h.refreshMCPServerCapabilities)
+		}
+
+		// Agent MCP Binding API - 使用 :id 保持与现有路由一致
+		agentMCPBindings := authorized.Group("/agents/:id/mcp-bindings")
+		{
+			agentMCPBindings.GET("", h.listAgentMCPBindings)
+			agentMCPBindings.POST("", h.createAgentMCPBinding)
+			agentMCPBindings.GET("/:binding_id", h.getAgentMCPBinding)
+			agentMCPBindings.PUT("/:binding_id", h.updateAgentMCPBinding)
+			agentMCPBindings.DELETE("/:binding_id", h.deleteAgentMCPBinding)
+			agentMCPBindings.GET("/tools", h.getAgentMCPTools)
+		}
 	}
+}
+
+// MCPService MCP 服务接口
+type MCPService interface {
+	ListServers() ([]models.MCPServer, error)
+	CreateServer(req mcpsvc.CreateMCPServerRequest) (*models.MCPServer, error)
+	GetServer(id uint) (*models.MCPServer, error)
+	UpdateServer(id uint, req mcpsvc.UpdateMCPServerRequest) (*models.MCPServer, error)
+	DeleteServer(id uint) error
+	TestServer(id uint) error
+	RefreshCapabilities(id uint) error
+
+	GetAgentBindings(agentID uint) ([]models.AgentMCPBinding, error)
+	CreateAgentBinding(agentID uint, req mcpsvc.CreateAgentMCPBindingRequest) (*models.AgentMCPBinding, error)
+	GetAgentBindingByID(bindingID uint) (*models.AgentMCPBinding, error)
+	UpdateAgentBinding(bindingID uint, req mcpsvc.UpdateAgentMCPBindingRequest) (*models.AgentMCPBinding, error)
+	DeleteAgentBinding(bindingID uint) error
+	GetAgentMCPTools(agentCode string) ([]mcpsvc.AgentMCPToolInfo, error)
 }
 
 // === Helper Functions ===

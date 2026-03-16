@@ -7,7 +7,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/common"
-	"github.com/weibaohui/nanobot-go/bus"
+	"github.com/weibaohui/nanobot-go/pkg/bus"
 )
 
 type Sender interface {

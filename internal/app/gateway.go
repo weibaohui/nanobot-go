@@ -13,12 +13,12 @@ import (
 
 	"github.com/weibaohui/nanobot-go/pkg/agent"
 	"github.com/weibaohui/nanobot-go/pkg/agent/provider"
-	"github.com/weibaohui/nanobot-go/bus"
-	"github.com/weibaohui/nanobot-go/channels"
+	"github.com/weibaohui/nanobot-go/pkg/bus"
+	"github.com/weibaohui/nanobot-go/pkg/channels"
 	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/internal/api"
 	"github.com/weibaohui/nanobot-go/internal/models"
-	"github.com/weibaohui/nanobot-go/session"
+	"github.com/weibaohui/nanobot-go/pkg/session"
 	"go.uber.org/zap"
 )
 

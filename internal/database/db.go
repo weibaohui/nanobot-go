@@ -161,6 +161,11 @@ func (c *Client) InitSchema() error {
 		return fmt.Errorf("创建记忆模块表失败: %w", err)
 	}
 
+	// 自动迁移 MCP 相关表
+	if err := c.db.AutoMigrate(&models.MCPServer{}, &models.AgentMCPBinding{}); err != nil {
+		return fmt.Errorf("创建 MCP 表失败: %w", err)
+	}
+
 	// 创建索引
 	indexes := []string{
 		// 对话记录表索引
@@ -179,6 +184,12 @@ func (c *Client) InitSchema() error {
 		"CREATE INDEX IF NOT EXISTS idx_conv_records_agent_code_timestamp ON conversation_records(agent_code, timestamp);",
 		"CREATE INDEX IF NOT EXISTS idx_conv_records_channel_code_timestamp ON conversation_records(channel_code, timestamp);",
 		"CREATE INDEX IF NOT EXISTS idx_conv_records_session_key_timestamp ON conversation_records(session_key, timestamp);",
+		// MCP 服务器表索引
+		"CREATE INDEX IF NOT EXISTS idx_mcp_servers_code ON mcp_servers(code);",
+		"CREATE INDEX IF NOT EXISTS idx_mcp_servers_status ON mcp_servers(status);",
+		// Agent MCP 绑定表索引
+		"CREATE INDEX IF NOT EXISTS idx_agent_mcp_bindings_agent_id ON agent_mcp_bindings(agent_id);",
+		"CREATE INDEX IF NOT EXISTS idx_agent_mcp_bindings_mcp_server_id ON agent_mcp_bindings(mcp_server_id);",
 	}
 
 	for _, indexSQL := range indexes {

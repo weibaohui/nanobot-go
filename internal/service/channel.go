@@ -14,7 +14,7 @@ type CreateChannelRequest struct {
 	Type      models.ChannelType     `json:"type"`
 	Config    map[string]interface{} `json:"config"`
 	AllowFrom []string               `json:"allow_from"`
-	AgentID   *uint                  `json:"agent_id,omitempty"`
+	AgentCode string                 `json:"agent_code,omitempty"`
 }
 
 // UpdateChannelRequest 更新 Channel 请求
@@ -104,6 +104,7 @@ func (s *channelService) CreateChannel(userCode string, req CreateChannelRequest
 		IsActive:    true,
 		AllowFrom:   string(allowFromJSON),
 		Config:      string(configJSON),
+		AgentCode:   req.AgentCode,
 	}
 
 	if err := s.channelRepo.Create(channel); err != nil {
@@ -164,6 +165,8 @@ func (s *channelService) UpdateChannel(id uint, req UpdateChannelRequest) (*mode
 		}
 		channel.AllowFrom = string(allowFromJSON)
 	}
+	// 更新 AgentCode（允许为空字符串来解绑）
+	channel.AgentCode = req.AgentCode
 
 	if err := s.channelRepo.Update(channel); err != nil {
 		return nil, err

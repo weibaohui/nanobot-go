@@ -11,7 +11,7 @@ import (
 	hookevents "github.com/weibaohui/nanobot-go/pkg/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/pkg/agent/hooks/observer"
 	"github.com/weibaohui/nanobot-go/pkg/agent/hooks/trace"
-	"github.com/weibaohui/nanobot-go/bus"
+	"github.com/weibaohui/nanobot-go/pkg/bus"
 	"go.uber.org/zap"
 )
 

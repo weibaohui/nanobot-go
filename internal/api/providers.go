@@ -8,6 +8,7 @@ import (
 	"github.com/weibaohui/nanobot-go/internal/service/codelookup"
 	"github.com/weibaohui/nanobot-go/internal/service/conversation"
 	ms "github.com/weibaohui/nanobot-go/internal/service/memory"
+	mcpsvc "github.com/weibaohui/nanobot-go/internal/service/mcp"
 	memservice "github.com/weibaohui/nanobot-go/internal/memory/service"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -37,6 +38,9 @@ type Providers struct {
 	StreamMemoryService       ms.StreamMemoryService
 	LongTermMemoryService     ms.LongTermMemoryService
 	SessionManager            SessionManager
+	MCPServerRepo             repository.MCPServerRepository
+	AgentMCPBindingRepo       repository.AgentMCPBindingRepository
+	MCPService                mcpsvc.Service
 }
 
 // NewProviders 创建所有服务和仓库
@@ -84,6 +88,11 @@ func NewProviders(db *gorm.DB, cfg *config.Config, logger *zap.Logger) *Provider
 	// 创建新的对话服务（支持统计功能）
 	convService := conversation.NewService(convRepo)
 
+	// 创建 MCP 相关 repository 和 service
+	mcpServerRepo := repository.NewMCPServerRepository(db)
+	agentMCPBindingRepo := repository.NewAgentMCPBindingRepository(db)
+	mcpService := mcpsvc.NewService(mcpServerRepo, agentMCPBindingRepo, agentRepo)
+
 	return &Providers{
 		DB:                        db,
 		UserRepo:                  userRepo,
@@ -100,6 +109,9 @@ func NewProviders(db *gorm.DB, cfg *config.Config, logger *zap.Logger) *Provider
 		ConversationService:       convService,
 		StreamMemoryService:       streamMemoryService,
 		LongTermMemoryService:     longTermMemoryService,
+		MCPServerRepo:             mcpServerRepo,
+		AgentMCPBindingRepo:       agentMCPBindingRepo,
+		MCPService:                mcpService,
 	}
 }
 
