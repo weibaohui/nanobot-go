@@ -132,7 +132,7 @@ func (h *Handler) refreshMCPServerCapabilities(c *gin.Context) {
 
 // listAgentMCPBindings 获取 Agent 的 MCP 绑定列表
 func (h *Handler) listAgentMCPBindings(c *gin.Context) {
-	agentID, ok := parseID(c, "agent_id")
+	agentID, ok := parseID(c, "id")
 	if !ok {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid agent id"})
 		return
@@ -152,7 +152,7 @@ func (h *Handler) listAgentMCPBindings(c *gin.Context) {
 
 // createAgentMCPBinding 创建 Agent MCP 绑定
 func (h *Handler) createAgentMCPBinding(c *gin.Context) {
-	agentID, ok := parseID(c, "agent_id")
+	agentID, ok := parseID(c, "id")
 	if !ok {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid agent id"})
 		return
@@ -235,7 +235,7 @@ func (h *Handler) deleteAgentMCPBinding(c *gin.Context) {
 
 // getAgentMCPTools 获取 Agent 可用的 MCP 工具
 func (h *Handler) getAgentMCPTools(c *gin.Context) {
-	agentCode := c.Param("agent_id")
+	agentCode := c.Param("id")
 	// 如果是数字 ID，尝试通过 agent service 获取 code
 	if id, err := strconv.ParseUint(agentCode, 10, 32); err == nil {
 		agent, err := h.agentService.GetAgent(uint(id))

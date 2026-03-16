@@ -202,8 +202,8 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 			mcpServers.POST("/:id/refresh", h.refreshMCPServerCapabilities)
 		}
 
-		// Agent MCP Binding API
-		agentMCPBindings := authorized.Group("/agents/:agent_id/mcp-bindings")
+		// Agent MCP Binding API - 使用 :id 保持与现有路由一致
+		agentMCPBindings := authorized.Group("/agents/:id/mcp-bindings")
 		{
 			agentMCPBindings.GET("", h.listAgentMCPBindings)
 			agentMCPBindings.POST("", h.createAgentMCPBinding)
