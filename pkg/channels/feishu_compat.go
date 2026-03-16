@@ -4,8 +4,8 @@ package channels
 // 新代码应该直接使用 channels/feishu 包
 
 import (
-	"github.com/weibaohui/nanobot-go/bus"
-	"github.com/weibaohui/nanobot-go/channels/feishu"
+	"github.com/weibaohui/nanobot-go/pkg/bus"
+	"github.com/weibaohui/nanobot-go/pkg/channels/feishu"
 	"go.uber.org/zap"
 )
 

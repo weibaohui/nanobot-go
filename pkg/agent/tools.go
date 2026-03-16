@@ -17,7 +17,7 @@ import (
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/webfetch"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/websearch"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/writefile"
-	"github.com/weibaohui/nanobot-go/bus"
+	"github.com/weibaohui/nanobot-go/pkg/bus"
 	"go.uber.org/zap"
 )
 

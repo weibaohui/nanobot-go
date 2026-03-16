@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/cloudwego/eino/schema"
-	"github.com/weibaohui/nanobot-go/cron"
+	"github.com/weibaohui/nanobot-go/pkg/cron"
 	"go.uber.org/zap"
 )
 

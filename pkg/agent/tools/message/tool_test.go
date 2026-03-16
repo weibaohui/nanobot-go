@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/cloudwego/eino/schema"
-	"github.com/weibaohui/nanobot-go/bus"
+	"github.com/weibaohui/nanobot-go/pkg/bus"
 )
 
 // mockSendCallback 模拟发送回调

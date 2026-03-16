@@ -14,8 +14,8 @@ import (
 	"github.com/weibaohui/nanobot-go/pkg/agent/hooks/trace"
 	"github.com/weibaohui/nanobot-go/pkg/agent/interrupt"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/askuser"
-	"github.com/weibaohui/nanobot-go/bus"
-	"github.com/weibaohui/nanobot-go/session"
+	"github.com/weibaohui/nanobot-go/pkg/bus"
+	"github.com/weibaohui/nanobot-go/pkg/session"
 	"go.uber.org/zap"
 )
 

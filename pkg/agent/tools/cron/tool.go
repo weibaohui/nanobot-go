@@ -8,7 +8,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/common"
-	"github.com/weibaohui/nanobot-go/cron"
+	"github.com/weibaohui/nanobot-go/pkg/cron"
 )
 
 // Tool 定时任务工具

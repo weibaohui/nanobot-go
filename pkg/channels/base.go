@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/weibaohui/nanobot-go/bus"
+	"github.com/weibaohui/nanobot-go/pkg/bus"
 )
 
 // Channel 渠道接口

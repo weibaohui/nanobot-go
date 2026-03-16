@@ -6,7 +6,7 @@ import (
 
 	"github.com/weibaohui/nanobot-go/pkg/agent/hooks/trace"
 	configtools "github.com/weibaohui/nanobot-go/pkg/agent/tools/config"
-	"github.com/weibaohui/nanobot-go/bus"
+	"github.com/weibaohui/nanobot-go/pkg/bus"
 	"go.uber.org/zap"
 )
 

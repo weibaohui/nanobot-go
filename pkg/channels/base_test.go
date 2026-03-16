@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/weibaohui/nanobot-go/bus"
+	"github.com/weibaohui/nanobot-go/pkg/bus"
 	"go.uber.org/zap"
 )
 

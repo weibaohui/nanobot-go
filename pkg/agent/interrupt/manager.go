@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/cloudwego/eino/compose"
-	"github.com/weibaohui/nanobot-go/bus"
+	"github.com/weibaohui/nanobot-go/pkg/bus"
 	"go.uber.org/zap"
 )
 

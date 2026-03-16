@@ -9,7 +9,7 @@ import (
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 	"github.com/weibaohui/nanobot-go/pkg/agent/hooks/trace"
-	"github.com/weibaohui/nanobot-go/session"
+	"github.com/weibaohui/nanobot-go/pkg/session"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )

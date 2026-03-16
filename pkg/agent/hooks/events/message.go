@@ -2,7 +2,7 @@ package events
 
 import (
 	"github.com/cloudwego/eino/schema"
-	"github.com/weibaohui/nanobot-go/bus"
+	"github.com/weibaohui/nanobot-go/pkg/bus"
 )
 
 // MessageReceivedEvent 收到消息事件

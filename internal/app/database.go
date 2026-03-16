@@ -4,7 +4,7 @@ import (
 	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/internal/database"
 	"github.com/weibaohui/nanobot-go/internal/service/conversation"
-	"github.com/weibaohui/nanobot-go/session"
+	"github.com/weibaohui/nanobot-go/pkg/session"
 	"go.uber.org/zap"
 )
 
