@@ -236,10 +236,23 @@ POST /api/internal/mcp/invoke
 |------|----------|------|
 | 2026-03-16 | 初始设计文档 | Claude |
 
-## 8. 待办事项
+## 8. 实现状态
 
-- [ ] 数据库迁移脚本
-- [ ] MCP 协议客户端实现
-- [ ] 后端 API 开发
+| 模块 | 状态 | 说明 |
+|------|------|------|
+| 数据库设计 | ✅ 已完成 | mcp_servers, agent_mcp_bindings 表 |
+| Repository 层 | ✅ 已完成 | MCPServerRepository, AgentMCPBindingRepository |
+| Service 层 | ✅ 已完成 | 基础 CRUD, 绑定管理 |
+| API Handler | ✅ 已完成 | RESTful API |
+| MCP 协议客户端 | ⏳ 待实现 | stdio/http/sse transport |
+| Agent 集成 | ⏳ 待实现 | 工具加载和调用 |
+| 前端页面 | ⏳ 待实现 | React 管理界面 |
+
+## 9. 待办事项
+
+- [x] 数据库迁移脚本
+- [x] 后端 API 开发
+- [ ] MCP 协议客户端实现 (stdio/http/sse transport)
+- [ ] Agent 执行流程集成
 - [ ] 前端页面开发
 - [ ] 集成测试
