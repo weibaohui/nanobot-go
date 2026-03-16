@@ -266,11 +266,12 @@ func (r *repository) GetAgentDistribution(ctx context.Context, startTime, endTim
 	}
 
 	var results []result
+	// 使用 NULLIF 将空字符串转换为 NULL，确保空字符串和 NULL 被分到同一组
 	if err := query.Select(
-		"agent_code, " +
+		"NULLIF(agent_code, '') as agent_code, " +
 			"COUNT(*) as count, " +
 			"COALESCE(SUM(total_tokens), 0) as tokens",
-	).Group("agent_code").Order("count DESC").Scan(&results).Error; err != nil {
+	).Group("NULLIF(agent_code, '')").Order("count DESC").Scan(&results).Error; err != nil {
 		return nil, err
 	}
 
