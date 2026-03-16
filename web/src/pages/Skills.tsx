@@ -11,6 +11,7 @@ import {
   Descriptions,
   Empty,
   Spin,
+  message,
 } from 'antd';
 import { EyeOutlined } from '@ant-design/icons';
 import { skillsApi } from '../api';
@@ -28,6 +29,9 @@ const Skills: React.FC = () => {
   const [selectedSkill, setSelectedSkill] = useState<SkillDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
+  // fetchSkills 获取技能列表
+  // API: GET /api/v1/skills
+  // 返回: { items: Skill[] }
   const fetchSkills = async () => {
     setLoading(true);
     try {
@@ -35,6 +39,7 @@ const Skills: React.FC = () => {
       setSkills((res.items || []) as Skill[]);
     } catch (error) {
       console.error('获取技能列表失败:', error);
+      message.error('获取技能列表失败，请稍后重试');
     } finally {
       setLoading(false);
     }
@@ -44,6 +49,9 @@ const Skills: React.FC = () => {
     fetchSkills();
   }, []);
 
+  // 获取技能详情
+  // API: GET /api/v1/skills/:name
+  // 返回: SkillDetail (包含 bound_agents)
   const openDetail = async (skillName: string) => {
     setDetailLoading(true);
     setDetailVisible(true);
@@ -52,6 +60,7 @@ const Skills: React.FC = () => {
       setSelectedSkill(res || null);
     } catch (error) {
       console.error('获取技能详情失败:', error);
+      message.error('获取技能详情失败');
       setSelectedSkill(null);
     } finally {
       setDetailLoading(false);
@@ -88,7 +97,7 @@ const Skills: React.FC = () => {
       title: '操作',
       key: 'action',
       width: screens.xs ? 80 : 100,
-      render: (_: any, record: Skill) => (
+      render: (_: unknown, record: Skill) => (
         <Button
           type="link"
           icon={<EyeOutlined />}

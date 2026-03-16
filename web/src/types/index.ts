@@ -306,10 +306,7 @@ export interface Skill {
   source: string;
 }
 
-export interface SkillDetail {
-  name: string;
-  description: string;
-  source: string;
+export interface SkillDetail extends Skill {
   content: string;
   bound_agents: Agent[];
 }

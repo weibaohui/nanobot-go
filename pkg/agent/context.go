@@ -119,7 +119,6 @@ available="false" 的技能需要先安装依赖 - 你可以尝试使用 apt/bre
 func (c *ContextBuilder) getIdentity() string {
 	now := time.Now().Format("2006-01-02 15:04 (Monday)")
 	tz, _ := time.Now().Zone()
-	workspacePath, _ := filepath.Abs(c.workspace)
 	system := runtime.GOOS
 	if system == "darwin" {
 		system = "macOS"
@@ -141,18 +140,11 @@ func (c *ContextBuilder) getIdentity() string {
 ## 运行环境
 %s %s, Go %s
 
-## 工作区
-你的工作区位于: %s
-- 内存文件: %s/memory/MEMORY.md
-- 每日笔记: %s/memory/YYYY-MM-DD.md
-- 自定义技能: %s/skills/{skill-name}/SKILL.md
-
 重要: 当回答直接问题或对话时，直接回复文本。
 只有当你需要向特定聊天渠道（如 WhatsApp）发送消息时才使用 'message' 工具。
 对于普通对话，只需回复文本 - 不要调用 message 工具。
 
-始终保持有帮助、准确和简洁。使用工具时，逐步思考：你知道什么、你需要什么、以及为什么选择这个工具。
-当记住某些内容时，写入 %s/memory/MEMORY.md`, now, tz, system, runtime.GOARCH, goVersion, workspacePath, workspacePath, workspacePath, workspacePath, workspacePath)
+始终保持有帮助、准确和简洁。使用工具时，逐步思考：你知道什么、你需要什么、以及为什么选择这个工具。`, now, tz, system, runtime.GOARCH, goVersion)
 }
 
 // loadBootstrapFiles 加载引导文件
