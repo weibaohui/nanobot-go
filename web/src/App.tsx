@@ -14,6 +14,7 @@ import ConversationStats from './pages/ConversationStats';
 import Sessions from './pages/Sessions';
 import StreamMemories from './pages/StreamMemories';
 import LongTermMemories from './pages/LongTermMemories';
+import MCPServers from './pages/MCPServers';
 import Login from './pages/Login';
 import { isAuthenticated, authApi, setCurrentUser, getCurrentUserCode } from './api';
 
@@ -80,6 +81,7 @@ const App: React.FC = () => {
             <Route path="sessions" element={<Sessions />} />
             <Route path="stream-memories" element={<StreamMemories />} />
             <Route path="long-term-memories" element={<LongTermMemories />} />
+            <Route path="mcp-servers" element={<MCPServers />} />
           </Route>
 
           {/* 未匹配路由重定向 */}

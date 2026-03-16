@@ -297,3 +297,80 @@ export interface Session {
   created_at: string;
   updated_at: string;
 }
+
+// MCP Server 传输类型
+export type MCPTransportType = 'stdio' | 'http' | 'sse';
+
+export const MCPTransportTypeLabels: Record<MCPTransportType, string> = {
+  stdio: 'stdio（标准输入输出）',
+  http: 'HTTP',
+  sse: 'SSE（服务器发送事件）',
+};
+
+// MCP Server 状态
+export type MCPStatus = 'inactive' | 'active' | 'error';
+
+export const MCPStatusLabels: Record<MCPStatus, string> = {
+  inactive: '未连接',
+  active: '已连接',
+  error: '错误',
+};
+
+// MCP Tool 定义
+export interface MCPTool {
+  name: string;
+  description?: string;
+  input_schema?: Record<string, any>;
+}
+
+// MCP Server 类型
+export interface MCPServer {
+  id: number;
+  code: string;
+  name: string;
+  description?: string;
+  transport_type: MCPTransportType;
+  command?: string;
+  args?: string[];
+  url?: string;
+  env_vars?: Record<string, string>;
+  status: MCPStatus;
+  error_message?: string;
+  capabilities?: MCPTool[];
+  last_connected_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateMCPServerRequest {
+  code: string;
+  name: string;
+  description?: string;
+  transport_type: MCPTransportType;
+  command?: string;
+  args?: string[];
+  url?: string;
+  env_vars?: Record<string, string>;
+}
+
+export interface UpdateMCPServerRequest extends Partial<CreateMCPServerRequest> {}
+
+// Agent MCP 绑定
+export interface AgentMCPBinding {
+  id: number;
+  agent_id: number;
+  mcp_server_id: number;
+  mcp_server?: MCPServer;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateAgentMCPBindingRequest {
+  mcp_server_id: number;
+  is_active?: boolean;
+}
+
+export interface UpdateAgentMCPBindingRequest {
+  is_active?: boolean;
+}
