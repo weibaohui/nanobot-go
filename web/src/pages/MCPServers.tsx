@@ -13,11 +13,10 @@ import {
   Card,
   Grid,
   Typography,
-  Switch,
   Descriptions,
   Tooltip,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, ApiOutlined, ReloadOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, ApiOutlined, ReloadOutlined } from '@ant-design/icons';
 import { mcpServersApi } from '../api';
 import type { MCPServer, CreateMCPServerRequest, MCPTransportType, MCPStatus } from '../types';
 import type { TableColumnsType } from 'antd';
@@ -54,7 +53,7 @@ const MCPServers: React.FC = () => {
     setLoading(true);
     try {
       const res = await mcpServersApi.list();
-      setServers((res.data?.data?.items || []) as MCPServer[]);
+      setServers((res.data?.items || []) as MCPServer[]);
     } catch (error) {
       message.error('获取 MCP Server 列表失败');
     } finally {

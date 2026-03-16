@@ -356,8 +356,8 @@ const Agents: React.FC = () => {
         mcpServersApi.getAgentBindings(agent.id),
         mcpServersApi.list(),
       ]);
-      setMcpBindings((bindingsRes.data?.data?.items || []) as AgentMCPBinding[]);
-      setMcpServers((serversRes.data?.data?.items || []) as MCPServer[]);
+      setMcpBindings((bindingsRes.data?.items || []) as AgentMCPBinding[]);
+      setMcpServers((serversRes.data?.items || []) as MCPServer[]);
     } catch (error) {
       message.error('获取 MCP 绑定信息失败');
     } finally {
@@ -376,7 +376,7 @@ const Agents: React.FC = () => {
       mcpForm.resetFields();
       // 刷新绑定列表
       const res = await mcpServersApi.getAgentBindings(mcpBindingAgent.id);
-      setMcpBindings((res.data?.data?.items || []) as AgentMCPBinding[]);
+      setMcpBindings((res.data?.items || []) as AgentMCPBinding[]);
     } catch (error: any) {
       message.error(error?.response?.data?.error || '绑定失败');
     }
@@ -389,7 +389,7 @@ const Agents: React.FC = () => {
       message.success('解绑成功');
       // 刷新绑定列表
       const res = await mcpServersApi.getAgentBindings(mcpBindingAgent.id);
-      setMcpBindings((res.data?.data?.items || []) as AgentMCPBinding[]);
+      setMcpBindings((res.data?.items || []) as AgentMCPBinding[]);
     } catch (error: any) {
       message.error(error?.response?.data?.error || '解绑失败');
     }
@@ -404,7 +404,7 @@ const Agents: React.FC = () => {
       message.success(binding.is_active ? '已禁用' : '已启用');
       // 刷新绑定列表
       const res = await mcpServersApi.getAgentBindings(mcpBindingAgent.id);
-      setMcpBindings((res.data?.data?.items || []) as AgentMCPBinding[]);
+      setMcpBindings((res.data?.items || []) as AgentMCPBinding[]);
     } catch (error: any) {
       message.error(error?.response?.data?.error || '操作失败');
     }
