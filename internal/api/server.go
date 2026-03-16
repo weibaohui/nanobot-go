@@ -10,6 +10,11 @@ import (
 	"go.uber.org/zap"
 )
 
+// HealthResponse 健康检查响应
+type HealthResponse struct {
+	Status string `json:"status"`
+}
+
 // Server API 服务器
 type Server struct {
 	handler *Handler
@@ -32,6 +37,7 @@ func NewServer(addr string, providers *Providers, logger *zap.Logger) *Server {
 		providers.StreamMemoryService,
 		providers.LongTermMemoryService,
 		providers.SessionManager,
+		providers.MCPService,
 	)
 
 	// 创建 Gin 路由
@@ -52,7 +58,7 @@ func NewServer(addr string, providers *Providers, logger *zap.Logger) *Server {
 
 	// 添加健康检查端点
 	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		c.JSON(http.StatusOK, HealthResponse{Status: "ok"})
 	})
 
 	server := &http.Server{
