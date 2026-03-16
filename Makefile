@@ -10,16 +10,24 @@ help:
 	@echo "  make dev-web    - 仅启动前端开发服务器"
 	@echo "  make stop       - 停止所有 nanobot 进程"
 	@echo "  make test       - 运行测试"
+	@echo "  make setup      - 安装依赖"
 	@echo "  make migrate    - 运行配置迁移工具"
 	@echo "  make fmt        - 格式化代码"
 	@echo "  make lint       - 运行代码检查"
+
+# Setup - install dependencies
+setup:
+	go mod tidy
+	cd web && pnpm install
+	@command -v air >/dev/null 2>&1 || { echo "Installing air..."; go install github.com/air-verse/air@latest; }
+
 
 # 构建
 build:
 	@echo "构建后端..."
 	go build -o bin/nanobot ./cmd/nanobot
 	@echo "构建前端..."
-	cd web && npm run build
+	cd web && pnpm run build
 
 # 清理
 clean:
@@ -37,7 +45,7 @@ dev:
 	@echo "========================================="
 	@(trap 'kill 0' INT; \
 		air 2>&1 & \
-		cd web && npm run dev 2>&1 & \
+		cd web && pnpm run dev 2>&1 & \
 		wait)
 
 # 启动后端开发服务器
@@ -46,7 +54,7 @@ dev-backend:
 
 # 启动前端开发服务器
 dev-web:
-	cd web && npm run dev
+	cd web && pnpm run dev
 
 # 停止所有 nanobot 进程
 stop:
@@ -73,7 +81,7 @@ stop:
 # 运行测试
 test:
 	go test ./...
-	cd web && npm test
+	cd web && pnpm test
 
 # 配置迁移
 migrate:
@@ -87,4 +95,4 @@ fmt:
 # 代码检查
 lint:
 	golangci-lint run
-	cd web && npm run lint
+	cd web && pnpm run lint
