@@ -20,6 +20,8 @@ type AgentRepository interface {
 	GetWithChannels(id uint) (*models.Agent, error)
 	// CheckAgentCodeExists 检查 AgentCode 是否已存在
 	CheckAgentCodeExists(code string) (bool, error)
+	// ListAll 获取所有 Agent
+	ListAll() ([]models.Agent, error)
 }
 
 // agentRepository Agent 仓库实现
@@ -132,4 +134,13 @@ func (r *agentRepository) CheckAgentCodeExists(code string) (bool, error) {
 		return false, fmt.Errorf("检查 AgentCode 失败: %w", err)
 	}
 	return count > 0, nil
+}
+
+// ListAll 获取所有 Agent
+func (r *agentRepository) ListAll() ([]models.Agent, error) {
+	var agents []models.Agent
+	if err := r.db.Find(&agents).Error; err != nil {
+		return nil, fmt.Errorf("获取 Agent 列表失败: %w", err)
+	}
+	return agents, nil
 }

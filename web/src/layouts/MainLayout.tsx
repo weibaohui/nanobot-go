@@ -16,6 +16,7 @@ import {
   DatabaseOutlined,
   ApiOutlined,
   LogoutOutlined,
+  ToolOutlined,
 } from '@ant-design/icons';
 import { authApi, clearToken } from '../api';
 import type { User } from '../types';
@@ -65,6 +66,7 @@ const MainLayout: React.FC = () => {
     { key: '/channels', icon: <MessageOutlined />, label: '渠道' },
     { key: '/providers', icon: <KeyOutlined />, label: 'LLM' },
     { key: '/mcp-servers', icon: <ApiOutlined />, label: 'MCP Server' },
+    { key: '/skills', icon: <ToolOutlined />, label: '技能' },
     { key: '/cron', icon: <ClockCircleOutlined />, label: '定时任务' },
     { key: '/conversations', icon: <CommentOutlined />, label: '对话记录' },
     { key: '/sessions', icon: <TeamOutlined />, label: '会话管理' },

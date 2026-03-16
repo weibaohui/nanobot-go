@@ -10,3 +10,5 @@ export { longTermMemoriesApi } from './longTermMemories';
 export { sessionsApi } from './sessions';
 export { mcpServersApi } from './mcpServers';
 export { authApi, setToken, getToken, clearToken, isAuthenticated, setCurrentUser, getCurrentUser, getCurrentUserCode } from './auth';
+export { skillsApi } from './skills';
+

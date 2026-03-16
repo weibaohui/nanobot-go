@@ -38,6 +38,7 @@ func NewServer(addr string, providers *Providers, logger *zap.Logger) *Server {
 		providers.LongTermMemoryService,
 		providers.SessionManager,
 		providers.MCPService,
+		providers.SkillService,
 	)
 
 	// 创建 Gin 路由

@@ -182,11 +182,13 @@ func (r *repository) DeleteByID(ctx context.Context, id uint) error {
 func (r *repository) buildStatsQuery(ctx context.Context, startTime, endTime time.Time, agentCodes, channelCodes, roles []string) *gorm.DB {
 	query := r.db.WithContext(ctx).Model(&models.ConversationRecord{})
 
+	// 使用 datetime() 函数确保时间比较正确，解决 SQLite 字符串比较问题
+	// 数据库存储格式 "2026-03-16 18:00:24+08:00" 与查询格式 "2026-03-16T15:00:00Z" 不一致
 	if !startTime.IsZero() {
-		query = query.Where("timestamp >= ?", startTime)
+		query = query.Where("datetime(timestamp) >= datetime(?)", startTime.UTC().Format(time.RFC3339))
 	}
 	if !endTime.IsZero() {
-		query = query.Where("timestamp <= ?", endTime)
+		query = query.Where("datetime(timestamp) <= datetime(?)", endTime.UTC().Format(time.RFC3339))
 	}
 	if len(agentCodes) > 0 {
 		query = query.Where("agent_code IN ?", agentCodes)
@@ -266,11 +268,12 @@ func (r *repository) GetAgentDistribution(ctx context.Context, startTime, endTim
 	}
 
 	var results []result
+	// 使用 NULLIF 将空字符串转换为 NULL，确保空字符串和 NULL 被分到同一组
 	if err := query.Select(
-		"agent_code, " +
+		"NULLIF(agent_code, '') as agent_code, " +
 			"COUNT(*) as count, " +
 			"COALESCE(SUM(total_tokens), 0) as tokens",
-	).Group("agent_code").Order("count DESC").Scan(&results).Error; err != nil {
+	).Group("NULLIF(agent_code, '')").Order("count DESC").Scan(&results).Error; err != nil {
 		return nil, err
 	}
 

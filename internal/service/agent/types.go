@@ -51,6 +51,7 @@ type AgentConfig struct {
 	AgentsContent   string  `json:"agents_content"`
 	UserContent     string  `json:"user_content"`
 	ToolsContent    string  `json:"tools_content"`
+	MemoryContent   string  `json:"memory_content"` // 长期记忆内容
 	Model           string  `json:"model"`
 	MaxTokens       int     `json:"max_tokens"`
 	Temperature     float64 `json:"temperature"`

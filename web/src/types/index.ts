@@ -298,6 +298,18 @@ export interface Session {
   updated_at: string;
 }
 
+// Skill 技能类型
+export interface Skill {
+  name: string;
+  description: string;
+  source: string;
+}
+
+export interface SkillDetail extends Skill {
+  content: string;
+  bound_agents: Agent[];
+}
+
 // MCP Server 传输类型
 export type MCPTransportType = 'stdio' | 'http' | 'sse';
 

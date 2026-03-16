@@ -116,7 +116,7 @@ const Dashboard: React.FC = () => {
         start_time: start.toISOString(),
         end_time: end.toISOString(),
       });
-      setConvStats(res as ConversationStats);
+      setConvStats(res as unknown as ConversationStats);
     } catch (error) {
       console.error('获取对话统计失败:', error);
     } finally {

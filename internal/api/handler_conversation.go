@@ -337,8 +337,15 @@ func (h *Handler) handleConversationStats(c *gin.Context) {
 
 	// 填充 Agent 名称
 	for i := range stats.AgentDistribution {
-		if agent, err := h.agentService.GetAgentByCode(stats.AgentDistribution[i].Code); err == nil && agent != nil {
+		code := stats.AgentDistribution[i].Code
+		if code == "" {
+			// agent_code 为空时显示"未知"
+			stats.AgentDistribution[i].Name = "未知"
+		} else if agent, err := h.agentService.GetAgentByCode(code); err == nil && agent != nil {
 			stats.AgentDistribution[i].Name = agent.Name
+		} else {
+			// agent_code 不为空但找不到对应 Agent 时显示 code
+			stats.AgentDistribution[i].Name = code
 		}
 	}
 
