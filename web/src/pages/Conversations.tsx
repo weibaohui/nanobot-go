@@ -74,7 +74,7 @@ const Conversations: React.FC = () => {
   const [sessionVisible, setSessionVisible] = useState(false);
   const [sessionRecords, setSessionRecords] = useState<ConversationRecord[]>([]);
   const [sessionLoading, setSessionLoading] = useState(false);
-  const [currentSessionKey, setCurrentSessionKey] = useState('');
+  const [_currentSessionKey, _setCurrentSessionKey] = useState('');
 
   // 增强筛选状态
   const [filterVisible, setFilterVisible] = useState(false);
@@ -164,20 +164,7 @@ const Conversations: React.FC = () => {
     }
   };
 
-  const fetchSessionRecords = async (session: string) => {
-    setSessionLoading(true);
-    try {
-      const res = await conversationsApi.getBySession(session);
-      const items = (res as any)?.items || [];
-      setSessionRecords(items);
-    } catch (error) {
-      message.error('获取会话数据失败');
-    } finally {
-      setSessionLoading(false);
-    }
-  };
-
-  const fetchSessionRecordsByTrace = async (session: string, traceId: string) => {
+  const fetchSessionRecordsByTrace = async (_session: string, traceId: string) => {
     setSessionLoading(true);
     try {
       // 直接使用 trace API 获取该 trace 的所有消息
@@ -479,7 +466,7 @@ const Conversations: React.FC = () => {
               type="text"
               icon={<MessageOutlined />}
               onClick={() => {
-                setCurrentSessionKey(record.session_key);
+                _setCurrentSessionKey(record.session_key);
                 setCurrentTraceId(record.trace_id);
                 fetchSessionRecordsByTrace(record.session_key, record.trace_id);
                 setSessionVisible(true);
@@ -692,14 +679,14 @@ const Conversations: React.FC = () => {
                 // 自动从当前对话记录中提取用户编码
                 const uniqueUserCodes = [...new Set(sessionRecords.map(r => r.user_code).filter(Boolean))];
                 if (uniqueUserCodes.length === 1) {
-                  setOrganizeUserCode(uniqueUserCodes[0]);
+                  setOrganizeUserCode(uniqueUserCodes[0] || '');
                 } else if (uniqueUserCodes.length > 1) {
                   setOrganizeUserCode('');
                 }
                 // 自动从当前对话记录中提取Agent编码
                 const uniqueAgentCodes = [...new Set(sessionRecords.map(r => r.agent_code).filter(Boolean))];
                 if (uniqueAgentCodes.length === 1) {
-                  setOrganizeAgentCode(uniqueAgentCodes[0]);
+                  setOrganizeAgentCode(uniqueAgentCodes[0] || '');
                 } else if (uniqueAgentCodes.length > 1) {
                   setOrganizeAgentCode('');
                 }

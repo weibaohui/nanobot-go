@@ -297,3 +297,19 @@ export interface Session {
   created_at: string;
   updated_at: string;
 }
+
+
+// Skill 技能类型
+export interface Skill {
+  name: string;
+  description: string;
+  source: string;
+}
+
+export interface SkillDetail {
+  name: string;
+  description: string;
+  source: string;
+  content: string;
+  bound_agents: Agent[];
+}

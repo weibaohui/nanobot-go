@@ -9,6 +9,7 @@ import (
 	"github.com/weibaohui/nanobot-go/internal/service"
 	"github.com/weibaohui/nanobot-go/internal/service/conversation"
 	mcpsvc "github.com/weibaohui/nanobot-go/internal/service/mcp"
+	skillsvc "github.com/weibaohui/nanobot-go/internal/service/skill"
 )
 
 // Handler API 处理器
@@ -25,6 +26,7 @@ type Handler struct {
 	longTermMemoryService     LongTermMemoryService
 	sessionManager            SessionManager
 	mcpService                MCPService
+	skillService              skillsvc.Service
 }
 
 // NewHandler 创建 API 处理器
@@ -41,6 +43,7 @@ func NewHandler(
 	longTermMemoryService LongTermMemoryService,
 	sessionManager SessionManager,
 	mcpService MCPService,
+	skillService skillsvc.Service,
 ) *Handler {
 	return &Handler{
 		userService:               userService,
@@ -55,6 +58,7 @@ func NewHandler(
 		longTermMemoryService:     longTermMemoryService,
 		sessionManager:            sessionManager,
 		mcpService:                mcpService,
+		skillService:              skillService,
 	}
 }
 
@@ -211,6 +215,13 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 			agentMCPBindings.PUT("/:binding_id", h.updateAgentMCPBinding)
 			agentMCPBindings.DELETE("/:binding_id", h.deleteAgentMCPBinding)
 			agentMCPBindings.GET("/tools", h.getAgentMCPTools)
+		}
+
+		// Skills API
+		skills := authorized.Group("/skills")
+		{
+			skills.GET("", h.listSkills)
+			skills.GET("/:name", h.getSkill)
 		}
 	}
 }

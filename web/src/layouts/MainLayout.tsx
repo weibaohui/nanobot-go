@@ -63,6 +63,7 @@ const MainLayout: React.FC = () => {
     { key: '/agents', icon: <RobotOutlined />, label: 'Agent' },
     { key: '/channels', icon: <MessageOutlined />, label: '渠道' },
     { key: '/providers', icon: <KeyOutlined />, label: 'LLM' },
+    { key: '/skills', icon: <ThunderboltOutlined />, label: '技能' },
     { key: '/cron', icon: <ClockCircleOutlined />, label: '定时任务' },
     { key: '/conversations', icon: <CommentOutlined />, label: '对话记录' },
     { key: '/sessions', icon: <TeamOutlined />, label: '会话管理' },

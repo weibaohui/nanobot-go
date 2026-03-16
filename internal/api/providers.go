@@ -9,6 +9,7 @@ import (
 	"github.com/weibaohui/nanobot-go/internal/service/conversation"
 	ms "github.com/weibaohui/nanobot-go/internal/service/memory"
 	mcpsvc "github.com/weibaohui/nanobot-go/internal/service/mcp"
+	skillsvc "github.com/weibaohui/nanobot-go/internal/service/skill"
 	memservice "github.com/weibaohui/nanobot-go/internal/memory/service"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -41,6 +42,7 @@ type Providers struct {
 	MCPServerRepo             repository.MCPServerRepository
 	AgentMCPBindingRepo       repository.AgentMCPBindingRepository
 	MCPService                mcpsvc.Service
+	SkillService              skillsvc.Service
 }
 
 // NewProviders 创建所有服务和仓库
@@ -93,6 +95,9 @@ func NewProviders(db *gorm.DB, cfg *config.Config, logger *zap.Logger) *Provider
 	agentMCPBindingRepo := repository.NewAgentMCPBindingRepository(db)
 	mcpService := mcpsvc.NewService(mcpServerRepo, agentMCPBindingRepo, agentRepo)
 
+	// 创建 Skill service
+	skillService := skillsvc.NewService(cfg.Agents.Defaults.Workspace, agentRepo)
+
 	return &Providers{
 		DB:                        db,
 		UserRepo:                  userRepo,
@@ -112,6 +117,7 @@ func NewProviders(db *gorm.DB, cfg *config.Config, logger *zap.Logger) *Provider
 		MCPServerRepo:             mcpServerRepo,
 		AgentMCPBindingRepo:       agentMCPBindingRepo,
 		MCPService:                mcpService,
+		SkillService:              skillService,
 	}
 }
 

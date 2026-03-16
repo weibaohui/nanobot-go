@@ -9,3 +9,5 @@ export { streamMemoriesApi } from './streamMemories';
 export { longTermMemoriesApi } from './longTermMemories';
 export { sessionsApi } from './sessions';
 export { authApi, setToken, getToken, clearToken, isAuthenticated, setCurrentUser, getCurrentUser, getCurrentUserCode } from './auth';
+export { skillsApi } from './skills';
+
