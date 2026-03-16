@@ -32,7 +32,7 @@ const Skills: React.FC = () => {
     setLoading(true);
     try {
       const res = await skillsApi.list();
-      setSkills((res.data?.items || []) as Skill[]);
+      setSkills((res.items || []) as Skill[]);
     } catch (error) {
       console.error('获取技能列表失败:', error);
     } finally {
@@ -49,7 +49,7 @@ const Skills: React.FC = () => {
     setDetailVisible(true);
     try {
       const res = await skillsApi.get(skillName);
-      setSelectedSkill(res.data || null);
+      setSelectedSkill(res || null);
     } catch (error) {
       console.error('获取技能详情失败:', error);
       setSelectedSkill(null);

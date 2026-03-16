@@ -1,12 +1,12 @@
 import client from './client';
-import type { ApiResponse, ListResponse, Skill, SkillDetail } from '../types';
+import type { ListResponse, Skill, SkillDetail } from '../types';
 
 export const skillsApi = {
   // 获取所有技能列表
   list: () =>
-    client.get<any, ApiResponse<ListResponse<Skill>>>('/skills'),
+    client.get<any, ListResponse<Skill>>('/skills'),
 
   // 获取单个技能详情
   get: (name: string) =>
-    client.get<any, ApiResponse<SkillDetail>>(`/skills/${name}`),
+    client.get<any, SkillDetail>(`/skills/${name}`),
 };
