@@ -63,6 +63,7 @@ const Skills: React.FC = () => {
       title: '名称',
       dataIndex: 'name',
       key: 'name',
+      width: 200,
       render: (text: string) => (
         <Tag color="blue">{text}</Tag>
       ),
