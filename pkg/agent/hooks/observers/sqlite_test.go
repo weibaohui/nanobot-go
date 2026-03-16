@@ -13,12 +13,11 @@ import (
 	"github.com/weibaohui/nanobot-go/pkg/agent/hooks/observer"
 	"github.com/weibaohui/nanobot-go/pkg/agent/hooks/trace"
 	"github.com/weibaohui/nanobot-go/internal/database"
-	"github.com/weibaohui/nanobot-go/conversation/repository"
-	"github.com/weibaohui/nanobot-go/conversation/service"
+	"github.com/weibaohui/nanobot-go/internal/service/conversation"
 	"go.uber.org/zap"
 )
 
-func setupTestDeps(t *testing.T) (*database.Client, repository.ConversationRecordRepository, service.ConversationService) {
+func setupTestDeps(t *testing.T) (*database.Client, conversation.Repository, conversation.Service) {
 	tmpDir := t.TempDir()
 
 	dbConfig := &database.Config{
@@ -38,13 +37,13 @@ func setupTestDeps(t *testing.T) (*database.Client, repository.ConversationRecor
 		t.Fatalf("初始化表结构失败: %v", err)
 	}
 
-	repo := repository.NewConversationRecordRepository(dbClient.DB())
-	convService := service.NewConversationService(repo)
+	repo := conversation.NewRepository(dbClient.DB())
+	convService := conversation.NewService(repo)
 
 	return dbClient, repo, convService
 }
 
-func createTestObserver(t *testing.T) (*SQLiteObserver, *database.Client, repository.ConversationRecordRepository, service.ConversationService) {
+func createTestObserver(t *testing.T) (*SQLiteObserver, *database.Client, conversation.Repository, conversation.Service) {
 	dbClient, repo, convService := setupTestDeps(t)
 	obs := NewSQLiteObserver(zap.NewNop(), nil,
 		WithDBClient(dbClient),
@@ -207,8 +206,8 @@ func TestSQLiteObserver_DatabaseLocation(t *testing.T) {
 		t.Fatalf("初始化表结构失败: %v", err)
 	}
 
-	repo := repository.NewConversationRecordRepository(dbClient.DB())
-	convService := service.NewConversationService(repo)
+	repo := conversation.NewRepository(dbClient.DB())
+	convService := conversation.NewService(repo)
 
 	obs := NewSQLiteObserver(zap.NewNop(), nil,
 		WithDBClient(dbClient),
