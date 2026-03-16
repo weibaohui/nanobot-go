@@ -36,7 +36,6 @@ type AgentConfig struct {
 // ContextBuilder 上下文构建器
 type ContextBuilder struct {
 	workspace       string
-	memory          *MemoryStore
 	skills          *SkillsLoader
 	bootstrapMode   BootstrapMode // 引导文件加载模式
 	agentConfig     *AgentConfig  // Agent 配置内容（从数据库加载，优先使用）
@@ -46,7 +45,6 @@ type ContextBuilder struct {
 func NewContextBuilder(workspace string) *ContextBuilder {
 	return &ContextBuilder{
 		workspace:     workspace,
-		memory:        NewMemoryStore(workspace),
 		skills:        NewSkillsLoader(workspace),
 		bootstrapMode: BootstrapFull, // 默认完整模式
 	}
@@ -156,15 +154,12 @@ func (c *ContextBuilder) getIdentity() string {
 }
 
 // getMemoryContext 获取记忆上下文
-// 优先从数据库 Agent 配置加载，如果没有则从文件系统加载
+// 从数据库 Agent 配置加载
 func (c *ContextBuilder) getMemoryContext() string {
-	// 如果设置了 Agent 配置且有记忆内容，优先使用
 	if c.agentConfig != nil && c.agentConfig.MemoryContent != "" {
 		return "## 长期记忆\n" + c.agentConfig.MemoryContent
 	}
-
-	// 否则从文件系统加载（向后兼容）
-	return c.memory.GetMemoryContext()
+	return ""
 }
 
 // loadBootstrapFiles 加载引导文件
