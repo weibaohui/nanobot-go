@@ -44,9 +44,10 @@ func NewMCPTool(
 }
 
 // Name 返回工具名称
-// 格式: mcp_{server_code}_{tool_name}
+// 格式: mcp::{server_code}::{tool_name}
+// 使用 :: 作为分隔符，避免与 server_code 或 tool_name 中的下划线冲突
 func (t *MCPTool) Name() string {
-	return fmt.Sprintf("mcp_%s_%s", t.serverCode, t.toolName)
+	return fmt.Sprintf("mcp::%s::%s", t.serverCode, t.toolName)
 }
 
 // Info 返回工具信息

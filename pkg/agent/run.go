@@ -259,7 +259,7 @@ func (l *Loop) loadChannelAgentConfig(ctx context.Context, msg *bus.InboundMessa
 		} else {
 			var mcpServerInfos []MCPServerInfo
 			for _, info := range mcpServers {
-				if info.IsActive && info.MCPServer != nil {
+				if info.Binding.IsActive && info.MCPServer != nil {
 					mcpServerInfos = append(mcpServerInfos, MCPServerInfo{
 						Code:        info.MCPServer.Code,
 						Name:        info.MCPServer.Name,

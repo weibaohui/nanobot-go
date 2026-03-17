@@ -107,20 +107,27 @@ func (t *UseMCPTool) handleLoad(serverCode string) (string, error) {
 			"tools":        tools,
 		}
 
-		resultJSON, _ := json.MarshalIndent(result, "", "  ")
+		resultJSON, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return "", fmt.Errorf("序列化结果失败: %w", err)
+		}
 		return string(resultJSON), nil
 	}
 
 	// 加载 Server
 	loaded, err := t.manager.LoadServer(serverCode)
 	if err != nil {
+		// 注意：返回 JSON 格式的错误信息（而非 Go error），以便 LLM 能够理解错误原因
 		result := map[string]interface{}{
 			"success":     false,
 			"server_code": serverCode,
 			"error":       err.Error(),
 			"message":     fmt.Sprintf("加载 MCP Server '%s' 失败: %v", serverCode, err),
 		}
-		resultJSON, _ := json.MarshalIndent(result, "", "  ")
+		resultJSON, marshalErr := json.MarshalIndent(result, "", "  ")
+		if marshalErr != nil {
+			return "", fmt.Errorf("序列化错误结果失败: %w", marshalErr)
+		}
 		return string(resultJSON), nil
 	}
 
@@ -150,7 +157,10 @@ func (t *UseMCPTool) handleLoad(serverCode string) (string, error) {
 		"usage":      "使用 call_mcp_tool(server_code, tool_name, params) 调用工具",
 	}
 
-	resultJSON, _ := json.MarshalIndent(result, "", "  ")
+	resultJSON, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("序列化结果失败: %w", err)
+	}
 	return string(resultJSON), nil
 }
 
@@ -163,20 +173,26 @@ func (t *UseMCPTool) handleInfo(serverCode string) (string, error) {
 			"server_code": serverCode,
 			"error":       err.Error(),
 		}
-		resultJSON, _ := json.MarshalIndent(result, "", "  ")
+		resultJSON, marshalErr := json.MarshalIndent(result, "", "  ")
+		if marshalErr != nil {
+			return "", fmt.Errorf("序列化错误结果失败: %w", marshalErr)
+		}
 		return string(resultJSON), nil
 	}
 
 	result := map[string]interface{}{
-		"success":      true,
-		"server_code":  info.Code,
-		"server_name":  info.Name,
-		"description":  info.Description,
-		"status":       info.Status,
-		"tool_count":   info.ToolCount,
-		"is_loaded":    t.manager.IsLoaded(serverCode),
+		"success":     true,
+		"server_code": info.Code,
+		"server_name": info.Name,
+		"description": info.Description,
+		"status":      info.Status,
+		"tool_count":  info.ToolCount,
+		"is_loaded":   t.manager.IsLoaded(serverCode),
 	}
 
-	resultJSON, _ := json.MarshalIndent(result, "", "  ")
+	resultJSON, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("序列化结果失败: %w", err)
+	}
 	return string(resultJSON), nil
 }

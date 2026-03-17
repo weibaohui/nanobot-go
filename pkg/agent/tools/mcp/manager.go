@@ -74,7 +74,9 @@ func (m *Manager) LoadServer(serverCode string) (*LoadedServer, error) {
 	// 获取 Server 的工具列表
 	capabilities := server.GetCapabilities()
 	if len(capabilities) == 0 {
-		return nil, fmt.Errorf("MCP Server '%s' 没有可用工具", serverCode)
+		// 允许加载无工具的 Server（支持动态工具场景），仅记录警告
+		m.logger.Warn("MCP Server 没有可用工具",
+			zap.String("server_code", serverCode))
 	}
 
 	// 创建工具实例

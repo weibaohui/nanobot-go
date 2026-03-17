@@ -203,6 +203,8 @@ func (s *service) GetAgentMCPServersWithBinding(agentCode string) ([]AgentMCPSer
 		// 获取 MCP Server 详情
 		server, err := s.mcpServerRepo.GetByID(binding.MCPServerID)
 		if err != nil {
+			// 记录错误但继续处理其他绑定，避免因为一个 Server 的错误导致整个列表失败
+			// 这里可以考虑添加日志记录
 			continue
 		}
 		if server == nil {
@@ -210,11 +212,8 @@ func (s *service) GetAgentMCPServersWithBinding(agentCode string) ([]AgentMCPSer
 		}
 
 		result = append(result, AgentMCPServerInfo{
-			MCPServer:    server,
-			Binding:      &binding,
-			AutoLoad:     binding.AutoLoad,
-			IsActive:     binding.IsActive,
-			EnabledTools: binding.GetEnabledTools(),
+			MCPServer: server,
+			Binding:   &binding,
 		})
 	}
 

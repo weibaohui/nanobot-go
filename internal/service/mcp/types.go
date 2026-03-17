@@ -124,12 +124,11 @@ type Service interface {
 }
 
 // AgentMCPServerInfo Agent 绑定的 MCP Server 信息（包含绑定配置）
+// 注意：AutoLoad、IsActive、EnabledTools 等字段可直接从 Binding 字段获取
+// 示例：info.Binding.AutoLoad, info.Binding.IsActive, info.Binding.GetEnabledTools()
 type AgentMCPServerInfo struct {
-	MCPServer    *models.MCPServer `json:"mcp_server"`
-	Binding      *models.AgentMCPBinding `json:"binding"`
-	AutoLoad     bool              `json:"auto_load"`
-	IsActive     bool              `json:"is_active"`
-	EnabledTools []string          `json:"enabled_tools"`
+	MCPServer *models.MCPServer       `json:"mcp_server"`
+	Binding   *models.AgentMCPBinding `json:"binding"`
 }
 
 // AgentMCPToolInfo Agent 可用的 MCP 工具信息
