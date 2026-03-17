@@ -76,6 +76,11 @@ func (t *CallMCPTool) InvokableRun(ctx context.Context, argumentsInJSON string, 
 		return "", fmt.Errorf("tool_name 不能为空")
 	}
 
+	// 规范化 nil params 为空对象，避免序列化为 "null"
+	if args.Params == nil {
+		args.Params = map[string]interface{}{}
+	}
+
 	// 执行 MCP 工具
 	result, err := t.manager.ExecuteTool(ctx, args.ServerCode, args.ToolName, args.Params)
 	if err != nil {

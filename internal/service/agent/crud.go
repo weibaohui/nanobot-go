@@ -45,6 +45,10 @@ func (s *service) CreateAgent(userCode string, req CreateAgentRequest) (*models.
 	if maxIterations <= 0 {
 		maxIterations = 15
 	}
+	historyMessages := req.HistoryMessages
+	if historyMessages <= 0 {
+		historyMessages = 10
+	}
 
 	agent := &models.Agent{
 		UserCode:              userCode,
@@ -62,6 +66,7 @@ func (s *service) CreateAgent(userCode string, req CreateAgentRequest) (*models.
 		MaxTokens:             maxTokens,
 		Temperature:           temperature,
 		MaxIterations:         maxIterations,
+		HistoryMessages:       historyMessages,
 		IsActive:              true,
 		IsDefault:             req.IsDefault,
 		EnableThinkingProcess: req.EnableThinkingProcess,
@@ -132,6 +137,9 @@ func (s *service) UpdateAgent(id uint, req UpdateAgentRequest) (*models.Agent, e
 	}
 	if req.MaxIterations > 0 {
 		agent.MaxIterations = req.MaxIterations
+	}
+	if req.HistoryMessages > 0 {
+		agent.HistoryMessages = req.HistoryMessages
 	}
 	if req.IsActive != nil {
 		agent.IsActive = *req.IsActive

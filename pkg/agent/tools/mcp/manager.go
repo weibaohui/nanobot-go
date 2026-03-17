@@ -178,7 +178,7 @@ func (m *Manager) Clear() {
 func (m *Manager) GetServerInfo(serverCode string) (*ServerInfo, error) {
 	server, err := m.mcpService.GetServerByCode(serverCode)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("获取 MCP Server 失败: %w", err)
 	}
 	if server == nil {
 		return nil, fmt.Errorf("MCP Server '%s' 不存在", serverCode)
@@ -211,6 +211,11 @@ type MCPToolInfo struct {
 // ExecuteTool 执行 MCP 工具
 // 如果 Server 未加载，会自动加载
 func (m *Manager) ExecuteTool(ctx context.Context, serverCode, toolName string, params map[string]interface{}) (string, error) {
+	// 规范化 nil params 为空对象，避免序列化为 "null"
+	if params == nil {
+		params = map[string]interface{}{}
+	}
+
 	// 检查 Server 是否已加载
 	server := m.GetLoadedServer(serverCode)
 	if server == nil {

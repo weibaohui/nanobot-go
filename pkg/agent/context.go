@@ -31,6 +31,9 @@ type AgentConfig struct {
 	ToolsContent    string // TOOLS.md 内容
 	UserContent     string // USER.md 内容
 	MemoryContent   string // 长期记忆内容（来自数据库 agents.memory_content）
+
+	// 运行时配置
+	HistoryMessages int // 携带的历史对话消息数量（默认10，范围0-50）
 }
 
 // MCPServerInfo MCP Server 基本信息
@@ -72,6 +75,23 @@ func (c *ContextBuilder) SetAgentConfig(config *AgentConfig) {
 // GetSkillsLoader 获取技能加载器
 func (c *ContextBuilder) GetSkillsLoader() *SkillsLoader {
 	return c.skills
+}
+
+// GetHistoryMessages 获取历史消息数量
+// 如果未设置 AgentConfig 或 HistoryMessages 为 0，返回默认值 10
+// 返回值范围限制在 0-50 之间
+func (c *ContextBuilder) GetHistoryMessages() int {
+	if c.agentConfig == nil {
+		return 10
+	}
+	n := c.agentConfig.HistoryMessages
+	if n <= 0 {
+		return 10
+	}
+	if n > 50 {
+		return 50
+	}
+	return n
 }
 
 // SetMCPServers 设置 MCP Server 列表

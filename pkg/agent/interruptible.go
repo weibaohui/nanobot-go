@@ -177,10 +177,15 @@ func (i *interruptible) Process(ctx context.Context, msg *bus.InboundMessage, bu
 	}
 
 	// Normal processing flow
-	history := i.convertHistory(i.sessions.GetHistory(ctx, sessionKey, 50))
-	i.logger.Info("加载会话历史",
-		zap.String("session_key", sessionKey),
-		zap.Int("history_messages", len(history)))
+	// 从 AgentConfig 获取历史消息数量配置（默认10，最大50）
+	historyWindow := 10
+	if i.context != nil {
+		historyWindow = i.context.GetHistoryMessages()
+	}
+	history := i.convertHistory(i.sessions.GetHistory(ctx, sessionKey, historyWindow))
+	i.logger.Debug("加载会话历史",
+		zap.Int("history_window", historyWindow),
+		zap.Int("loaded_messages", len(history)))
 	messages := buildMessagesFunc(history, msg.Content, msg.Channel, msg.ChatID)
 	checkpointID := fmt.Sprintf("%s_%d", sessionKey, time.Now().UnixNano())
 

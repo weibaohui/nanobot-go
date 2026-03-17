@@ -25,6 +25,7 @@ func (s *service) GetAgentConfig(agentID uint) (*AgentConfig, error) {
 		MaxTokens:       agent.MaxTokens,
 		Temperature:     agent.Temperature,
 		MaxIterations:   agent.MaxIterations,
+		HistoryMessages: agent.HistoryMessages,
 	}, nil
 }
 
@@ -49,6 +50,7 @@ func (s *service) GetAgentConfigByCode(agentCode string) (*AgentConfig, error) {
 		MaxTokens:       agent.MaxTokens,
 		Temperature:     agent.Temperature,
 		MaxIterations:   agent.MaxIterations,
+		HistoryMessages: agent.HistoryMessages,
 	}, nil
 }
 
@@ -71,6 +73,7 @@ func (s *service) UpdateAgentConfig(agentID uint, config *AgentConfig) error {
 	agent.MaxTokens = config.MaxTokens
 	agent.Temperature = config.Temperature
 	agent.MaxIterations = config.MaxIterations
+	agent.HistoryMessages = config.HistoryMessages
 
 	return s.agentRepo.Update(agent)
 }
@@ -94,6 +97,7 @@ func (s *service) UpdateAgentConfigByCode(agentCode string, config *AgentConfig)
 	agent.MaxTokens = config.MaxTokens
 	agent.Temperature = config.Temperature
 	agent.MaxIterations = config.MaxIterations
+	agent.HistoryMessages = config.HistoryMessages
 
 	return s.agentRepo.Update(agent)
 }

@@ -160,11 +160,17 @@ func (m *Manager) GetHistory(ctx context.Context, sessionKey string, maxMessages
 		zap.Int("total_records", len(records)))
 
 	// 使用所有查询到的记录（移除2小时时间限制，以支持加载历史对话）
+	// 注意：查询使用 DESC 排序，最新的在前
 	filteredRecords := records
 
-	// 限制消息数量（取最近的 maxMessages 条）
+	// 限制消息数量（取最新的 maxMessages 条，即前 maxMessages 条）
 	if len(filteredRecords) > maxMessages {
-		filteredRecords = filteredRecords[len(filteredRecords)-maxMessages:]
+		filteredRecords = filteredRecords[:maxMessages]
+	}
+
+	// 反转顺序，使消息按时间正序排列（最旧的在前，最新的在后）
+	for i, j := 0, len(filteredRecords)-1; i < j; i, j = i+1, j-1 {
+		filteredRecords[i], filteredRecords[j] = filteredRecords[j], filteredRecords[i]
 	}
 
 	// 转换为 map 格式
