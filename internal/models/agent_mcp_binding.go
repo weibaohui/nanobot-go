@@ -12,8 +12,9 @@ type AgentMCPBinding struct {
 	MCPServerID uint `gorm:"not null;index" json:"mcp_server_id"`
 
 	// 绑定配置
-	EnabledTools string `gorm:"type:text" json:"enabled_tools"` // 启用的工具列表 JSON (null 表示全部启用)
-	IsActive     bool   `gorm:"default:true" json:"is_active"`    // 是否启用该 MCP 服务器
+	EnabledTools string `gorm:"type:text" json:"enabled_tools"`    // 启用的工具列表 JSON (null 表示全部启用)
+	IsActive     bool   `gorm:"default:true" json:"is_active"`       // 是否启用该 MCP 服务器
+	AutoLoad     bool   `gorm:"default:false" json:"auto_load"`      // 是否在对话开始时自动加载该 MCP 服务器的工具
 
 	// 关联模型
 	Agent     Agent     `gorm:"foreignKey:AgentID" json:"agent,omitempty"`

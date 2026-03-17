@@ -58,12 +58,14 @@ type CreateAgentMCPBindingRequest struct {
 	MCPServerID  uint     `json:"mcp_server_id" binding:"required"`
 	EnabledTools []string `json:"enabled_tools"`
 	IsActive     *bool    `json:"is_active,omitempty"`
+	AutoLoad     *bool    `json:"auto_load,omitempty"` // 是否在对话开始时自动加载
 }
 
 // UpdateAgentMCPBindingRequest 更新 Agent MCP 绑定请求
 type UpdateAgentMCPBindingRequest struct {
 	EnabledTools []string `json:"enabled_tools,omitempty"`
 	IsActive     *bool    `json:"is_active,omitempty"`
+	AutoLoad     *bool    `json:"auto_load,omitempty"` // 是否在对话开始时自动加载
 }
 
 // AgentMCPBindingResponse Agent MCP 绑定响应
@@ -74,6 +76,7 @@ type AgentMCPBindingResponse struct {
 	MCPServer    *MCPServerResponse `json:"mcp_server,omitempty"`
 	EnabledTools []string           `json:"enabled_tools"`
 	IsActive     bool               `json:"is_active"`
+	AutoLoad     bool               `json:"auto_load"` // 是否在对话开始时自动加载
 	CreatedAt    string             `json:"created_at"`
 	UpdatedAt    string             `json:"updated_at"`
 }
@@ -112,6 +115,18 @@ type Service interface {
 
 	// 获取 Agent 可用的 MCP 工具
 	GetAgentMCPTools(agentCode string) ([]AgentMCPToolInfo, error)
+
+	// 获取 Agent 绑定的 MCP Servers（包含 auto_load 信息）
+	GetAgentMCPServersWithBinding(agentCode string) ([]AgentMCPServerInfo, error)
+}
+
+// AgentMCPServerInfo Agent 绑定的 MCP Server 信息（包含绑定配置）
+type AgentMCPServerInfo struct {
+	MCPServer    *models.MCPServer `json:"mcp_server"`
+	Binding      *models.AgentMCPBinding `json:"binding"`
+	AutoLoad     bool              `json:"auto_load"`
+	IsActive     bool              `json:"is_active"`
+	EnabledTools []string          `json:"enabled_tools"`
 }
 
 // AgentMCPToolInfo Agent 可用的 MCP 工具信息

@@ -40,6 +40,7 @@ func (s *service) CreateAgentBinding(agentID uint, req CreateAgentMCPBindingRequ
 		AgentID:     agentID,
 		MCPServerID: req.MCPServerID,
 		IsActive:    true,
+		AutoLoad:    false,
 	}
 
 	// 设置启用的工具
@@ -51,6 +52,10 @@ func (s *service) CreateAgentBinding(agentID uint, req CreateAgentMCPBindingRequ
 
 	if req.IsActive != nil {
 		binding.IsActive = *req.IsActive
+	}
+
+	if req.AutoLoad != nil {
+		binding.AutoLoad = *req.AutoLoad
 	}
 
 	if err := s.agentMCPBindingRepo.Create(binding); err != nil {
@@ -92,6 +97,9 @@ func (s *service) UpdateAgentBinding(bindingID uint, req UpdateAgentMCPBindingRe
 	}
 	if req.IsActive != nil {
 		binding.IsActive = *req.IsActive
+	}
+	if req.AutoLoad != nil {
+		binding.AutoLoad = *req.AutoLoad
 	}
 
 	binding.UpdatedAt = time.Now()
@@ -171,6 +179,46 @@ func (s *service) GetAgentMCPTools(agentCode string) ([]AgentMCPToolInfo, error)
 	}
 
 	return tools, nil
+}
+
+// GetAgentMCPServersWithBinding 获取 Agent 绑定的 MCP Servers（包含绑定配置）
+func (s *service) GetAgentMCPServersWithBinding(agentCode string) ([]AgentMCPServerInfo, error) {
+	// 获取 Agent
+	agent, err := s.agentRepo.GetByAgentCode(agentCode)
+	if err != nil {
+		return nil, err
+	}
+	if agent == nil {
+		return nil, fmt.Errorf("Agent 不存在")
+	}
+
+	// 获取 Agent 的所有绑定
+	bindings, err := s.agentMCPBindingRepo.GetByAgentID(agent.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []AgentMCPServerInfo
+	for _, binding := range bindings {
+		// 获取 MCP Server 详情
+		server, err := s.mcpServerRepo.GetByID(binding.MCPServerID)
+		if err != nil {
+			continue
+		}
+		if server == nil {
+			continue
+		}
+
+		result = append(result, AgentMCPServerInfo{
+			MCPServer:    server,
+			Binding:      &binding,
+			AutoLoad:     binding.AutoLoad,
+			IsActive:     binding.IsActive,
+			EnabledTools: binding.GetEnabledTools(),
+		})
+	}
+
+	return result, nil
 }
 
 // contains 检查字符串数组是否包含指定元素

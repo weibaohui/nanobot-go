@@ -375,18 +375,24 @@ export interface AgentMCPBinding {
   agent_id: number;
   mcp_server_id: number;
   mcp_server?: MCPServer;
+  enabled_tools?: string[];
   is_active: boolean;
+  auto_load: boolean;
   created_at: string;
   updated_at: string;
 }
 
 export interface CreateAgentMCPBindingRequest {
   mcp_server_id: number;
+  enabled_tools?: string[];
   is_active?: boolean;
+  auto_load?: boolean;
 }
 
 export interface UpdateAgentMCPBindingRequest {
+  enabled_tools?: string[];
   is_active?: boolean;
+  auto_load?: boolean;
 }
 
 // Task 后台任务类型

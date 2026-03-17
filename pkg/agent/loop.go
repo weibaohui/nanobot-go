@@ -8,10 +8,12 @@ import (
 	"github.com/weibaohui/nanobot-go/pkg/agent/interrupt"
 	"github.com/weibaohui/nanobot-go/pkg/agent/task"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools"
+	"github.com/weibaohui/nanobot-go/pkg/agent/tools/mcp"
 	"github.com/weibaohui/nanobot-go/pkg/bus"
 	"github.com/weibaohui/nanobot-go/pkg/cron"
 	"github.com/weibaohui/nanobot-go/internal/service"
 	agentsvc "github.com/weibaohui/nanobot-go/internal/service/agent"
+	mcpsvc "github.com/weibaohui/nanobot-go/internal/service/mcp"
 	"github.com/weibaohui/nanobot-go/pkg/session"
 	"go.uber.org/zap"
 )
@@ -34,6 +36,8 @@ type Loop struct {
 	hookCallback        func(eventType events.EventType, data map[string]interface{}) // Hook 回调
 	channelService      service.ChannelService // 渠道服务，用于获取渠道绑定的 Agent
 	agentService        agentsvc.Service       // Agent 服务，用于获取 Agent 配置
+	mcpService          mcpsvc.Service         // MCP 服务
+	mcpManager          *mcp.Manager           // MCP 会话管理器
 
 	interruptManager *interrupt.Manager
 	masterAgent      *MasterAgent
@@ -55,6 +59,7 @@ type LoopConfig struct {
 	HookCallback        func(eventType events.EventType, data map[string]interface{}) // Hook 回调
 	ChannelService      service.ChannelService                                       // 渠道服务
 	AgentService        agentsvc.Service                                             // Agent 服务
+	MCPService          mcpsvc.Service                                               // MCP 服务
 }
 
 // NewLoop 创建代理循环
@@ -84,6 +89,13 @@ func NewLoop(cfg *LoopConfig) *Loop {
 		hookCallback:        cfg.HookCallback,
 		channelService:      cfg.ChannelService,
 		agentService:        cfg.AgentService,
+		mcpService:          cfg.MCPService,
+	}
+
+	// 初始化 MCP 管理器（如果配置了 MCP 服务）
+	if cfg.MCPService != nil {
+		loop.mcpManager = mcp.NewManager(cfg.MCPService, logger)
+		logger.Info("MCP 管理器已初始化")
 	}
 
 	// 设置工具的 HookManager，使工具执行时能触发 Hook 事件
