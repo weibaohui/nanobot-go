@@ -1,9 +1,16 @@
 package task
 
 import (
+	"errors"
 	"time"
 
 	"github.com/weibaohui/nanobot-go/pkg/agent/task"
+)
+
+// 定义错误类型，便于调用方区分不同情况
+var (
+	ErrManagerNotInitialized = errors.New("task manager not initialized")
+	ErrTaskNotFound          = errors.New("task not found or already completed")
 )
 
 // Service Task 服务接口
@@ -66,7 +73,7 @@ func (s *service) ListTasks() ([]*TaskResponse, error) {
 // GetTask 获取任务详情
 func (s *service) GetTask(id string) (*TaskDetailResponse, error) {
 	if s.manager == nil {
-		return nil, nil
+		return nil, ErrManagerNotInitialized
 	}
 
 	info, err := s.manager.GetTask(id)
@@ -87,7 +94,7 @@ func (s *service) GetTask(id string) (*TaskDetailResponse, error) {
 // StopTask 停止任务
 func (s *service) StopTask(id string) (*TaskResponse, error) {
 	if s.manager == nil {
-		return nil, nil
+		return nil, ErrManagerNotInitialized
 	}
 
 	stopped, status, err := s.manager.StopTask(id)
@@ -96,7 +103,7 @@ func (s *service) StopTask(id string) (*TaskResponse, error) {
 	}
 
 	if !stopped {
-		return nil, nil
+		return nil, ErrTaskNotFound
 	}
 
 	return &TaskResponse{

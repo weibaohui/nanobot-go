@@ -27,10 +27,13 @@ type Server struct {
 
 // NewServer 创建 API 服务器
 func NewServer(addr string, providers *Providers, logger *zap.Logger) *Server {
-	// 创建 TaskService（如果 TaskManager 存在）
+	// 创建 TaskService（优先复用已注入的 TaskService，否则从 TaskManager 创建）
 	var taskService TaskService
-	if providers.TaskManager != nil {
+	if providers.TaskService != nil {
+		taskService = providers.TaskService
+	} else if providers.TaskManager != nil {
 		taskService = tasksvc.NewService(providers.TaskManager)
+		providers.TaskService = taskService
 	}
 
 	handler := NewHandler(

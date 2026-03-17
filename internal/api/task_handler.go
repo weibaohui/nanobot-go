@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -40,6 +41,10 @@ func (h *Handler) getTask(c *gin.Context) {
 
 	task, err := h.taskService.GetTask(taskID)
 	if err != nil {
+		if errors.Is(err, tasksvc.ErrManagerNotInitialized) {
+			c.JSON(http.StatusServiceUnavailable, ErrorResponse{Error: err.Error()})
+			return
+		}
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: err.Error()})
 		return
 	}
@@ -63,12 +68,14 @@ func (h *Handler) stopTask(c *gin.Context) {
 
 	task, err := h.taskService.StopTask(taskID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
-		return
-	}
-
-	if task == nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "任务无法停止（可能已完成或不存在）"})
+		switch {
+		case errors.Is(err, tasksvc.ErrManagerNotInitialized):
+			c.JSON(http.StatusServiceUnavailable, ErrorResponse{Error: err.Error()})
+		case errors.Is(err, tasksvc.ErrTaskNotFound):
+			c.JSON(http.StatusNotFound, ErrorResponse{Error: err.Error()})
+		default:
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		}
 		return
 	}
 

@@ -297,7 +297,7 @@ const Tasks: React.FC = () => {
                   }}
                 >
                   {selectedTask.logs.map((log, index) => (
-                    <div key={index}>{log}</div>
+                    <div key={`log-${index}-${log.slice(0, 20)}`}>{log}</div>
                   ))}
                 </div>
               </div>
