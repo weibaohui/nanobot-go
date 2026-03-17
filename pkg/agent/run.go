@@ -193,6 +193,8 @@ func (l *Loop) loadChannelAgentConfig(ctx context.Context, msg *bus.InboundMessa
 		)
 		// 清除之前的 Agent 配置，使用默认文件配置
 		l.context.SetAgentConfig(nil)
+		// 清空 MCP Server 列表
+		l.context.SetMCPServers(nil)
 		// 未绑定 Agent，思考过程默认关闭
 		ctx = trace.WithEnableThinkingProcess(ctx, false)
 		// 仍然存储 channel_id 和 channel_code
@@ -248,6 +250,30 @@ func (l *Loop) loadChannelAgentConfig(ctx context.Context, msg *bus.InboundMessa
 		zap.String("agent_name", agent.Name),
 		zap.Bool("enable_thinking_process", agent.EnableThinkingProcess),
 	)
+
+	// 加载 Agent 绑定的 MCP Servers 信息
+	if l.mcpService != nil {
+		mcpServers, err := l.mcpService.GetAgentMCPServersWithBinding(agent.AgentCode)
+		if err != nil {
+			l.logger.Warn("获取 Agent MCP Servers 失败", zap.Error(err))
+		} else {
+			var mcpServerInfos []MCPServerInfo
+			for _, info := range mcpServers {
+				if info.IsActive && info.MCPServer != nil {
+					mcpServerInfos = append(mcpServerInfos, MCPServerInfo{
+						Code:        info.MCPServer.Code,
+						Name:        info.MCPServer.Name,
+						Description: info.MCPServer.Description,
+					})
+				}
+			}
+			l.context.SetMCPServers(mcpServerInfos)
+			l.logger.Info("已加载 Agent MCP Servers",
+				zap.String("agent_code", agent.AgentCode),
+				zap.Int("server_count", len(mcpServerInfos)),
+			)
+		}
+	}
 
 	// 注入配置工具上下文（供 config tools 使用）
 	cfgCtx := &configtools.AgentConfigContext{

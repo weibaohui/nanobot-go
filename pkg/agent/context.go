@@ -33,12 +33,20 @@ type AgentConfig struct {
 	MemoryContent   string // 长期记忆内容（来自数据库 agents.memory_content）
 }
 
+// MCPServerInfo MCP Server 基本信息
+type MCPServerInfo struct {
+	Code        string
+	Name        string
+	Description string
+}
+
 // ContextBuilder 上下文构建器
 type ContextBuilder struct {
 	workspace       string
 	skills          *SkillsLoader
-	bootstrapMode   BootstrapMode // 引导文件加载模式
-	agentConfig     *AgentConfig  // Agent 配置内容（从数据库加载，优先使用）
+	bootstrapMode   BootstrapMode   // 引导文件加载模式
+	agentConfig     *AgentConfig    // Agent 配置内容（从数据库加载，优先使用）
+	mcpServers      []MCPServerInfo // MCP Server 列表
 }
 
 // NewContextBuilder 创建上下文构建器
@@ -64,6 +72,36 @@ func (c *ContextBuilder) SetAgentConfig(config *AgentConfig) {
 // GetSkillsLoader 获取技能加载器
 func (c *ContextBuilder) GetSkillsLoader() *SkillsLoader {
 	return c.skills
+}
+
+// SetMCPServers 设置 MCP Server 列表
+func (c *ContextBuilder) SetMCPServers(servers []MCPServerInfo) {
+	c.mcpServers = servers
+}
+
+// BuildMCPServersSection 构建 MCP Servers 部分
+func (c *ContextBuilder) BuildMCPServersSection() string {
+	if len(c.mcpServers) == 0 {
+		return ""
+	}
+
+	var parts []string
+	parts = append(parts, "## 可用的 MCP Servers")
+	parts = append(parts, "你可以使用 use_mcp 工具加载以下 MCP Server 的工具：")
+	parts = append(parts, "")
+
+	for _, server := range c.mcpServers {
+		desc := server.Description
+		if desc == "" {
+			desc = "无描述"
+		}
+		parts = append(parts, fmt.Sprintf("- **%s** (%s): %s", server.Code, server.Name, desc))
+	}
+
+	parts = append(parts, "")
+	parts = append(parts, "使用示例：use_mcp(server_code=\"abcd\", action=\"load\")")
+
+	return strings.Join(parts, "\n")
 }
 
 // BuildSystemPrompt 构建系统提示
@@ -109,6 +147,12 @@ func (c *ContextBuilder) BuildSystemPromptWithMode(mode BootstrapMode) string {
 available="false" 的技能需要先安装依赖 - 你可以尝试使用 apt/brew 安装。
 
 `+skillsSummary)
+	}
+
+	// MCP Servers
+	mcpSection := c.BuildMCPServersSection()
+	if mcpSection != "" {
+		parts = append(parts, mcpSection)
 	}
 
 	return strings.Join(parts, "\n\n---\n\n")
