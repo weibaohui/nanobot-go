@@ -386,3 +386,37 @@ export interface CreateAgentMCPBindingRequest {
 export interface UpdateAgentMCPBindingRequest {
   is_active?: boolean;
 }
+
+// Task 后台任务类型
+export type TaskStatus = 'pending' | 'running' | 'finished' | 'failed' | 'stopped';
+
+export const TaskStatusLabels: Record<TaskStatus, string> = {
+  pending: '等待中',
+  running: '运行中',
+  finished: '已完成',
+  failed: '失败',
+  stopped: '已停止',
+};
+
+export const TaskStatusColors: Record<TaskStatus, string> = {
+  pending: 'default',
+  running: 'processing',
+  finished: 'success',
+  failed: 'error',
+  stopped: 'warning',
+};
+
+export interface Task {
+  id: string;
+  status: TaskStatus;
+  work: string;
+  channel?: string;
+  chat_id?: string;
+  created_at: string;
+  completed_at?: string;
+  result?: string;
+}
+
+export interface TaskDetail extends Task {
+  logs?: string[];
+}

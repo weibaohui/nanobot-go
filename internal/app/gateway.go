@@ -88,13 +88,23 @@ func (g *Gateway) InitAPI() {
 	} else {
 		g.Logger.Info("Agent 管理系统已初始化")
 	}
+}
 
-	if g.apiEnabled {
-		apiAddr := ":" + strconv.Itoa(g.apiPort)
-		g.APIServer = api.NewServer(apiAddr, g.Providers, g.Logger)
-		if err := g.APIServer.Start(); err != nil {
-			g.Logger.Error("启动 API 服务器失败", zap.Error(err))
-		}
+// StartAPIServer 启动 API 服务器（需要在 InitAgentLoop 之后调用）
+func (g *Gateway) StartAPIServer() {
+	if !g.apiEnabled || g.Providers == nil {
+		return
+	}
+
+	// 注入 TaskManager（如果存在）
+	if g.Loop != nil {
+		g.Providers.TaskManager = g.Loop.GetTaskManager()
+	}
+
+	apiAddr := ":" + strconv.Itoa(g.apiPort)
+	g.APIServer = api.NewServer(apiAddr, g.Providers, g.Logger)
+	if err := g.APIServer.Start(); err != nil {
+		g.Logger.Error("启动 API 服务器失败", zap.Error(err))
 	}
 }
 

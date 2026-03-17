@@ -186,13 +186,19 @@ func (m *Manager) StopTask(taskID string) (bool, Status, error) {
 
 // ListTasks 获取所有任务列表
 func (m *Manager) ListTasks() ([]*Info, error) {
-	results := make([]*Info, 0)
-
+	// 先复制任务指针列表，避免在持有锁时调用 task.ToInfo() 导致死锁
 	m.mu.RLock()
+	tasks := make([]*Task, 0, len(m.runningTasks))
 	for _, task := range m.runningTasks {
-		results = append(results, task.ToInfo())
+		tasks = append(tasks, task)
 	}
 	m.mu.RUnlock()
+
+	// 释放锁后再调用 ToInfo()，避免与 runTask() 中的锁顺序冲突
+	results := make([]*Info, 0, len(tasks))
+	for _, task := range tasks {
+		results = append(results, task.ToInfo())
+	}
 
 	todayTasks, err := m.persistence.LoadTodayCompletedTasks()
 	if err != nil {
@@ -212,32 +218,54 @@ func (m *Manager) runTask(ctx context.Context, task *Task, channel, chatID strin
 
 	result, err := m.executeTask(execCtx, task.Work(), channel, chatID)
 
+	// 在锁内准备需要的数据，然后释放锁再调用可能获取 m.mu 的函数
 	task.mu.Lock()
-	defer task.mu.Unlock()
-
+	var (
+		status        Status
+		taskID        string
+		shouldPersist bool
+		persistedTask *PersistedTask
+		notifyResult  string
+	)
 	if task.IsStopRequested() || execCtx.Err() == context.Canceled {
 		task.status = StatusStopped
 		task.AppendLog("任务已停止")
 		task.CloseDone()
-		m.persistTask(task)
-		m.notifyComplete(task, "")
-		m.removeFromRunning(task.ID())
-		return
-	}
-
-	if err != nil {
+		status = task.status
+		taskID = task.id
+		shouldPersist = true
+		persistedTask = task.ToPersistedTask()
+		notifyResult = ""
+	} else if err != nil {
 		task.status = StatusFailed
 		task.AppendLog(fmt.Sprintf("任务失败: %v", err))
+		task.CloseDone()
+		status = task.status
+		taskID = task.id
+		shouldPersist = true
+		persistedTask = task.ToPersistedTask()
+		notifyResult = result
 	} else {
 		task.status = StatusFinished
 		task.result = result
 		task.AppendLog("任务完成")
+		task.CloseDone()
+		status = task.status
+		taskID = task.id
+		shouldPersist = true
+		persistedTask = task.ToPersistedTask()
+		notifyResult = result
 	}
+	task.mu.Unlock()
 
-	task.CloseDone()
-	m.persistTask(task)
-	m.notifyComplete(task, result)
-	m.removeFromRunning(task.ID())
+	// 在释放 task.mu 后再调用可能获取 m.mu 的函数，避免死锁
+	if shouldPersist {
+		m.persistence.AppendTaskToFile(persistedTask)
+	}
+	if m.onTaskComplete != nil {
+		m.onTaskComplete(channel, chatID, taskID, status, notifyResult)
+	}
+	m.removeFromRunning(taskID)
 }
 
 func (m *Manager) removeFromRunning(taskID string) {
@@ -269,11 +297,16 @@ func (m *Manager) buildTaskContext(ctx context.Context) (context.Context, contex
 }
 
 func (m *Manager) reachedLimit() bool {
+	// 先复制任务指针列表，避免在持有锁时调用 task.mu.Lock() 导致死锁
 	m.mu.RLock()
-	defer m.mu.RUnlock()
+	tasks := make([]*Task, 0, len(m.runningTasks))
+	for _, task := range m.runningTasks {
+		tasks = append(tasks, task)
+	}
+	m.mu.RUnlock()
 
 	running := 0
-	for _, task := range m.runningTasks {
+	for _, task := range tasks {
 		task.mu.Lock()
 		status := task.status
 		task.mu.Unlock()

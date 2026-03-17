@@ -116,6 +116,9 @@ func runGateway(cmd *cobra.Command, args []string) {
 	gateway.InitAgentLoop()
 	gateway.InitChannels()
 
+	// 启动 API 服务器（在 InitAgentLoop 之后，以便注入 TaskManager）
+	gateway.StartAPIServer()
+
 	// 启动网关
 	if err := gateway.Start(); err != nil {
 		logger.Fatal("启动网关失败", zap.Error(err))

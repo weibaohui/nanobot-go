@@ -148,10 +148,19 @@ func (t *Task) GetLogs() []string {
 func (t *Task) ToInfo() *Info {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
+	logs := make([]string, len(t.lastLogs))
+	copy(logs, t.lastLogs)
+
 	return &Info{
 		ID:            t.id,
 		Status:        t.status,
 		ResultSummary: t.result,
+		Work:          t.work,
+		Channel:       t.channel,
+		ChatID:        t.chatID,
+		CreatedAt:     t.createdAt,
+		LastLogs:      logs,
 	}
 }
 

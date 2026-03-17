@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	tasksvc "github.com/weibaohui/nanobot-go/internal/service/task"
 	"go.uber.org/zap"
 )
 
@@ -17,14 +18,24 @@ type HealthResponse struct {
 
 // Server API 服务器
 type Server struct {
-	handler *Handler
-	server  *http.Server
-	logger  *zap.Logger
-	router  *gin.Engine
+	handler   *Handler
+	server    *http.Server
+	logger    *zap.Logger
+	router    *gin.Engine
+	providers *Providers
 }
 
 // NewServer 创建 API 服务器
 func NewServer(addr string, providers *Providers, logger *zap.Logger) *Server {
+	// 创建 TaskService（优先复用已注入的 TaskService，否则从 TaskManager 创建）
+	var taskService TaskService
+	if providers.TaskService != nil {
+		taskService = providers.TaskService
+	} else if providers.TaskManager != nil {
+		taskService = tasksvc.NewService(providers.TaskManager)
+		providers.TaskService = taskService
+	}
+
 	handler := NewHandler(
 		providers.UserService,
 		providers.AgentService,
@@ -39,6 +50,7 @@ func NewServer(addr string, providers *Providers, logger *zap.Logger) *Server {
 		providers.SessionManager,
 		providers.MCPService,
 		providers.SkillService,
+		taskService,
 	)
 
 	// 创建 Gin 路由
@@ -71,10 +83,11 @@ func NewServer(addr string, providers *Providers, logger *zap.Logger) *Server {
 	}
 
 	return &Server{
-		handler: handler,
-		server:  server,
-		logger:  logger,
-		router:  router,
+		handler:   handler,
+		server:    server,
+		logger:    logger,
+		router:    router,
+		providers: providers,
 	}
 }
 

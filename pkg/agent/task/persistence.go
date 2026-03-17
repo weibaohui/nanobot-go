@@ -98,6 +98,11 @@ func (p *Persistence) LoadTodayCompletedTasks() ([]*Info, error) {
 				ID:            pt.ID,
 				Status:        pt.Status,
 				ResultSummary: pt.Result,
+				Work:          pt.Work,
+				Channel:       pt.Channel,
+				ChatID:        pt.ChatID,
+				CreatedAt:     pt.CreatedAt,
+				CompletedAt:   pt.CompletedAt,
 			})
 		}
 	}
@@ -129,6 +134,11 @@ func (p *Persistence) LoadTaskFromFile(taskID string) (*Info, error) {
 					ID:            pt.ID,
 					Status:        pt.Status,
 					ResultSummary: pt.Result,
+					Work:          pt.Work,
+					Channel:       pt.Channel,
+					ChatID:        pt.ChatID,
+					CreatedAt:     pt.CreatedAt,
+					CompletedAt:   pt.CompletedAt,
 				}, nil
 			}
 		}

@@ -2,6 +2,7 @@ package api
 
 import (
 	"github.com/weibaohui/nanobot-go/pkg/agent/provider"
+	"github.com/weibaohui/nanobot-go/pkg/agent/task"
 	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/internal/repository"
 	"github.com/weibaohui/nanobot-go/internal/service"
@@ -10,6 +11,7 @@ import (
 	ms "github.com/weibaohui/nanobot-go/internal/service/memory"
 	mcpsvc "github.com/weibaohui/nanobot-go/internal/service/mcp"
 	skillsvc "github.com/weibaohui/nanobot-go/internal/service/skill"
+	tasksvc "github.com/weibaohui/nanobot-go/internal/service/task"
 	memservice "github.com/weibaohui/nanobot-go/internal/memory/service"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -43,6 +45,8 @@ type Providers struct {
 	AgentMCPBindingRepo       repository.AgentMCPBindingRepository
 	MCPService                mcpsvc.Service
 	SkillService              skillsvc.Service
+	TaskManager               *task.Manager
+	TaskService               tasksvc.Service
 }
 
 // NewProviders 创建所有服务和仓库
