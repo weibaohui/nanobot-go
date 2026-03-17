@@ -79,27 +79,23 @@ func (t *MCPTool) InvokableRun(ctx context.Context, argumentsInJSON string, opts
 		zap.Any("params", params),
 	)
 
-	// TODO: 实现实际的 MCP 工具调用
-	// 这里需要：
-	// 1. 创建 MCP 客户端
-	// 2. 调用 Server 的 tools/call 方法
-	// 3. 返回结果
-
-	// 目前返回模拟结果
-	result := map[string]interface{}{
-		"server_code": t.serverCode,
-		"tool_name":   t.toolName,
-		"params":      params,
-		"status":      "success",
-		"message":     fmt.Sprintf("MCP 工具 '%s' 执行成功 (模拟)", t.toolName),
-	}
-
-	resultJSON, err := json.MarshalIndent(result, "", "  ")
+	// 调用 MCP 服务执行工具
+	result, err := t.mcpService.ExecuteTool(t.serverID, t.toolName, params)
 	if err != nil {
-		return "", err
+		t.logger.Error("MCP 工具执行失败",
+			zap.String("server_code", t.serverCode),
+			zap.String("tool_name", t.toolName),
+			zap.Error(err),
+		)
+		return "", fmt.Errorf("MCP 工具 '%s' 执行失败: %w", t.toolName, err)
 	}
 
-	return string(resultJSON), nil
+	t.logger.Info("MCP 工具执行成功",
+		zap.String("server_code", t.serverCode),
+		zap.String("tool_name", t.toolName),
+	)
+
+	return result, nil
 }
 
 // buildParams 构建参数定义

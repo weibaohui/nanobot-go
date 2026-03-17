@@ -118,6 +118,9 @@ type Service interface {
 
 	// 获取 Agent 绑定的 MCP Servers（包含 auto_load 信息）
 	GetAgentMCPServersWithBinding(agentCode string) ([]AgentMCPServerInfo, error)
+
+	// 执行 MCP 工具
+	ExecuteTool(serverID uint, toolName string, params map[string]interface{}) (string, error)
 }
 
 // AgentMCPServerInfo Agent 绑定的 MCP Server 信息（包含绑定配置）
