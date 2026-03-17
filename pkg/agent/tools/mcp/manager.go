@@ -207,11 +207,19 @@ type MCPToolInfo struct {
 }
 
 // ExecuteTool 执行 MCP 工具
+// 如果 Server 未加载，会自动加载
 func (m *Manager) ExecuteTool(ctx context.Context, serverCode, toolName string, params map[string]interface{}) (string, error) {
 	// 检查 Server 是否已加载
 	server := m.GetLoadedServer(serverCode)
 	if server == nil {
-		return "", fmt.Errorf("MCP Server '%s' 未加载，请先调用 use_mcp 加载", serverCode)
+		// 自动加载 Server
+		m.logger.Info("MCP Server 未加载，正在自动加载", zap.String("server_code", serverCode))
+		var err error
+		server, err = m.LoadServer(serverCode)
+		if err != nil {
+			return "", fmt.Errorf("自动加载 MCP Server '%s' 失败: %w", serverCode, err)
+		}
+		m.logger.Info("MCP Server 自动加载成功", zap.String("server_code", serverCode))
 	}
 
 	// 查找工具

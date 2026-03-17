@@ -31,7 +31,7 @@ func (t *CallMCPTool) Name() string {
 func (t *CallMCPTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "call_mcp_tool",
-		Desc: "调用已加载的 MCP Server 中的工具。在调用 use_mcp 加载 Server 后，使用此工具执行具体的 MCP 工具。",
+		Desc: "调用 MCP Server 中的工具。如果 Server 未加载，会自动加载后再执行。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"server_code": {
 				Type:     schema.String,
