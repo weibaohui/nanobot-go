@@ -132,3 +132,16 @@ func (m *MCPServer) IsHTTP() bool {
 func (m *MCPServer) IsSSE() bool {
 	return m.TransportType == "sse"
 }
+
+// MarshalJSON 自定义 JSON 序列化
+// 将 Capabilities 字符串字段解析为数组输出
+func (m *MCPServer) MarshalJSON() ([]byte, error) {
+	type Alias MCPServer
+	return json.Marshal(&struct {
+		Capabilities []MCPTool `json:"capabilities,omitempty"`
+		*Alias
+	}{
+		Capabilities: m.GetCapabilities(),
+		Alias:        (*Alias)(m),
+	})
+}

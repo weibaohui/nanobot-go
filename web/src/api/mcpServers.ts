@@ -4,7 +4,7 @@ import type { ApiResponse, ListResponse, MCPServer, CreateMCPServerRequest, Upda
 export const mcpServersApi = {
   // 获取 MCP Server 列表
   list: () =>
-    client.get<any, ApiResponse<ListResponse<MCPServer>>>('/mcp-servers'),
+    client.get<any, ListResponse<MCPServer>>('/mcp-servers'),
 
   // 获取单个 MCP Server
   get: (id: number) =>
@@ -30,9 +30,13 @@ export const mcpServersApi = {
   refreshCapabilities: (id: number) =>
     client.post<any, ApiResponse<void>>(`/mcp-servers/${id}/refresh`),
 
+  // 获取 MCP Server 的工具列表
+  listTools: (id: number) =>
+    client.get<any, ListResponse<MCPTool>>(`/mcp-servers/${id}/tools`),
+
   // 获取 Agent 的 MCP 绑定列表
   getAgentBindings: (agentId: number) =>
-    client.get<any, ApiResponse<ListResponse<AgentMCPBinding>>>(`/agents/${agentId}/mcp-bindings`),
+    client.get<any, ListResponse<AgentMCPBinding>>(`/agents/${agentId}/mcp-bindings`),
 
   // 创建 Agent MCP 绑定
   createAgentBinding: (agentId: number, data: CreateAgentMCPBindingRequest) =>

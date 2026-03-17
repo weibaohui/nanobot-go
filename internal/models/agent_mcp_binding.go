@@ -13,7 +13,7 @@ type AgentMCPBinding struct {
 
 	// 绑定配置
 	EnabledTools string `gorm:"type:text" json:"enabled_tools"` // 启用的工具列表 JSON (null 表示全部启用)
-	IsEnabled    bool   `gorm:"default:true" json:"is_enabled"`   // 是否启用该 MCP 服务器
+	IsActive     bool   `gorm:"default:true" json:"is_active"`    // 是否启用该 MCP 服务器
 
 	// 关联模型
 	Agent     Agent     `gorm:"foreignKey:AgentID" json:"agent,omitempty"`
@@ -58,7 +58,7 @@ func (b *AgentMCPBinding) SetEnabledTools(tools []string) error {
 
 // IsToolEnabled 检查指定工具是否启用
 func (b *AgentMCPBinding) IsToolEnabled(toolName string) bool {
-	if !b.IsEnabled {
+	if !b.IsActive {
 		return false
 	}
 	enabledTools := b.GetEnabledTools()

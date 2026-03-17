@@ -30,8 +30,8 @@ const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     // 如果已登录但没有用户信息，获取当前用户信息
     if (authenticated && !getCurrentUserCode()) {
       authApi.me().then((res: any) => {
-        if (res.data) {
-          setCurrentUser(res.data);
+        if (res) {
+          setCurrentUser(res);
         }
       }).catch(() => {
         // 获取失败不处理，后续请求会因为没有 user_code 而失败

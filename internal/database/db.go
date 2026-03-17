@@ -162,8 +162,13 @@ func (c *Client) InitSchema() error {
 	}
 
 	// 自动迁移 MCP 相关表
-	if err := c.db.AutoMigrate(&models.MCPServer{}, &models.AgentMCPBinding{}); err != nil {
+	if err := c.db.AutoMigrate(&models.MCPServer{}, &models.AgentMCPBinding{}, &models.MCPToolModel{}, &models.MCPToolLog{}); err != nil {
 		return fmt.Errorf("创建 MCP 表失败: %w", err)
+	}
+
+	// 迁移：将 agent_mcp_bindings 表的 is_enabled 列重命名为 is_active
+	if err := c.migrateAgentMCPBindingColumn(); err != nil {
+		return fmt.Errorf("迁移 agent_mcp_bindings 表列失败: %w", err)
 	}
 
 	// 创建索引
@@ -195,6 +200,26 @@ func (c *Client) InitSchema() error {
 	for _, indexSQL := range indexes {
 		if err := c.db.Exec(indexSQL).Error; err != nil {
 			return fmt.Errorf("创建索引失败: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// migrateAgentMCPBindingColumn 迁移 agent_mcp_bindings 表的列
+// 将 is_enabled 重命名为 is_active
+func (c *Client) migrateAgentMCPBindingColumn() error {
+	// 使用 GORM Migrator 检查列是否存在
+	migrator := c.db.Migrator()
+
+	// 检查是否存在旧的 is_enabled 列
+	hasOldColumn := migrator.HasColumn(&models.AgentMCPBinding{}, "IsEnabled")
+	hasNewColumn := migrator.HasColumn(&models.AgentMCPBinding{}, "IsActive")
+
+	if hasOldColumn && !hasNewColumn {
+		// SQLite 支持 RENAME COLUMN
+		if err := c.db.Exec("ALTER TABLE agent_mcp_bindings RENAME COLUMN is_enabled TO is_active").Error; err != nil {
+			return fmt.Errorf("重命名列失败: %w", err)
 		}
 	}
 
