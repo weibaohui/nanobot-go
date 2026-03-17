@@ -124,25 +124,30 @@ func (t *UseMCPTool) handleLoad(serverCode string) (string, error) {
 		return string(resultJSON), nil
 	}
 
-	// 构建返回结果
-	tools := make([]map[string]string, 0, len(loaded.Tools))
+	// 构建返回结果 - 包含工具详细信息（供大模型了解如何使用）
+	tools := make([]map[string]interface{}, 0, len(loaded.Tools))
 	for _, t := range loaded.Tools {
 		if mcpTool, ok := t.(*MCPTool); ok {
-			tools = append(tools, map[string]string{
+			toolInfo := map[string]interface{}{
 				"name":        mcpTool.toolName,
-				"full_name":   mcpTool.Name(),
 				"description": mcpTool.description,
-			})
+				"input_schema": mcpTool.inputSchema,
+			}
+			tools = append(tools, toolInfo)
 		}
 	}
 
 	result := map[string]interface{}{
-		"success":      true,
-		"server_code":  loaded.Code,
-		"server_name":  loaded.Name,
-		"message":      fmt.Sprintf("MCP Server '%s' 加载成功，包含 %d 个工具", loaded.Name, len(loaded.Tools)),
-		"tools":        tools,
-		"tool_count":   len(loaded.Tools),
+		"success":     true,
+		"server_code": loaded.Code,
+		"server_name": loaded.Name,
+		"message": fmt.Sprintf("MCP Server '%s' 加载成功，包含 %d 个工具。"+
+			"现在你可以使用 call_mcp_tool 工具调用这些工具。"+
+			"示例：call_mcp_tool(server_code='%s', tool_name='工具名', params={...})",
+			loaded.Name, len(loaded.Tools), loaded.Code),
+		"tools":      tools,
+		"tool_count": len(loaded.Tools),
+		"usage":      "使用 call_mcp_tool(server_code, tool_name, params) 调用工具",
 	}
 
 	resultJSON, _ := json.MarshalIndent(result, "", "  ")

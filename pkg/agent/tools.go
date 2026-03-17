@@ -76,7 +76,8 @@ func (l *Loop) registerDefaultTools() {
 	// 注册 use_mcp 工具（用于按需加载 MCP Server）
 	if l.mcpManager != nil {
 		l.tools.Register(mcp.NewUseMCPTool(l.mcpManager))
-		l.logger.Info("use_mcp 工具已注册")
+		l.tools.Register(mcp.NewCallMCPTool(l.mcpManager))
+		l.logger.Info("MCP 工具已注册", zap.Strings("tools", []string{"use_mcp", "call_mcp_tool"}))
 	}
 }
 
