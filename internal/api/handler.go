@@ -207,6 +207,7 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 			mcpServers.DELETE("/:id", h.deleteMCPServer)
 			mcpServers.POST("/:id/test", h.testMCPServer)
 			mcpServers.POST("/:id/refresh", h.refreshMCPServerCapabilities)
+			mcpServers.GET("/:id/tools", h.listMCPTools)
 		}
 
 		// Agent MCP Binding API - 使用 :id 保持与现有路由一致
@@ -246,6 +247,7 @@ type MCPService interface {
 	DeleteServer(id uint) error
 	TestServer(id uint) error
 	RefreshCapabilities(id uint) error
+	ListTools(serverID uint) ([]models.MCPToolModel, error)
 
 	GetAgentBindings(agentID uint) ([]models.AgentMCPBinding, error)
 	CreateAgentBinding(agentID uint, req mcpsvc.CreateAgentMCPBindingRequest) (*models.AgentMCPBinding, error)

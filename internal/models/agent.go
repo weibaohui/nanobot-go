@@ -28,6 +28,7 @@ type Agent struct {
 	// 能力配置
 	SkillsList string `gorm:"type:text" json:"skills_list"` // 可用技能列表，JSON 数组
 	ToolsList  string `gorm:"type:text" json:"tools_list"`  // 可用工具列表，JSON 数组
+	MCPList    string `gorm:"type:text" json:"mcp_list"`    // 可用MCP列表，JSON 数组
 
 	// 模型配置
 	Model         string  `gorm:"type:text" json:"model"`
@@ -70,4 +71,16 @@ func (a *Agent) GetAvailableTools() []string {
 		return nil
 	}
 	return tools
+}
+
+// GetAvailableMCPs 获取可用MCP列表
+func (a *Agent) GetAvailableMCPs() []string {
+	if a.MCPList == "" || a.MCPList == "null" {
+		return nil
+	}
+	var mcps []string
+	if err := json.Unmarshal([]byte(a.MCPList), &mcps); err != nil {
+		return nil
+	}
+	return mcps
 }

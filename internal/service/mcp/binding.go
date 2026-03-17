@@ -39,7 +39,7 @@ func (s *service) CreateAgentBinding(agentID uint, req CreateAgentMCPBindingRequ
 	binding := &models.AgentMCPBinding{
 		AgentID:     agentID,
 		MCPServerID: req.MCPServerID,
-		IsEnabled:   true,
+		IsActive:    true,
 	}
 
 	// 设置启用的工具
@@ -49,8 +49,8 @@ func (s *service) CreateAgentBinding(agentID uint, req CreateAgentMCPBindingRequ
 		}
 	}
 
-	if req.IsEnabled != nil {
-		binding.IsEnabled = *req.IsEnabled
+	if req.IsActive != nil {
+		binding.IsActive = *req.IsActive
 	}
 
 	if err := s.agentMCPBindingRepo.Create(binding); err != nil {
@@ -90,8 +90,8 @@ func (s *service) UpdateAgentBinding(bindingID uint, req UpdateAgentMCPBindingRe
 			}
 		}
 	}
-	if req.IsEnabled != nil {
-		binding.IsEnabled = *req.IsEnabled
+	if req.IsActive != nil {
+		binding.IsActive = *req.IsActive
 	}
 
 	binding.UpdatedAt = time.Now()
@@ -139,7 +139,7 @@ func (s *service) GetAgentMCPTools(agentCode string) ([]AgentMCPToolInfo, error)
 
 	var tools []AgentMCPToolInfo
 	for _, binding := range bindings {
-		if !binding.IsEnabled {
+		if !binding.IsActive {
 			continue
 		}
 

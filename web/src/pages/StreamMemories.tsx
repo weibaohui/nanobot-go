@@ -84,7 +84,7 @@ const StreamMemories: React.FC = () => {
     try {
       const dateStr = upgradeDate.format('YYYY-MM-DD');
       const res = await streamMemoriesApi.upgrade(dateStr);
-      message.success(res.data?.message || '记忆升级成功');
+      message.success((res as any).Message || '记忆升级成功');
       setUpgradeModalVisible(false);
       fetchMemories();
     } catch (error: any) {

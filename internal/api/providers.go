@@ -97,7 +97,9 @@ func NewProviders(db *gorm.DB, cfg *config.Config, logger *zap.Logger) *Provider
 	// 创建 MCP 相关 repository 和 service
 	mcpServerRepo := repository.NewMCPServerRepository(db)
 	agentMCPBindingRepo := repository.NewAgentMCPBindingRepository(db)
-	mcpService := mcpsvc.NewService(mcpServerRepo, agentMCPBindingRepo, agentRepo)
+	mcpToolRepo := repository.NewMCPToolRepository(db)
+	mcpToolLogRepo := repository.NewMCPToolLogRepository(db)
+	mcpService := mcpsvc.NewService(mcpServerRepo, agentMCPBindingRepo, agentRepo, mcpToolRepo, mcpToolLogRepo)
 
 	// 创建 Skill service
 	skillService := skillsvc.NewService(cfg.Agents.Defaults.Workspace, agentRepo)

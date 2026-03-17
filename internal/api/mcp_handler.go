@@ -233,6 +233,26 @@ func (h *Handler) deleteAgentMCPBinding(c *gin.Context) {
 	c.JSON(http.StatusOK, SuccessResponse{Message: "binding deleted"})
 }
 
+// listMCPTools 获取指定 MCP 服务器的工具列表
+func (h *Handler) listMCPTools(c *gin.Context) {
+	id, ok := parseID(c, "id")
+	if !ok {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid mcp server id"})
+		return
+	}
+
+	tools, err := h.mcpService.ListTools(uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, ListResponse{
+		Items: tools,
+		Total: int64(len(tools)),
+	})
+}
+
 // getAgentMCPTools 获取 Agent 可用的 MCP 工具
 func (h *Handler) getAgentMCPTools(c *gin.Context) {
 	agentCode := c.Param("id")

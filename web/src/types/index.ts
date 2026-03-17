@@ -39,6 +39,7 @@ export interface Agent {
   memory_summary?: string;
   skills_list?: string;
   tools_list?: string;
+  mcp_list?: string;
   model_selection_mode: 'auto' | 'specific';
   model_id?: string;
   model_name?: string;
@@ -68,6 +69,7 @@ export interface CreateAgentRequest {
   max_iterations?: number;
   skills_list?: string[];
   tools_list?: string[];
+  mcp_list?: string[];
   is_default?: boolean;
   enable_thinking_process?: boolean;
 }
@@ -418,5 +420,30 @@ export interface Task {
 }
 
 export interface TaskDetail extends Task {
-  logs?: string[];
+  logs: string[];
+}
+
+
+// MCP Server Tool 列表项 (用于展示)
+export interface MCPToolItem {
+  id: number;
+  mcp_server_id: number;
+  name: string;
+  description: string;
+  input_schema?: Record<string, any> | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// MCP Tool 调用日志
+export interface MCPToolLog {
+  id: number;
+  session_key: string;
+  mcp_server_id: number;
+  tool_name: string;
+  parameters?: Record<string, any>;
+  result?: string;
+  error_message?: string;
+  execute_time: number;
+  created_at: string;
 }

@@ -15,6 +15,7 @@ import {
   Typography,
   Descriptions,
   Tooltip,
+  Collapse,
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, ApiOutlined, ReloadOutlined } from '@ant-design/icons';
 import { mcpServersApi } from '../api';
@@ -48,12 +49,28 @@ const MCPServers: React.FC = () => {
   const [form] = Form.useForm();
   const [testingId, setTestingId] = useState<number | null>(null);
   const [refreshingId, setRefreshingId] = useState<number | null>(null);
+  const [toolCounts, setToolCounts] = useState<Record<number, number>>({});
 
   const fetchServers = async () => {
     setLoading(true);
     try {
       const res = await mcpServersApi.list();
-      setServers((res.data?.items || []) as MCPServer[]);
+      const serverList = (res.items || []) as MCPServer[];
+      setServers(serverList);
+
+      // 获取每个服务器的工具数量
+      const counts: Record<number, number> = {};
+      await Promise.all(
+        serverList.map(async (server) => {
+          try {
+            const toolsRes = await mcpServersApi.listTools(server.id);
+            counts[server.id] = toolsRes.items?.length || 0;
+          } catch {
+            counts[server.id] = 0;
+          }
+        })
+      );
+      setToolCounts(counts);
     } catch (error) {
       message.error('获取 MCP Server 列表失败');
     } finally {
@@ -240,7 +257,7 @@ const MCPServers: React.FC = () => {
       width: screens.xs ? 60 : 80,
       align: 'center',
       render: (_: any, record: MCPServer) => {
-        const count = record.capabilities?.length || 0;
+        const count = toolCounts[record.id] ?? 0;
         return <Tag color={count > 0 ? 'blue' : 'default'}>{count}</Tag>;
       },
     },
@@ -516,24 +533,33 @@ const MCPServers: React.FC = () => {
 
         {selectedServer?.capabilities && selectedServer.capabilities.length > 0 && (
           <div style={{ marginTop: 24 }}>
-            <Title level={5}>可用工具</Title>
-            <Space direction="vertical" style={{ width: '100%' }}>
-              {selectedServer.capabilities.map((tool) => (
-                <Card
-                  key={tool.name}
-                  size="small"
-                  title={tool.name}
-                  style={{ width: '100%' }}
-                >
-                  <p>{tool.description || '无描述'}</p>
-                  {tool.input_schema && (
-                    <pre style={{ fontSize: '11px', background: '#f5f5f5', padding: 8 }}>
-                      {JSON.stringify(tool.input_schema, null, 2)}
-                    </pre>
-                  )}
-                </Card>
-              ))}
-            </Space>
+            <Collapse
+              items={[
+                {
+                  key: 'tools',
+                  label: `可用工具 (${selectedServer.capabilities.length})`,
+                  children: (
+                    <Space direction="vertical" style={{ width: '100%' }}>
+                      {selectedServer.capabilities.map((tool) => (
+                        <Card
+                          key={tool.name}
+                          size="small"
+                          title={tool.name}
+                          style={{ width: '100%' }}
+                        >
+                          <p>{tool.description || '无描述'}</p>
+                          {tool.input_schema && (
+                            <pre style={{ fontSize: '11px', background: '#f5f5f5', padding: 8 }}>
+                              {JSON.stringify(tool.input_schema, null, 2)}
+                            </pre>
+                          )}
+                        </Card>
+                      ))}
+                    </Space>
+                  ),
+                },
+              ]}
+            />
           </div>
         )}
       </Modal>
