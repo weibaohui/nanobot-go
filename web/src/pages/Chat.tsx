@@ -221,7 +221,22 @@ const Chat: React.FC = () => {
     }
   };
 
+  // IME 组合状态跟踪（处理中英文输入法候选词选择问题）
+  const isComposingRef = useRef(false);
+
+  const handleCompositionStart = () => {
+    isComposingRef.current = true;
+  };
+
+  const handleCompositionEnd = () => {
+    isComposingRef.current = false;
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // 在 IME 组合过程中不处理 Enter 键
+    if (isComposingRef.current) {
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -432,6 +447,8 @@ const Chat: React.FC = () => {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
+            onCompositionStart={handleCompositionStart}
+            onCompositionEnd={handleCompositionEnd}
             placeholder={
               channels.length === 0
                 ? '请先创建一个 WebSocket 渠道'
