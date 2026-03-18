@@ -128,7 +128,8 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 				h.handleSessionByKey(c)
 			})
 			sessions.POST("/:id/cancel", h.cancelSession)
-		}
+		sessions.GET("/:id/active", h.checkSessionActive)
+	}
 
 		// Provider API
 		providers := authorized.Group("/providers")

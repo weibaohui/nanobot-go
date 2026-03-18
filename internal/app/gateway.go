@@ -11,13 +11,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/weibaohui/nanobot-go/config"
+	"github.com/weibaohui/nanobot-go/internal/api"
+	"github.com/weibaohui/nanobot-go/internal/models"
 	"github.com/weibaohui/nanobot-go/pkg/agent"
 	"github.com/weibaohui/nanobot-go/pkg/agent/provider"
 	"github.com/weibaohui/nanobot-go/pkg/bus"
 	"github.com/weibaohui/nanobot-go/pkg/channels"
-	"github.com/weibaohui/nanobot-go/config"
-	"github.com/weibaohui/nanobot-go/internal/api"
-	"github.com/weibaohui/nanobot-go/internal/models"
 	"github.com/weibaohui/nanobot-go/pkg/session"
 	"go.uber.org/zap"
 )
@@ -217,13 +217,15 @@ func (g *Gateway) Start() error {
 
 	// 启动 Agent 循环
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		if err := g.Loop.Run(ctx); err != nil {
-			g.Logger.Error("代理循环错误", zap.Error(err))
-		}
-	}()
+	if g.Loop != nil {
+		wg.Go(func() {
+			if err := g.Loop.Run(ctx); err != nil {
+				g.Logger.Error("代理循环错误", zap.Error(err))
+			}
+		})
+	} else {
+		g.Logger.Warn("Agent Loop 未初始化，跳过消息处理")
+	}
 
 	// 等待信号
 	sigChan := make(chan os.Signal, 1)

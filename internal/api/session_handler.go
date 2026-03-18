@@ -194,6 +194,15 @@ func (h *Handler) cancelSession(c *gin.Context) {
 		return
 	}
 
+	// 先检查会话是否在执行中
+	if !h.sessionManager.IsSessionActive(sessionKey) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "会话不在执行中，无法取消",
+		})
+		return
+	}
+
 	success := h.sessionManager.CancelSession(sessionKey)
 	if !success {
 		c.JSON(http.StatusNotFound, gin.H{
@@ -205,5 +214,25 @@ func (h *Handler) cancelSession(c *gin.Context) {
 
 	c.JSON(http.StatusOK, SuccessResponse{
 		Message: "会话已取消",
+	})
+}
+
+// checkSessionActive 检查会话是否活跃（正在执行中）
+func (h *Handler) checkSessionActive(c *gin.Context) {
+	sessionKey := c.Param("id")
+	if sessionKey == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "session key is required"})
+		return
+	}
+
+	if h.sessionManager == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "session manager not available"})
+		return
+	}
+
+	isActive := h.sessionManager.IsSessionActive(sessionKey)
+	c.JSON(http.StatusOK, gin.H{
+		"session_key": sessionKey,
+		"is_active":   isActive,
 	})
 }

@@ -38,4 +38,7 @@ export const sessionsApi = {
 
   // 取消正在执行的会话
   cancel: (sessionKey: string) => client.post(`/sessions/${sessionKey}/cancel`),
+
+  // 检查会话是否活跃（正在执行中）
+  checkActive: (sessionKey: string) => client.get(`/sessions/${sessionKey}/active`),
 };
