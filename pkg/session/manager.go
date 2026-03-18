@@ -10,20 +10,11 @@ import (
 	"go.uber.org/zap"
 )
 
-// Message 会话消息
-type Message struct {
-	Role         string    `json:"role"`
-	Content      string    `json:"content"`
-	Timestamp    time.Time `json:"timestamp"`
-	TraceID      string    `json:"trace_id,omitempty"`       // 链路追踪 ID
-	SpanID       string    `json:"span_id,omitempty"`        // 跨度 ID
-	ParentSpanID string    `json:"parent_span_id,omitempty"` // 父跨度 ID
-}
-
 // Session 会话
+// 职责：管理会话的运行时状态（context 取消控制）
+// 消息存储已移至 conversation_records 表，不再在内存中缓存
 type Session struct {
 	Key       string    `json:"key"`
-	Messages  []Message `json:"messages"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 
@@ -31,35 +22,6 @@ type Session struct {
 	cancel context.CancelFunc `json:"-"` // context 取消函数
 	ctx    context.Context    `json:"-"` // 当前会话的 context
 	mu     sync.RWMutex       `json:"-"` // 保护 context 相关字段
-}
-
-// AddMessage 添加消息到会话
-func (s *Session) AddMessage(role, content string) {
-	s.Messages = append(s.Messages, Message{
-		Role:      role,
-		Content:   content,
-		Timestamp: time.Now(),
-	})
-	s.UpdatedAt = time.Now()
-}
-
-// AddMessageWithTrace 添加消息到会话（带链路追踪信息）
-func (s *Session) AddMessageWithTrace(role, content, traceID, spanID, parentSpanID string) {
-	s.Messages = append(s.Messages, Message{
-		Role:         role,
-		Content:      content,
-		Timestamp:    time.Now(),
-		TraceID:      traceID,
-		SpanID:       spanID,
-		ParentSpanID: parentSpanID,
-	})
-	s.UpdatedAt = time.Now()
-}
-
-// Clear 清空会话消息
-func (s *Session) Clear() {
-	s.Messages = nil
-	s.UpdatedAt = time.Now()
 }
 
 // SetContext 设置会话的 context 和 cancel 函数
