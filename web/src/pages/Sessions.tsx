@@ -19,8 +19,8 @@ import {
   ThunderboltOutlined,
   ClockCircleOutlined,
 } from '@ant-design/icons';
-import { sessionsApi, getCurrentUserCode } from '../api';
-import type { Session } from '../types';
+import { sessionsApi, getCurrentUserCode, usersApi, channelsApi, agentsApi } from '../api';
+import type { Session, User, Channel, Agent } from '../types';
 
 const Sessions: React.FC = () => {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -29,6 +29,33 @@ const Sessions: React.FC = () => {
   const [searchKey, setSearchKey] = useState('');
   const [detailVisible, setDetailVisible] = useState(false);
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
+
+  // 名称映射
+  const [usersMap, setUsersMap] = useState<Record<string, string>>({});
+  const [channelsMap, setChannelsMap] = useState<Record<string, string>>({});
+  const [agentsMap, setAgentsMap] = useState<Record<string, string>>({});
+
+  // 获取用户、渠道、Agent 列表用于名称映射
+  const fetchNameMaps = async () => {
+    try {
+      const currentUserCode = getCurrentUserCode();
+      const [usersRes, channelsRes, agentsRes] = await Promise.all([
+        usersApi.list().catch(() => ({ items: [] })),
+        channelsApi.list(currentUserCode).catch(() => ({ items: [] })),
+        agentsApi.list().catch(() => ({ items: [] })),
+      ]);
+
+      const users = (usersRes as any)?.items || [];
+      const channels = (channelsRes as any)?.items || [];
+      const agents = (agentsRes as any)?.items || [];
+
+      setUsersMap(Object.fromEntries(users.map((u: User) => [u.user_code, u.display_name || u.username])));
+      setChannelsMap(Object.fromEntries(channels.map((c: Channel) => [c.channel_code, c.name])));
+      setAgentsMap(Object.fromEntries(agents.map((a: Agent) => [a.agent_code, a.name])));
+    } catch (error) {
+      console.error('获取名称映射失败', error);
+    }
+  };
 
   const fetchSessions = async () => {
     setLoading(true);
@@ -77,6 +104,7 @@ const Sessions: React.FC = () => {
   };
 
   useEffect(() => {
+    fetchNameMaps();
     fetchSessions();
     // 每30秒自动刷新一次列表
     const timer = setInterval(fetchSessions, 30000);
@@ -131,18 +159,48 @@ const Sessions: React.FC = () => {
     {
       title: '用户',
       dataIndex: 'user_code',
-      width: 120,
+      width: 150,
+      render: (code: string) => {
+        const name = usersMap[code];
+        return name ? (
+          <Tooltip title={code}>
+            <span>{name}</span>
+          </Tooltip>
+        ) : (
+          <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{code}</span>
+        );
+      },
     },
     {
       title: '渠道',
       dataIndex: 'channel_code',
-      width: 120,
+      width: 150,
+      render: (code: string) => {
+        const name = channelsMap[code];
+        return name ? (
+          <Tooltip title={code}>
+            <span>{name}</span>
+          </Tooltip>
+        ) : (
+          <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{code}</span>
+        );
+      },
     },
     {
       title: 'Agent',
       dataIndex: 'agent_code',
-      width: 120,
-      render: (code?: string) => code || '-',
+      width: 150,
+      render: (code?: string) => {
+        if (!code) return '-';
+        const name = agentsMap[code];
+        return name ? (
+          <Tooltip title={code}>
+            <span>{name}</span>
+          </Tooltip>
+        ) : (
+          <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{code}</span>
+        );
+      },
     },
     {
       title: '状态',
@@ -272,9 +330,9 @@ const Sessions: React.FC = () => {
             </pre>
 
             <p><strong>用户信息:</strong></p>
-            <p>用户代码: {selectedSession.user_code}</p>
-            <p>渠道代码: {selectedSession.channel_code}</p>
-            <p>Agent代码: {selectedSession.agent_code || '-'}</p>
+            <p>用户: {usersMap[selectedSession.user_code] || selectedSession.user_code} <Tag>{selectedSession.user_code}</Tag></p>
+            <p>渠道: {channelsMap[selectedSession.channel_code] || selectedSession.channel_code} <Tag>{selectedSession.channel_code}</Tag></p>
+            <p>Agent: {selectedSession.agent_code ? (agentsMap[selectedSession.agent_code] || selectedSession.agent_code) : '-'} {selectedSession.agent_code && <Tag>{selectedSession.agent_code}</Tag>}</p>
 
             <p><strong>时间信息:</strong></p>
             <p>创建时间: {formatTime(selectedSession.created_at)}</p>
