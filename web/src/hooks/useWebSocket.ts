@@ -78,9 +78,12 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
     setIsConnecting(true);
 
     // 构建 WebSocket URL
+    // 注意：WebSocket 连接的是后端服务器，不是前端开发服务器
+    // 在开发环境中，前端在 5173，后端在 8080
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/ws/chat?channel_code=${channelCode}&token=${token}`;
+    const host = window.location.hostname;
+    const port = '8080'; // 后端端口
+    const wsUrl = `${protocol}//${host}:${port}/ws/chat?channel_code=${channelCode}&token=${token}`;
 
     console.log('[WebSocket] 连接到:', wsUrl);
 
