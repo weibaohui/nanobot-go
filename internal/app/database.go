@@ -3,6 +3,7 @@ package app
 import (
 	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/internal/database"
+	"github.com/weibaohui/nanobot-go/internal/repository"
 	"github.com/weibaohui/nanobot-go/internal/service/conversation"
 	"github.com/weibaohui/nanobot-go/pkg/session"
 	"go.uber.org/zap"
@@ -10,8 +11,9 @@ import (
 
 // DatabaseComponents 数据库相关组件
 type DatabaseComponents struct {
-	DB       *database.Client
-	ConvRepo session.ConversationRecordRepository
+	DB          *database.Client
+	ConvRepo    session.ConversationRecordRepository
+	SessionRepo session.SessionRepository
 }
 
 // InitDatabase 初始化数据库
@@ -35,12 +37,14 @@ func InitDatabase(cfg *config.Config, logger *zap.Logger) *DatabaseComponents {
 	}
 
 	convRepo := conversation.NewRepository(dbClient.DB())
+	sessionRepo := repository.NewSessionRepository(dbClient.DB())
 
 	logger.Info("数据库和对话记录仓库已初始化")
 
 	return &DatabaseComponents{
-		DB:       dbClient,
-		ConvRepo: convRepo,
+		DB:          dbClient,
+		ConvRepo:    convRepo,
+		SessionRepo: sessionRepo,
 	}
 }
 

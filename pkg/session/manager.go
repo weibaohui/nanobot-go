@@ -67,27 +67,42 @@ type ConversationRecordRepository interface {
 	FindBySessionKey(ctx context.Context, sessionKey string, opts *models.QueryOptions) ([]models.ConversationRecord, error)
 }
 
+// SessionRepository 会话仓库接口（用于自动同步到数据库）
+type SessionRepository interface {
+	// GetBySessionKey 根据 session_key 查询会话
+	GetBySessionKey(key string) (*models.Session, error)
+	// Create 创建会话
+	Create(session *models.Session) error
+}
+
 // Manager 会话管理器
 type Manager struct {
-	cfg      *config.Config
-	logger   *zap.Logger
-	cache    map[string]*Session
-	mu       sync.RWMutex
-	convRepo ConversationRecordRepository
+	cfg        *config.Config
+	logger     *zap.Logger
+	cache      map[string]*Session
+	mu         sync.RWMutex
+	convRepo   ConversationRecordRepository
+	sessionRepo SessionRepository
 }
 
 // NewManager 创建会话管理器
-func NewManager(cfg *config.Config, logger *zap.Logger, convRepo ConversationRecordRepository) *Manager {
+func NewManager(cfg *config.Config, logger *zap.Logger, convRepo ConversationRecordRepository, sessionRepo SessionRepository) *Manager {
 	m := &Manager{
-		cfg:      cfg,
-		logger:   logger,
-		cache:    make(map[string]*Session),
-		convRepo: convRepo,
+		cfg:         cfg,
+		logger:      logger,
+		cache:       make(map[string]*Session),
+		convRepo:    convRepo,
+		sessionRepo: sessionRepo,
 	}
 	if convRepo == nil {
 		logger.Warn("SessionManager 创建时 ConvRepo 为 nil，历史记录功能将不可用")
 	} else {
 		logger.Info("SessionManager 创建成功，ConvRepo 已设置")
+	}
+	if sessionRepo == nil {
+		logger.Warn("SessionManager 创建时 SessionRepo 为 nil，会话将不会自动同步到数据库")
+	} else {
+		logger.Info("SessionManager 创建成功，SessionRepo 已设置，会话将自动同步到数据库")
 	}
 	return m
 }
@@ -152,7 +167,13 @@ func (m *Manager) GetHistory(ctx context.Context, sessionKey string, maxMessages
 }
 
 // GetOrCreate 获取或创建会话
-func (m *Manager) GetOrCreate(key string) *Session {
+// 在创建新会话时，如果提供了 userCode 和 channelCode，会自动同步到数据库
+// 参数:
+//   - key: session_key (格式: channel:chat_id)
+//   - userCode: 用户代码（可选，用于数据库同步）
+//   - channelCode: 渠道代码（可选，用于数据库同步）
+//   - agentCode: Agent代码（可选）
+func (m *Manager) GetOrCreate(key, userCode, channelCode, agentCode string) *Session {
 	m.mu.RLock()
 	if session, ok := m.cache[key]; ok {
 		m.mu.RUnlock()
@@ -171,7 +192,52 @@ func (m *Manager) GetOrCreate(key string) *Session {
 	m.cache[key] = session
 	m.mu.Unlock()
 
+	// 自动同步到数据库
+	if m.sessionRepo != nil && userCode != "" && channelCode != "" {
+		go m.syncToDatabase(key, userCode, channelCode, agentCode)
+	}
+
 	return session
+}
+
+// syncToDatabase 将会话同步到数据库（异步）
+func (m *Manager) syncToDatabase(key, userCode, channelCode, agentCode string) {
+	// 先检查数据库是否已存在
+	existing, err := m.sessionRepo.GetBySessionKey(key)
+	if err != nil {
+		m.logger.Error("检查会话是否存在失败",
+			zap.String("session_key", key),
+			zap.Error(err))
+		return
+	}
+	if existing != nil {
+		// 已存在，不需要创建
+		return
+	}
+
+	// 创建新会话记录
+	now := time.Now()
+	session := &models.Session{
+		UserCode:     userCode,
+		ChannelCode:  channelCode,
+		AgentCode:    agentCode,
+		SessionKey:   key,
+		LastActiveAt: &now,
+		CreatedAt:    now,
+	}
+
+	if err := m.sessionRepo.Create(session); err != nil {
+		m.logger.Error("自动同步会话到数据库失败",
+			zap.String("session_key", key),
+			zap.Error(err))
+		return
+	}
+
+	m.logger.Info("会话已自动同步到数据库",
+		zap.String("session_key", key),
+		zap.String("user_code", userCode),
+		zap.String("channel_code", channelCode),
+		zap.String("agent_code", agentCode))
 }
 
 // CancelSession 取消指定会话

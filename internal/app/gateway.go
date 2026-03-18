@@ -66,10 +66,12 @@ func (g *Gateway) InitDatabase() {
 // InitSessionManager 初始化会话管理器
 func (g *Gateway) InitSessionManager() {
 	var convRepo session.ConversationRecordRepository
+	var sessionRepo session.SessionRepository
 	if g.DB != nil {
 		convRepo = g.DB.ConvRepo
+		sessionRepo = g.DB.SessionRepo
 	}
-	g.SessionManager = session.NewManager(g.Config, g.Logger, convRepo)
+	g.SessionManager = session.NewManager(g.Config, g.Logger, convRepo, sessionRepo)
 }
 
 // InitAPI 初始化 API 服务
