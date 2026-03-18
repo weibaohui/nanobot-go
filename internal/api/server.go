@@ -57,6 +57,7 @@ func NewServer(addr string, providers *Providers, logger *zap.Logger) *Server {
 		providers.MCPService,
 		providers.SkillService,
 		taskService,
+		providers.CodeLookupService,
 	)
 
 	// 创建 Gin 路由

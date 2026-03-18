@@ -12,6 +12,13 @@ import (
 	skillsvc "github.com/weibaohui/nanobot-go/internal/service/skill"
 )
 
+// CodeLookupService Code 查询服务接口
+type CodeLookupService interface {
+	GetUserByCode(code string) (*models.User, error)
+	GetChannelByCode(code string) (*models.Channel, error)
+	GetAgentByCode(code string) (*models.Agent, error)
+}
+
 // Handler API 处理器
 type Handler struct {
 	userService               service.UserService
@@ -28,6 +35,7 @@ type Handler struct {
 	mcpService                MCPService
 	skillService              skillsvc.Service
 	taskService               TaskService
+	codeLookupService         CodeLookupService
 }
 
 // NewHandler 创建 API 处理器
@@ -46,6 +54,7 @@ func NewHandler(
 	mcpService MCPService,
 	skillService skillsvc.Service,
 	taskService TaskService,
+	codeLookupService CodeLookupService,
 ) *Handler {
 	return &Handler{
 		userService:               userService,
@@ -62,6 +71,7 @@ func NewHandler(
 		mcpService:                mcpService,
 		skillService:              skillService,
 		taskService:               taskService,
+		codeLookupService:         codeLookupService,
 	}
 }
 

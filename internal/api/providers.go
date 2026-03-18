@@ -47,6 +47,7 @@ type Providers struct {
 	SkillService              skillsvc.Service
 	TaskManager               *task.Manager
 	TaskService               tasksvc.Service
+	CodeLookupService         *codelookup.Service
 }
 
 // NewProviders 创建所有服务和仓库
@@ -124,6 +125,7 @@ func NewProviders(db *gorm.DB, cfg *config.Config, logger *zap.Logger) *Provider
 		AgentMCPBindingRepo:       agentMCPBindingRepo,
 		MCPService:                mcpService,
 		SkillService:              skillService,
+		CodeLookupService:         codeLookupService,
 	}
 }
 

@@ -5,8 +5,72 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/weibaohui/nanobot-go/internal/models"
 	"github.com/weibaohui/nanobot-go/internal/service"
 )
+
+// SessionResponse 带名称的 Session 响应
+type SessionResponse struct {
+	ID          uint   `json:"id"`
+	SessionKey  string `json:"session_key"`
+	UserCode    string `json:"user_code"`
+	ChannelCode string `json:"channel_code"`
+	AgentCode   string `json:"agent_code,omitempty"`
+	ExternalID  string `json:"external_id,omitempty"`
+	Metadata    string `json:"metadata,omitempty"`
+
+	// 名称字段
+	UserName    string `json:"user_name,omitempty"`
+	ChannelName string `json:"channel_name,omitempty"`
+	AgentName   string `json:"agent_name,omitempty"`
+
+	LastActiveAt *string `json:"last_active_at"`
+	CreatedAt    string  `json:"created_at"`
+}
+
+// toSessionResponse 将 Session 转换为包含名称的响应
+func toSessionResponse(session *models.Session, svc CodeLookupService) SessionResponse {
+	resp := SessionResponse{
+		ID:          session.ID,
+		SessionKey:  session.SessionKey,
+		UserCode:    session.UserCode,
+		ChannelCode: session.ChannelCode,
+		AgentCode:   session.AgentCode,
+		ExternalID:  session.ExternalID,
+		Metadata:    session.Metadata,
+		CreatedAt:   session.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+	if session.LastActiveAt != nil {
+		t := session.LastActiveAt.Format("2006-01-02T15:04:05Z07:00")
+		resp.LastActiveAt = &t
+	}
+
+	// 查询用户名称
+	if session.UserCode != "" {
+		if user, err := svc.GetUserByCode(session.UserCode); err == nil && user != nil {
+			resp.UserName = user.DisplayName
+			if resp.UserName == "" {
+				resp.UserName = user.Username
+			}
+		}
+	}
+
+	// 查询渠道名称
+	if session.ChannelCode != "" {
+		if ch, err := svc.GetChannelByCode(session.ChannelCode); err == nil && ch != nil {
+			resp.ChannelName = ch.Name
+		}
+	}
+
+	// 查询 Agent 名称
+	if session.AgentCode != "" {
+		if agent, err := svc.GetAgentByCode(session.AgentCode); err == nil && agent != nil {
+			resp.AgentName = agent.Name
+		}
+	}
+
+	return resp
+}
 
 // handleSessions 处理 /api/v1/sessions
 func (h *Handler) handleSessions(c *gin.Context) {
@@ -55,27 +119,30 @@ func (h *Handler) listSessions(c *gin.Context) {
 	userCode := c.Query("user_code")
 	channelCode := c.Query("channel_code")
 
+	var sessions []models.Session
+	var err error
+
 	if userCode != "" {
-		sessions, err := h.sessionService.GetUserSessions(userCode)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, ListResponse{Items: sessions})
+		sessions, err = h.sessionService.GetUserSessions(userCode)
+	} else if channelCode != "" {
+		sessions, err = h.sessionService.GetChannelSessions(channelCode)
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user_code or channel_code is required"})
 		return
 	}
 
-	if channelCode != "" {
-		sessions, err := h.sessionService.GetChannelSessions(channelCode)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, ListResponse{Items: sessions})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusBadRequest, gin.H{"error": "user_code or channel_code is required"})
+	// 转换为包含名称的响应
+	items := make([]SessionResponse, 0, len(sessions))
+	for i := range sessions {
+		items = append(items, toSessionResponse(&sessions[i], h.codeLookupService))
+	}
+
+	c.JSON(http.StatusOK, ListResponse{Items: items})
 }
 
 // createSession 创建 Session

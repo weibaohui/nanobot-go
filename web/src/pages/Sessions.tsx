@@ -19,48 +19,36 @@ import {
   ThunderboltOutlined,
   ClockCircleOutlined,
 } from '@ant-design/icons';
-import { sessionsApi, getCurrentUserCode, usersApi, channelsApi, agentsApi } from '../api';
-import type { Session, User, Channel, Agent } from '../types';
+import { sessionsApi, getCurrentUserCode } from '../api';
+
+// Session 响应类型（包含后端返回的名称）
+interface SessionWithNames {
+  id: number;
+  session_key: string;
+  user_code: string;
+  channel_code: string;
+  agent_code?: string;
+  external_id?: string;
+  metadata?: Record<string, any>;
+  last_active_at?: string;
+  created_at: string;
+  // 后端返回的名称
+  user_name?: string;
+  channel_name?: string;
+  agent_name?: string;
+}
 
 const Sessions: React.FC = () => {
-  const [sessions, setSessions] = useState<Session[]>([]);
+  const [sessions, setSessions] = useState<SessionWithNames[]>([]);
   const [loading, setLoading] = useState(false);
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [searchKey, setSearchKey] = useState('');
   const [detailVisible, setDetailVisible] = useState(false);
-  const [selectedSession, setSelectedSession] = useState<Session | null>(null);
-
-  // 名称映射
-  const [usersMap, setUsersMap] = useState<Record<string, string>>({});
-  const [channelsMap, setChannelsMap] = useState<Record<string, string>>({});
-  const [agentsMap, setAgentsMap] = useState<Record<string, string>>({});
-
-  // 获取用户、渠道、Agent 列表用于名称映射
-  const fetchNameMaps = async () => {
-    try {
-      const currentUserCode = getCurrentUserCode();
-      const [usersRes, channelsRes, agentsRes] = await Promise.all([
-        usersApi.list().catch(() => ({ items: [] })),
-        channelsApi.list(currentUserCode).catch(() => ({ items: [] })),
-        agentsApi.list().catch(() => ({ items: [] })),
-      ]);
-
-      const users = (usersRes as any)?.items || [];
-      const channels = (channelsRes as any)?.items || [];
-      const agents = (agentsRes as any)?.items || [];
-
-      setUsersMap(Object.fromEntries(users.map((u: User) => [u.user_code, u.display_name || u.username])));
-      setChannelsMap(Object.fromEntries(channels.map((c: Channel) => [c.channel_code, c.name])));
-      setAgentsMap(Object.fromEntries(agents.map((a: Agent) => [a.agent_code, a.name])));
-    } catch (error) {
-      console.error('获取名称映射失败', error);
-    }
-  };
+  const [selectedSession, setSelectedSession] = useState<SessionWithNames | null>(null);
 
   const fetchSessions = async () => {
     setLoading(true);
     try {
-      // 使用当前用户的 user_code 获取会话列表
       const userCode = getCurrentUserCode();
       const res = await sessionsApi.list(userCode ? { user_code: userCode } : undefined);
       setSessions((res as any)?.items || []);
@@ -104,9 +92,7 @@ const Sessions: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchNameMaps();
     fetchSessions();
-    // 每30秒自动刷新一次列表
     const timer = setInterval(fetchSessions, 30000);
     return () => clearInterval(timer);
   }, []);
@@ -116,16 +102,13 @@ const Sessions: React.FC = () => {
     return new Date(time).toLocaleString();
   };
 
-  const getStatusTag = (record: Session) => {
-    // 通过会话是否有活跃处理中状态判断
-    // 实际上后端不直接返回 isActive，需要通过上下文判断
-    const lastActiveTime = record.last_active_at || record.updated_at;
+  const getStatusTag = (record: SessionWithNames) => {
+    const lastActiveTime = record.last_active_at;
     if (lastActiveTime) {
       const lastActive = new Date(lastActiveTime).getTime();
       const now = Date.now();
       const diffMinutes = (now - lastActive) / 1000 / 60;
 
-      // 如果最近2分钟内有活跃，认为是活跃状态
       if (diffMinutes < 2) {
         return (
           <Tag icon={<ThunderboltOutlined />} color="processing">
@@ -142,7 +125,7 @@ const Sessions: React.FC = () => {
     );
   };
 
-  const columns: ColumnsType<Session> = [
+  const columns: ColumnsType<SessionWithNames> = [
     {
       title: 'Session Key',
       dataIndex: 'session_key',
@@ -158,54 +141,45 @@ const Sessions: React.FC = () => {
     },
     {
       title: '用户',
-      dataIndex: 'user_code',
       width: 150,
-      render: (code: string) => {
-        const name = usersMap[code];
-        return name ? (
-          <Tooltip title={code}>
+      render: (_: any, record: SessionWithNames) => {
+        const name = record.user_name || record.user_code;
+        return (
+          <Tooltip title={record.user_code}>
             <span>{name}</span>
           </Tooltip>
-        ) : (
-          <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{code}</span>
         );
       },
     },
     {
       title: '渠道',
-      dataIndex: 'channel_code',
       width: 150,
-      render: (code: string) => {
-        const name = channelsMap[code];
-        return name ? (
-          <Tooltip title={code}>
+      render: (_: any, record: SessionWithNames) => {
+        const name = record.channel_name || record.channel_code;
+        return (
+          <Tooltip title={record.channel_code}>
             <span>{name}</span>
           </Tooltip>
-        ) : (
-          <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{code}</span>
         );
       },
     },
     {
       title: 'Agent',
-      dataIndex: 'agent_code',
       width: 150,
-      render: (code?: string) => {
-        if (!code) return '-';
-        const name = agentsMap[code];
-        return name ? (
-          <Tooltip title={code}>
+      render: (_: any, record: SessionWithNames) => {
+        if (!record.agent_code) return '-';
+        const name = record.agent_name || record.agent_code;
+        return (
+          <Tooltip title={record.agent_code}>
             <span>{name}</span>
           </Tooltip>
-        ) : (
-          <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{code}</span>
         );
       },
     },
     {
       title: '状态',
       width: 100,
-      render: (_: any, record: Session) => getStatusTag(record),
+      render: (_: any, record: SessionWithNames) => getStatusTag(record),
     },
     {
       title: '最后活跃',
@@ -223,7 +197,7 @@ const Sessions: React.FC = () => {
       title: '操作',
       width: 180,
       fixed: 'right',
-      render: (_: any, record: Session) => (
+      render: (_: any, record: SessionWithNames) => (
         <Space size="small">
           <Button
             type="text"
@@ -330,9 +304,9 @@ const Sessions: React.FC = () => {
             </pre>
 
             <p><strong>用户信息:</strong></p>
-            <p>用户: {usersMap[selectedSession.user_code] || selectedSession.user_code} <Tag>{selectedSession.user_code}</Tag></p>
-            <p>渠道: {channelsMap[selectedSession.channel_code] || selectedSession.channel_code} <Tag>{selectedSession.channel_code}</Tag></p>
-            <p>Agent: {selectedSession.agent_code ? (agentsMap[selectedSession.agent_code] || selectedSession.agent_code) : '-'} {selectedSession.agent_code && <Tag>{selectedSession.agent_code}</Tag>}</p>
+            <p>用户: {selectedSession.user_name || selectedSession.user_code} <Tag>{selectedSession.user_code}</Tag></p>
+            <p>渠道: {selectedSession.channel_name || selectedSession.channel_code} <Tag>{selectedSession.channel_code}</Tag></p>
+            <p>Agent: {selectedSession.agent_code ? (selectedSession.agent_name || selectedSession.agent_code) : '-'} {selectedSession.agent_code && <Tag>{selectedSession.agent_code}</Tag>}</p>
 
             <p><strong>时间信息:</strong></p>
             <p>创建时间: {formatTime(selectedSession.created_at)}</p>
