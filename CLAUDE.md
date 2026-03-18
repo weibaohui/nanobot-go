@@ -49,8 +49,8 @@ make build
 
 #### 5. 编译与测试
 ```bash
-make setup
-make build
+make stop
+make dev
 ```
 - 确保项目可正常编译/构建
 - 运行已有单元测试

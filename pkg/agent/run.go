@@ -141,6 +141,10 @@ func (l *Loop) processMessage(parentCtx context.Context, msg *bus.InboundMessage
 			if appID, ok := msg.Metadata["app_id"].(string); ok {
 				outMsg.Metadata["app_id"] = appID
 			}
+			// 复制 user_code 用于 WebSocket 路由
+			if userCode, ok := msg.Metadata["user_code"].(string); ok {
+				outMsg.Metadata["user_code"] = userCode
+			}
 		}
 		l.bus.PublishOutbound(outMsg)
 		return nil
@@ -157,6 +161,10 @@ func (l *Loop) processMessage(parentCtx context.Context, msg *bus.InboundMessage
 		// 复制 app_id 用于飞书多渠道路由
 		if appID, ok := msg.Metadata["app_id"].(string); ok {
 			outMsg.Metadata["app_id"] = appID
+		}
+		// 复制 user_code 用于 WebSocket 路由
+		if userCode, ok := msg.Metadata["user_code"].(string); ok {
+			outMsg.Metadata["user_code"] = userCode
 		}
 	}
 	l.bus.PublishOutbound(outMsg)

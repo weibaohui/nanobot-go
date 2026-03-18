@@ -8,7 +8,8 @@ import (
 type ChannelType string
 
 const (
-	ChannelTypeFeishu ChannelType = "feishu"
+	ChannelTypeFeishu    ChannelType = "feishu"
+	ChannelTypeWebSocket ChannelType = "websocket"
 )
 
 // Channel 渠道模型

@@ -16,6 +16,11 @@ type HealthResponse struct {
 	Status string `json:"status"`
 }
 
+// WebSocketHandler WebSocket 处理器接口
+type WebSocketHandler interface {
+	Handle(c *gin.Context)
+}
+
 // Server API 服务器
 type Server struct {
 	handler   *Handler
@@ -23,6 +28,7 @@ type Server struct {
 	logger    *zap.Logger
 	router    *gin.Engine
 	providers *Providers
+	wsHandler WebSocketHandler
 }
 
 // NewServer 创建 API 服务器
@@ -107,4 +113,11 @@ func (s *Server) Stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	return s.server.Shutdown(ctx)
+}
+
+// SetWebSocketHandler 设置 WebSocket 处理器
+func (s *Server) SetWebSocketHandler(handler WebSocketHandler) {
+	s.wsHandler = handler
+	// 注册 WebSocket 路由
+	s.router.GET("/ws/chat", handler.Handle)
 }

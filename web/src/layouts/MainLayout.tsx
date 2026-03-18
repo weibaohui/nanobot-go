@@ -18,6 +18,7 @@ import {
   LogoutOutlined,
   ToolOutlined,
   UnorderedListOutlined,
+  WechatOutlined,
 } from '@ant-design/icons';
 import { authApi, clearToken } from '../api';
 import type { User } from '../types';
@@ -63,6 +64,7 @@ const MainLayout: React.FC = () => {
 
   const menuItems = [
     { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
+    { key: '/chat', icon: <WechatOutlined />, label: 'AI 对话' },
     { key: '/agents', icon: <RobotOutlined />, label: 'Agent' },
     { key: '/channels', icon: <MessageOutlined />, label: '渠道' },
     { key: '/providers', icon: <KeyOutlined />, label: 'LLM' },

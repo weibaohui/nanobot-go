@@ -18,6 +18,7 @@ import (
 	"github.com/weibaohui/nanobot-go/pkg/agent/provider"
 	"github.com/weibaohui/nanobot-go/pkg/bus"
 	"github.com/weibaohui/nanobot-go/pkg/channels"
+	"github.com/weibaohui/nanobot-go/pkg/channels/websocket"
 	"github.com/weibaohui/nanobot-go/pkg/session"
 	"go.uber.org/zap"
 )
@@ -103,6 +104,12 @@ func (g *Gateway) StartAPIServer() {
 
 	apiAddr := ":" + strconv.Itoa(g.apiPort)
 	g.APIServer = api.NewServer(apiAddr, g.Providers, g.Logger)
+
+	// 注册 WebSocket 处理器
+	wsHandler := NewWebSocketHandler(g, g.Logger)
+	g.APIServer.SetWebSocketHandler(wsHandler)
+	g.Logger.Info("WebSocket 处理器已注册")
+
 	if err := g.APIServer.Start(); err != nil {
 		g.Logger.Error("启动 API 服务器失败", zap.Error(err))
 	}
@@ -187,6 +194,23 @@ func (g *Gateway) registerChannelsFromDB() {
 			feishu := channels.NewFeishuChannel(feishuConfig, g.MessageBus, g.Logger)
 			g.ChannelManager.Register(feishu)
 			g.Logger.Info("已注册飞书渠道", zap.String("app_id", cfg.AppID))
+
+		case models.ChannelTypeWebSocket:
+			var cfg models.WebSocketChannelConfig
+			if err := json.Unmarshal([]byte(ch.Config), &cfg); err != nil {
+				g.Logger.Error("解析 WebSocket 渠道配置失败", zap.Error(err), zap.Uint("channel_id", ch.ID))
+				continue
+			}
+			wsConfig := &websocket.Config{
+				Addr:        cfg.Addr,
+				Path:        cfg.Path,
+				ChannelCode: ch.ChannelCode,
+				ChannelID:   ch.ID,
+				AgentCode:   ch.AgentCode,
+			}
+			wsChannel := websocket.NewChannel(wsConfig, g.MessageBus, g.Logger)
+			g.ChannelManager.Register(wsChannel)
+			g.Logger.Info("已注册 WebSocket 渠道", zap.String("channel_code", ch.ChannelCode))
 
 		default:
 			g.Logger.Warn("未知渠道类型", zap.String("type", string(ch.Type)), zap.Uint("channel_id", ch.ID))
