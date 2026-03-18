@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/weibaohui/nanobot-go/internal/api"
 	"github.com/weibaohui/nanobot-go/internal/models"
 	"github.com/weibaohui/nanobot-go/pkg/channels/websocket"
 	"go.uber.org/zap"
@@ -31,10 +32,24 @@ func (h *WebSocketHandler) Handle(c *gin.Context) {
 		return
 	}
 
-	// 获取当前用户编码（从 JWT 中间件设置）
-	userCode := c.GetString("user_code")
+	// 从 URL 参数获取 token 并解析用户身份
+	token := c.Query("token")
+	if token == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "缺少 token 参数"})
+		return
+	}
+
+	claims, err := api.ParseToken(token)
+	if err != nil {
+		h.logger.Warn("解析 token 失败", zap.Error(err))
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "无效的 token"})
+		return
+	}
+
+	// 使用 username 作为 user_code
+	userCode := claims.Username
 	if userCode == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "无法获取用户信息"})
 		return
 	}
 
