@@ -158,14 +158,7 @@ func (i *interruptible) BuildChatModelAdapter() (*ChatModelAdapter, error) {
 // 包含中断检查和恢复逻辑
 func (i *interruptible) Process(ctx context.Context, msg *bus.InboundMessage, buildMessagesFunc func(history []*schema.Message, userInput, channel, chatID string) []*schema.Message) (string, error) {
 	sessionKey := msg.SessionKey()
-
-	// 从 context 获取用户/渠道/Agent信息
-	userCode := trace.GetUserCode(ctx)
-	channelCode := trace.GetChannelCode(ctx)
-	agentCode := trace.GetAgentCode(ctx)
-
-	// 创建或获取会话（带信息，确保同步到数据库）
-	sess := i.sessions.GetOrCreate(sessionKey, userCode, channelCode, agentCode)
+	sess := i.sessions.GetOrCreate(sessionKey)
 
 	ctx = context.WithValue(ctx, SessionKeyContextKey, sessionKey)
 	// 同时存储为 "session_key" 供 SessionObserver 使用

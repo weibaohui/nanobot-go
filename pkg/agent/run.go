@@ -60,8 +60,20 @@ func (l *Loop) processMessage(parentCtx context.Context, msg *bus.InboundMessage
 	// 注入会话信息到 context，用于事件分发时获取
 	sessionKey := msg.SessionKey()
 
+	// 获取或创建会话
+	sess := l.sessions.GetOrCreate(sessionKey)
+
+	// 为当前会话创建独立的 cancellable context
+	ctx, cancel := context.WithCancel(parentCtx)
+	sess.SetContext(ctx, cancel)
+
+	// 处理完成后清理 context
+	defer func() {
+		sess.SetContext(nil, nil)
+	}()
+
 	// 为每条消息创建根 span，建立完整的调用链
-	ctx := trace.WithTraceID(parentCtx, trace.NewTraceID())
+	ctx = trace.WithTraceID(ctx, trace.NewTraceID())
 	ctx = trace.WithSpanID(ctx, trace.NewSpanID())
 	// 根 span 没有 parentSpanID
 
@@ -77,23 +89,6 @@ func (l *Loop) processMessage(parentCtx context.Context, msg *bus.InboundMessage
 	if err != nil {
 		l.logger.Warn("加载渠道 Agent 配置失败，将使用默认配置", zap.Error(err))
 	}
-
-	// 获取 channel 信息，创建会话并同步到数据库
-	userCode := trace.GetUserCode(ctx)
-	channelCode := trace.GetChannelCode(ctx)
-	agentCode := trace.GetAgentCode(ctx)
-
-	// 创建会话（使用 GetOrCreateWithInfo 确保同步到数据库）
-	sess := l.sessions.GetOrCreate(sessionKey, userCode, channelCode, agentCode)
-
-	// 为当前会话创建独立的 cancellable context
-	ctx, cancel := context.WithCancel(ctx)
-	sess.SetContext(ctx, cancel)
-
-	// 处理完成后清理 context
-	defer func() {
-		sess.SetContext(nil, nil)
-	}()
 
 	// 使用 Master Agent 处理消息（包括中断恢复和正常处理）
 	if l.masterAgent == nil {

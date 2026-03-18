@@ -17,7 +17,7 @@
 │  └──────────────┘                                           │
 │           │                                                 │
 │  ┌─────────────────┐                                        │
-│  │ SessionManager  │  GetOrCreate() / GetHistory() / CancelSession() │
+│  │ SessionManager  │  GetOrCreate() / GetHistory()          │
 │  └─────────────────┘                                        │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -43,7 +43,7 @@
 ┌─────────────────────────────────────────────────────────────┐
 │              运行时管理层 (pkg/session)                      │
 │  ┌─────────────────┐                                        │
-│  │ SessionManager  │  GetOrCreate() / GetHistory() / CancelSession() │
+│  │ SessionManager  │  GetOrCreate() / CancelSession()       │
 │  └─────────────────┘                                        │
 │           │                                                 │
 │           ▼                                                 │
