@@ -24,7 +24,6 @@ const Chat: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isConnecting, setIsConnecting] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const currentUser = getCurrentUser();
@@ -141,34 +140,20 @@ const Chat: React.FC = () => {
 
   // 处理连接错误
   const handleError = useCallback((error: Error) => {
-    setIsConnecting(false);
     antMessage.error(error.message);
   }, []);
 
-  // 处理连接成功
-  const handleConnect = useCallback(() => {
-    setIsConnecting(false);
-  }, []);
-
-  // 处理连接断开
-  const handleDisconnect = useCallback(() => {
-    setIsConnecting(false);
-  }, []);
-
   // WebSocket 连接
-  const { isConnected, sendMessage, connect } = useWebSocket({
+  const { isConnected, isConnecting, sendMessage, connect } = useWebSocket({
     channelCode: selectedChannel,
     token,
     onMessage: handleMessage,
     onError: handleError,
-    onConnect: handleConnect,
-    onDisconnect: handleDisconnect,
   });
 
   // 当渠道改变时重新连接
   useEffect(() => {
     if (selectedChannel) {
-      setIsConnecting(true);
       connect();
     }
   }, [selectedChannel, connect]);

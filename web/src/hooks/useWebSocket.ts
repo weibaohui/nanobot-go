@@ -37,6 +37,7 @@ export interface UseWebSocketOptions {
 
 export interface UseWebSocketReturn {
   isConnected: boolean;
+  isConnecting: boolean;
   sendMessage: (payload: { content: string; user_code?: string; session_id?: string }) => boolean;
   disconnect: () => void;
   connect: () => void;
@@ -45,6 +46,7 @@ export interface UseWebSocketReturn {
 export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
   const { channelCode, token, onMessage, onError, onConnect, onDisconnect } = options;
   const [isConnected, setIsConnected] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const heartbeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -73,6 +75,8 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
       return;
     }
 
+    setIsConnecting(true);
+
     // 构建 WebSocket URL
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
@@ -86,6 +90,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
       ws.onopen = () => {
         console.log('[WebSocket] 连接成功');
         setIsConnected(true);
+        setIsConnecting(false);
         reconnectCountRef.current = 0;
         onConnect?.();
 
@@ -121,6 +126,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
       ws.onclose = (event) => {
         console.log('[WebSocket] 连接关闭:', event.code, event.reason);
         setIsConnected(false);
+        setIsConnecting(false);
         onDisconnect?.();
         clearTimers();
 
@@ -183,6 +189,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
 
   return {
     isConnected,
+    isConnecting,
     sendMessage,
     disconnect,
     connect,
