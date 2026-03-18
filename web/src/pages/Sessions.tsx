@@ -29,7 +29,6 @@ const Sessions: React.FC = () => {
   const [searchKey, setSearchKey] = useState('');
   const [detailVisible, setDetailVisible] = useState(false);
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
-  const [activeSessions, setActiveSessions] = useState<Set<string>>(new Set());
 
   const fetchSessions = async () => {
     setLoading(true);
@@ -66,12 +65,9 @@ const Sessions: React.FC = () => {
     try {
       const res = await sessionsApi.cancel(sessionKey) as any;
       if (res?.success === false) {
-        message.warning(res?.message || '取消会话失败');
+        message.info(res?.message || '当前没有正在执行的任务');
       } else {
         message.success('会话已取消');
-        // 刷新列表和活跃状态
-        fetchSessions();
-        checkActiveSessions();
       }
     } catch (error: any) {
       message.error(error?.response?.data?.message || '取消会话失败');
@@ -80,39 +76,12 @@ const Sessions: React.FC = () => {
     }
   };
 
-  // 检查所有会话的活跃状态
-  const checkActiveSessions = async () => {
-    if (sessions.length === 0) return;
-
-    const activeSet = new Set<string>();
-    await Promise.all(
-      sessions.map(async (session) => {
-        try {
-          const res = await sessionsApi.checkActive(session.session_key) as any;
-          if (res?.is_active) {
-            activeSet.add(session.session_key);
-          }
-        } catch (error) {
-          // 忽略错误，默认为不活跃
-        }
-      })
-    );
-    setActiveSessions(activeSet);
-  };
-
   useEffect(() => {
     fetchSessions();
-  }, []);
-
-  // 当会话列表变化时，检查活跃状态
-  useEffect(() => {
-    checkActiveSessions();
-    // 每5秒自动刷新一次活跃状态
-    const timer = setInterval(() => {
-      checkActiveSessions();
-    }, 5000);
+    // 每30秒自动刷新一次列表
+    const timer = setInterval(fetchSessions, 30000);
     return () => clearInterval(timer);
-  }, [sessions]);
+  }, []);
 
   const formatTime = (time?: string) => {
     if (!time) return '-';
@@ -209,26 +178,24 @@ const Sessions: React.FC = () => {
           >
             详情
           </Button>
-          {activeSessions.has(record.session_key) && (
-            <Popconfirm
-              title="确认取消会话"
-              description={`确定要强制停止会话 ${record.session_key?.substring(0, 20)}... 吗？`}
-              onConfirm={() => handleCancel(record.session_key)}
-              okText="确认"
-              cancelText="取消"
-              okButtonProps={{ danger: true }}
+          <Popconfirm
+            title="确认取消会话"
+            description={`确定要强制停止会话 ${record.session_key?.substring(0, 20)}... 吗？`}
+            onConfirm={() => handleCancel(record.session_key)}
+            okText="确认"
+            cancelText="取消"
+            okButtonProps={{ danger: true }}
+          >
+            <Button
+              type="text"
+              size="small"
+              danger
+              icon={<StopOutlined />}
+              loading={cancelling === record.session_key}
             >
-              <Button
-                type="text"
-                size="small"
-                danger
-                icon={<StopOutlined />}
-                loading={cancelling === record.session_key}
-              >
-                停止
-              </Button>
-            </Popconfirm>
-          )}
+              停止
+            </Button>
+          </Popconfirm>
         </Space>
       ),
     },
@@ -276,7 +243,7 @@ const Sessions: React.FC = () => {
         footer={
           <Space>
             <Button onClick={() => setDetailVisible(false)}>关闭</Button>
-            {selectedSession && activeSessions.has(selectedSession.session_key) && (
+            {selectedSession && (
               <Popconfirm
                 title="确认取消会话"
                 description="确定要强制停止此会话吗？"

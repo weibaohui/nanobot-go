@@ -182,6 +182,7 @@ func (h *Handler) handleSessionMetadata(c *gin.Context, sessionKey string) {
 }
 
 // cancelSession 取消正在执行的会话
+// 直接尝试执行 cancel，有 context 就取消，没有就返回提示
 func (h *Handler) cancelSession(c *gin.Context) {
 	sessionKey := c.Param("id")
 	if sessionKey == "" {
@@ -194,20 +195,12 @@ func (h *Handler) cancelSession(c *gin.Context) {
 		return
 	}
 
-	// 先检查会话是否在执行中
-	if !h.sessionManager.IsSessionActive(sessionKey) {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "会话不在执行中，无法取消",
-		})
-		return
-	}
-
+	// 直接尝试取消，让底层判断是否有可取消的执行
 	success := h.sessionManager.CancelSession(sessionKey)
 	if !success {
-		c.JSON(http.StatusNotFound, gin.H{
+		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "会话不存在或不在执行中",
+			"message": "当前没有正在执行的任务",
 		})
 		return
 	}
