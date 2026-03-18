@@ -389,24 +389,40 @@ const Chat: React.FC = () => {
                 key={msg.id}
                 style={{
                   display: 'flex',
+                  flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
                   gap: '16px',
                   padding: '24px 0',
                   borderBottom: '1px solid rgba(255,255,255,0.05)'
                 }}
               >
-                <Avatar
-                  size={36}
-                  icon={msg.role === 'user' ? <UserOutlined /> : <RobotOutlined />}
-                  style={{
-                    backgroundColor: msg.role === 'user' ? '#5436da' : '#19c37d',
-                    flexShrink: 0
-                  }}
-                />
-                <div style={{ flex: 1, minWidth: 0 }}>
+                {msg.role === 'assistant' ? (
+                  <Avatar
+                    size={36}
+                    icon={<RobotOutlined />}
+                    style={{
+                      backgroundColor: '#19c37d',
+                      flexShrink: 0
+                    }}
+                  />
+                ) : (
+                  <Avatar
+                    size={36}
+                    icon={<UserOutlined />}
+                    style={{
+                      backgroundColor: '#5436da',
+                      flexShrink: 0
+                    }}
+                  />
+                )}
+                <div style={{ flex: 1, minWidth: 0, display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
                   <div style={{
                     color: '#fff',
                     fontSize: '14px',
-                    lineHeight: '1.7'
+                    lineHeight: '1.7',
+                    maxWidth: msg.role === 'user' ? '80%' : '100%',
+                    padding: msg.role === 'user' ? '12px 16px' : '0',
+                    background: msg.role === 'user' ? '#5436da' : 'transparent',
+                    borderRadius: msg.role === 'user' ? '16px' : '0'
                   }}>
                     {msg.role === 'user' ? (
                       <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
