@@ -36,6 +36,7 @@ type Loop struct {
 	hookCallback        func(eventType events.EventType, data map[string]interface{}) // Hook 回调
 	channelService      service.ChannelService // 渠道服务，用于获取渠道绑定的 Agent
 	agentService        agentsvc.Service       // Agent 服务，用于获取 Agent 配置
+	sessionService      service.SessionService // Session 服务，用于创建和管理数据库 Session
 	mcpService          mcpsvc.Service         // MCP 服务
 	mcpManager          *mcp.Manager           // MCP 会话管理器
 
@@ -59,6 +60,7 @@ type LoopConfig struct {
 	HookCallback        func(eventType events.EventType, data map[string]interface{}) // Hook 回调
 	ChannelService      service.ChannelService                                       // 渠道服务
 	AgentService        agentsvc.Service                                             // Agent 服务
+	SessionService      service.SessionService                                       // Session 服务
 	MCPService          mcpsvc.Service                                               // MCP 服务
 }
 
@@ -89,6 +91,7 @@ func NewLoop(cfg *LoopConfig) *Loop {
 		hookCallback:        cfg.HookCallback,
 		channelService:      cfg.ChannelService,
 		agentService:        cfg.AgentService,
+		sessionService:      cfg.SessionService,
 		mcpService:          cfg.MCPService,
 	}
 

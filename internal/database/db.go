@@ -11,8 +11,8 @@ import (
 	"gorm.io/gorm/logger"
 
 	"github.com/weibaohui/nanobot-go/config"
-	"github.com/weibaohui/nanobot-go/internal/models"
 	memorymodels "github.com/weibaohui/nanobot-go/internal/memory/models"
+	"github.com/weibaohui/nanobot-go/internal/models"
 )
 
 // Config 数据库配置（简化版，主要配置在 config.Config 中）
