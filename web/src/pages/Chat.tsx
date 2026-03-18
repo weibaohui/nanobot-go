@@ -1,6 +1,10 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Select, message as antMessage, Spin, Avatar, Typography } from 'antd';
 import { SendOutlined, UserOutlined, RobotOutlined, PlusOutlined } from '@ant-design/icons';
+import { Mermaid, CodeHighlighter } from '@ant-design/x';
+import XMarkdown, { type ComponentProps } from '@ant-design/x-markdown';
+import Latex from '@ant-design/x-markdown/plugins/Latex';
+import '@ant-design/x-markdown/themes/dark.css';
 import { useWebSocket, type WebSocketMessage, type ChunkPayload, type SystemPayload } from '../hooks/useWebSocket';
 import { getToken, getCurrentUser, getCurrentUserCode, usersApi, channelsApi } from '../api';
 import type { User, Channel } from '../types';
@@ -14,71 +18,36 @@ interface ChatMessage {
   isStreaming?: boolean;
 }
 
+// 自定义代码块组件（支持 Mermaid 图表和代码高亮）
+const CustomCode: React.FC<ComponentProps> = (props) => {
+  const { className, children } = props;
+  const lang = className?.match(/language-(\w+)/)?.[1] || '';
+  if (typeof children !== 'string') return null;
+
+  // Mermaid 图表渲染
+  if (lang === 'mermaid') {
+    return <Mermaid>{children}</Mermaid>;
+  }
+
+  // 代码高亮渲染
+  return (
+    <CodeHighlighter lang={lang}>
+      {children}
+    </CodeHighlighter>
+  );
+};
+
 // Markdown 渲染组件
 const MarkdownContent: React.FC<{ content: string }> = ({ content }) => {
-  // 简单的 markdown 渲染
-  const renderContent = (text: string) => {
-    // 处理代码块
-    const parts = text.split(/(```[\s\S]*?```)/g);
-    return parts.map((part, index) => {
-      if (part.startsWith('```') && part.endsWith('```')) {
-        const codeContent = part.slice(3, -3);
-        const firstNewline = codeContent.indexOf('\n');
-        const language = firstNewline > -1 ? codeContent.slice(0, firstNewline).trim() : '';
-        const code = firstNewline > -1 ? codeContent.slice(firstNewline + 1) : codeContent;
-        return (
-          <div key={index} style={{ margin: '12px 0' }}>
-            {language && (
-              <div style={{
-                background: '#1e1e1e',
-                color: '#999',
-                padding: '8px 12px',
-                fontSize: '12px',
-                borderRadius: '8px 8px 0 0',
-                fontFamily: 'monospace'
-              }}>
-                {language}
-              </div>
-            )}
-            <pre style={{
-              background: '#1e1e1e',
-              color: '#d4d4d4',
-              padding: '16px',
-              borderRadius: language ? '0 0 8px 8px' : '8px',
-              overflow: 'auto',
-              margin: 0,
-              fontFamily: 'Consolas, Monaco, "Courier New", monospace',
-              fontSize: '14px',
-              lineHeight: '1.5'
-            }}>
-              <code>{code}</code>
-            </pre>
-          </div>
-        );
-      }
-      // 处理行内代码
-      return part.split(/(`[^`]+`)/g).map((subPart, subIndex) => {
-        if (subPart.startsWith('`') && subPart.endsWith('`')) {
-          return (
-            <code key={`${index}-${subIndex}`} style={{
-              background: 'rgba(0,0,0,0.1)',
-              padding: '2px 6px',
-              borderRadius: '4px',
-              fontFamily: 'Consolas, Monaco, "Courier New", monospace',
-              fontSize: '0.9em'
-            }}>
-              {subPart.slice(1, -1)}
-            </code>
-          );
-        }
-        return <span key={`${index}-${subIndex}`}>{subPart}</span>;
-      });
-    });
-  };
-
   return (
-    <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-      {renderContent(content)}
+    <div className="x-markdown-dark">
+      <XMarkdown
+        config={{ extensions: Latex() }}
+        components={{ code: CustomCode }}
+        paragraphTag="div"
+      >
+        {content}
+      </XMarkdown>
     </div>
   );
 };
