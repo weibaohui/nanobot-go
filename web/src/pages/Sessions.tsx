@@ -29,6 +29,7 @@ const Sessions: React.FC = () => {
   const [searchKey, setSearchKey] = useState('');
   const [detailVisible, setDetailVisible] = useState(false);
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
+  const [activeSessions, setActiveSessions] = useState<Set<string>>(new Set());
 
   const fetchSessions = async () => {
     setLoading(true);
@@ -68,8 +69,9 @@ const Sessions: React.FC = () => {
         message.warning(res?.message || '取消会话失败');
       } else {
         message.success('会话已取消');
-        // 刷新列表
+        // 刷新列表和活跃状态
         fetchSessions();
+        checkActiveSessions();
       }
     } catch (error: any) {
       message.error(error?.response?.data?.message || '取消会话失败');
@@ -78,12 +80,39 @@ const Sessions: React.FC = () => {
     }
   };
 
+  // 检查所有会话的活跃状态
+  const checkActiveSessions = async () => {
+    if (sessions.length === 0) return;
+
+    const activeSet = new Set<string>();
+    await Promise.all(
+      sessions.map(async (session) => {
+        try {
+          const res = await sessionsApi.checkActive(session.session_key) as any;
+          if (res?.is_active) {
+            activeSet.add(session.session_key);
+          }
+        } catch (error) {
+          // 忽略错误，默认为不活跃
+        }
+      })
+    );
+    setActiveSessions(activeSet);
+  };
+
   useEffect(() => {
     fetchSessions();
-    // 每5秒自动刷新一次，获取最新的活跃状态
-    const timer = setInterval(fetchSessions, 5000);
-    return () => clearInterval(timer);
   }, []);
+
+  // 当会话列表变化时，检查活跃状态
+  useEffect(() => {
+    checkActiveSessions();
+    // 每5秒自动刷新一次活跃状态
+    const timer = setInterval(() => {
+      checkActiveSessions();
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [sessions]);
 
   const formatTime = (time?: string) => {
     if (!time) return '-';
@@ -180,24 +209,26 @@ const Sessions: React.FC = () => {
           >
             详情
           </Button>
-          <Popconfirm
-            title="确认取消会话"
-            description={`确定要强制停止会话 ${record.session_key?.substring(0, 20)}... 吗？`}
-            onConfirm={() => handleCancel(record.session_key)}
-            okText="确认"
-            cancelText="取消"
-            okButtonProps={{ danger: true }}
-          >
-            <Button
-              type="text"
-              size="small"
-              danger
-              icon={<StopOutlined />}
-              loading={cancelling === record.session_key}
+          {activeSessions.has(record.session_key) && (
+            <Popconfirm
+              title="确认取消会话"
+              description={`确定要强制停止会话 ${record.session_key?.substring(0, 20)}... 吗？`}
+              onConfirm={() => handleCancel(record.session_key)}
+              okText="确认"
+              cancelText="取消"
+              okButtonProps={{ danger: true }}
             >
-              停止
-            </Button>
-          </Popconfirm>
+              <Button
+                type="text"
+                size="small"
+                danger
+                icon={<StopOutlined />}
+                loading={cancelling === record.session_key}
+              >
+                停止
+              </Button>
+            </Popconfirm>
+          )}
         </Space>
       ),
     },
@@ -245,23 +276,23 @@ const Sessions: React.FC = () => {
         footer={
           <Space>
             <Button onClick={() => setDetailVisible(false)}>关闭</Button>
-            <Popconfirm
-              title="确认取消会话"
-              description="确定要强制停止此会话吗？"
-              onConfirm={() => {
-                if (selectedSession) {
+            {selectedSession && activeSessions.has(selectedSession.session_key) && (
+              <Popconfirm
+                title="确认取消会话"
+                description="确定要强制停止此会话吗？"
+                onConfirm={() => {
                   handleCancel(selectedSession.session_key);
                   setDetailVisible(false);
-                }
-              }}
-              okText="确认"
-              cancelText="取消"
-              okButtonProps={{ danger: true }}
-            >
-              <Button type="primary" danger icon={<StopOutlined />}>
-                强制停止
-              </Button>
-            </Popconfirm>
+                }}
+                okText="确认"
+                cancelText="取消"
+                okButtonProps={{ danger: true }}
+              >
+                <Button type="primary" danger icon={<StopOutlined />}>
+                  强制停止
+                </Button>
+              </Popconfirm>
+            )}
           </Space>
         }
         width={700}
