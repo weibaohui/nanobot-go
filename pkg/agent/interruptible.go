@@ -50,40 +50,40 @@ func buildChatModelAdapter(logger *zap.Logger, configLoader LLMConfigLoader, ses
 // interruptible 可嵌入的中断处理能力
 // 为 Agent 提供中断处理、恢复执行等通用能力
 type interruptible struct {
-	configLoader      LLMConfigLoader
-	workspace         string
-	tools             []tool.BaseTool
-	logger            *zap.Logger
-	sessions          *session.Manager
-	bus               *bus.MessageBus
-	context           *ContextBuilder
-	adkRunner         *adk.Runner
-	interruptManager  *interrupt.Manager
-	checkpointStore   compose.CheckPointStore
-	registeredTools   []string
-	maxIterations     int
-	agentType         string // "master" 或 "supervisor"
-	adkAgent          adk.Agent
-	hookManager       *hooks.HookManager
+	configLoader     LLMConfigLoader
+	workspace        string
+	tools            []tool.BaseTool
+	logger           *zap.Logger
+	sessions         *session.Manager
+	bus              *bus.MessageBus
+	context          *ContextBuilder
+	adkRunner        *adk.Runner
+	interruptManager *interrupt.Manager
+	checkpointStore  compose.CheckPointStore
+	registeredTools  []string
+	maxIterations    int
+	agentType        string // "master" 或 "supervisor"
+	adkAgent         adk.Agent
+	hookManager      *hooks.HookManager
 }
 
 // interruptibleConfig 中断处理能力的配置
 type interruptibleConfig struct {
-	ConfigLoader     LLMConfigLoader
-	Workspace        string
-	Tools            []tool.BaseTool
-	Logger           *zap.Logger
-	Sessions         *session.Manager
-	Bus              *bus.MessageBus
-	Context          *ContextBuilder
-	InterruptMgr     *interrupt.Manager
-	CheckpointStore  compose.CheckPointStore
-	MaxIterations    int
-	RegisteredTools  []string
-	AgentType        string
-	ADKAgent         adk.Agent
-	ADKRunner        *adk.Runner
-	HookManager      *hooks.HookManager
+	ConfigLoader    LLMConfigLoader
+	Workspace       string
+	Tools           []tool.BaseTool
+	Logger          *zap.Logger
+	Sessions        *session.Manager
+	Bus             *bus.MessageBus
+	Context         *ContextBuilder
+	InterruptMgr    *interrupt.Manager
+	CheckpointStore compose.CheckPointStore
+	MaxIterations   int
+	RegisteredTools []string
+	AgentType       string
+	ADKAgent        adk.Agent
+	ADKRunner       *adk.Runner
+	HookManager     *hooks.HookManager
 }
 
 // newInterruptible 创建中断处理能力
@@ -103,21 +103,21 @@ func newInterruptible(ctx context.Context, cfg *interruptibleConfig) (*interrupt
 	}
 
 	i := &interruptible{
-		configLoader:      cfg.ConfigLoader,
-		workspace:         cfg.Workspace,
-		tools:             cfg.Tools,
-		logger:            logger,
-		sessions:          cfg.Sessions,
-		bus:               cfg.Bus,
-		context:           cfg.Context,
-		adkRunner:         cfg.ADKRunner,
-		interruptManager:  cfg.InterruptMgr,
-		checkpointStore:   cfg.CheckpointStore,
-		registeredTools:   cfg.RegisteredTools,
-		maxIterations:     maxIter,
-		agentType:         cfg.AgentType,
-		adkAgent:          cfg.ADKAgent,
-		hookManager:       cfg.HookManager,
+		configLoader:     cfg.ConfigLoader,
+		workspace:        cfg.Workspace,
+		tools:            cfg.Tools,
+		logger:           logger,
+		sessions:         cfg.Sessions,
+		bus:              cfg.Bus,
+		context:          cfg.Context,
+		adkRunner:        cfg.ADKRunner,
+		interruptManager: cfg.InterruptMgr,
+		checkpointStore:  cfg.CheckpointStore,
+		registeredTools:  cfg.RegisteredTools,
+		maxIterations:    maxIter,
+		agentType:        cfg.AgentType,
+		adkAgent:         cfg.ADKAgent,
+		hookManager:      cfg.HookManager,
 	}
 
 	logger.Info(fmt.Sprintf("%s Agent 能力初始化成功", cfg.AgentType),
@@ -177,7 +177,15 @@ func (i *interruptible) Process(ctx context.Context, msg *bus.InboundMessage, bu
 	}
 
 	// Normal processing flow
-	history := i.convertHistory(i.sessions.GetHistory(ctx, sessionKey, 10))
+	// 从 AgentConfig 获取历史消息数量配置（默认10，最大50）
+	historyWindow := 10
+	if i.context != nil {
+		historyWindow = i.context.GetHistoryMessages()
+	}
+	history := i.convertHistory(i.sessions.GetHistory(ctx, sessionKey, historyWindow))
+	i.logger.Debug("加载会话历史",
+		zap.Int("history_window", historyWindow),
+		zap.Int("loaded_messages", len(history)))
 	messages := buildMessagesFunc(history, msg.Content, msg.Channel, msg.ChatID)
 	checkpointID := fmt.Sprintf("%s_%d", sessionKey, time.Now().UnixNano())
 

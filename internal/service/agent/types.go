@@ -18,6 +18,7 @@ type CreateAgentRequest struct {
 	MaxTokens             int      `json:"max_tokens"`
 	Temperature           float64  `json:"temperature"`
 	MaxIterations         int      `json:"max_iterations"`
+	HistoryMessages       int      `json:"history_messages"` // 携带的历史对话消息数量（默认10，范围0-50）
 	SkillsList            []string `json:"skills_list"`
 	ToolsList             []string `json:"tools_list"`
 	IsDefault             bool     `json:"is_default"`
@@ -37,6 +38,7 @@ type UpdateAgentRequest struct {
 	MaxTokens             int      `json:"max_tokens,omitempty"`
 	Temperature           float64  `json:"temperature,omitempty"`
 	MaxIterations         int      `json:"max_iterations,omitempty"`
+	HistoryMessages       int      `json:"history_messages,omitempty"` // 携带的历史对话消息数量（默认10，范围0-50）
 	SkillsList            []string `json:"skills_list,omitempty"`
 	ToolsList             []string `json:"tools_list,omitempty"`
 	IsActive              *bool    `json:"is_active,omitempty"`
@@ -56,6 +58,7 @@ type AgentConfig struct {
 	MaxTokens       int     `json:"max_tokens"`
 	Temperature     float64 `json:"temperature"`
 	MaxIterations   int     `json:"max_iterations"`
+	HistoryMessages int     `json:"history_messages"` // 携带的历史对话消息数量（默认10，范围0-50）
 }
 
 // Service Agent 服务接口

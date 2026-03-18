@@ -31,10 +31,11 @@ type Agent struct {
 	MCPList    string `gorm:"type:text" json:"mcp_list"`    // 可用MCP列表，JSON 数组
 
 	// 模型配置
-	Model         string  `gorm:"type:text" json:"model"`
-	MaxTokens     int     `gorm:"default:4096" json:"max_tokens"`
-	Temperature   float64 `gorm:"default:0.7" json:"temperature"`
-	MaxIterations int     `gorm:"default:15" json:"max_iterations"`
+	Model           string  `gorm:"type:text" json:"model"`
+	MaxTokens       int     `gorm:"default:4096" json:"max_tokens"`
+	Temperature     float64 `gorm:"default:0.7" json:"temperature"`
+	MaxIterations   int     `gorm:"default:15" json:"max_iterations"`
+	HistoryMessages int     `gorm:"default:10" json:"history_messages"` // 携带的历史对话消息数量
 
 	IsActive             bool `gorm:"default:true" json:"is_active"`
 	IsDefault            bool `gorm:"default:false" json:"is_default"`             // 是否默认 Agent

@@ -410,6 +410,21 @@ const Agents: React.FC = () => {
     }
   };
 
+  const handleToggleAutoLoad = async (binding: AgentMCPBinding) => {
+    if (!mcpBindingAgent) return;
+    try {
+      await mcpServersApi.updateAgentBinding(mcpBindingAgent.id, binding.id, {
+        auto_load: !binding.auto_load,
+      });
+      message.success(!binding.auto_load ? '已设置自动加载' : '已取消自动加载');
+      // 刷新绑定列表
+      const res = await mcpServersApi.getAgentBindings(mcpBindingAgent.id);
+      setMcpBindings((res.items || []) as AgentMCPBinding[]);
+    } catch (error: any) {
+      message.error(error?.response?.data?.error || '操作失败');
+    }
+  };
+
   return (
     <div>
       <Card
@@ -683,14 +698,30 @@ const Agents: React.FC = () => {
                 ),
               },
               {
+                title: '自动加载',
+                width: 100,
+                render: (_, record: AgentMCPBinding) => (
+                  <Tag color={record.auto_load ? 'blue' : 'default'}>
+                    {record.auto_load ? '是' : '否'}
+                  </Tag>
+                ),
+              },
+              {
                 title: '操作',
-                width: 120,
+                width: 200,
                 render: (_, record: AgentMCPBinding) => (
                   <Space size="small">
                     <Switch
                       size="small"
                       checked={record.is_active}
                       onChange={() => handleToggleMcpBinding(record)}
+                    />
+                    <Switch
+                      size="small"
+                      checked={record.auto_load}
+                      checkedChildren="自加载"
+                      unCheckedChildren="懒加载"
+                      onChange={() => handleToggleAutoLoad(record)}
                     />
                     <Popconfirm
                       title="确认解绑"

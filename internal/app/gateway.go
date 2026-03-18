@@ -146,6 +146,7 @@ func (g *Gateway) InitAgentLoop() {
 		HookCallback:   g.Hook.Callback,
 		ChannelService: g.Providers.ChannelService,
 		AgentService:   g.Providers.AgentService,
+		MCPService:     g.Providers.MCPService,
 	})
 }
 

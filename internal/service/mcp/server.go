@@ -380,3 +380,72 @@ func validateTransportConfig(transportType, command, url string) error {
 	}
 	return nil
 }
+
+// ExecuteTool 执行 MCP 工具
+func (s *service) ExecuteTool(serverID uint, toolName string, params map[string]interface{}) (string, error) {
+	server, err := s.mcpServerRepo.GetByID(serverID)
+	if err != nil {
+		return "", fmt.Errorf("获取 MCP 服务器失败: %w", err)
+	}
+	if server == nil {
+		return "", fmt.Errorf("MCP 服务器不存在")
+	}
+
+	if server.Status != "active" {
+		return "", fmt.Errorf("MCP 服务器未激活，当前状态: %s", server.Status)
+	}
+
+	// 创建 MCP 客户端
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	mcpClient, err := s.createMCPClient(server)
+	if err != nil {
+		return "", fmt.Errorf("创建 MCP 客户端失败: %w", err)
+	}
+	defer mcpClient.Close()
+
+	// 启动传输层
+	if err := mcpClient.Start(ctx); err != nil {
+		return "", fmt.Errorf("MCP 服务器启动失败: %w", err)
+	}
+
+	// 执行 MCP 初始化握手
+	_, err = mcpClient.Initialize(ctx, mcp.InitializeRequest{
+		Params: mcp.InitializeParams{
+			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
+			ClientInfo: mcp.Implementation{
+				Name:    "nanobot-mcp-client",
+				Version: "1.0.0",
+			},
+			Capabilities: mcp.ClientCapabilities{},
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("MCP 服务器初始化失败: %w", err)
+	}
+
+	// 调用工具
+	result, err := mcpClient.CallTool(ctx, mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name:      toolName,
+			Arguments: params,
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("调用 MCP 工具失败: %w", err)
+	}
+
+	// 处理结果
+	if result.IsError {
+		return "", fmt.Errorf("MCP 工具执行错误: %s", result.Content)
+	}
+
+	// 将结果转换为 JSON 字符串
+	resultJSON, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("序列化结果失败: %w", err)
+	}
+
+	return string(resultJSON), nil
+}

@@ -9,6 +9,7 @@ import (
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/editfile"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/exec"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/listdir"
+	"github.com/weibaohui/nanobot-go/pkg/agent/tools/mcp"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/message"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/readfile"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/skill"
@@ -70,6 +71,13 @@ func (l *Loop) registerDefaultTools() {
 		l.tools.Register(configTools.ReadAgentConfigTool)
 		l.tools.Register(configTools.UpdateAgentConfigTool)
 		l.tools.Register(configTools.ManageAgentMemoryTool)
+	}
+
+	// 注册 use_mcp 工具（用于按需加载 MCP Server）
+	if l.mcpManager != nil {
+		l.tools.Register(mcp.NewUseMCPTool(l.mcpManager))
+		l.tools.Register(mcp.NewCallMCPTool(l.mcpManager))
+		l.logger.Info("MCP 工具已注册", zap.Strings("tools", []string{"use_mcp", "call_mcp_tool"}))
 	}
 }
 

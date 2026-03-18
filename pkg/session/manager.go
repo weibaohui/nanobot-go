@@ -116,46 +116,61 @@ type Manager struct {
 
 // NewManager 创建会话管理器
 func NewManager(cfg *config.Config, logger *zap.Logger, convRepo ConversationRecordRepository) *Manager {
-	return &Manager{
+	m := &Manager{
 		cfg:      cfg,
 		logger:   logger,
 		cache:    make(map[string]*Session),
 		convRepo: convRepo,
 	}
+	if convRepo == nil {
+		logger.Warn("SessionManager 创建时 ConvRepo 为 nil，历史记录功能将不可用")
+	} else {
+		logger.Info("SessionManager 创建成功，ConvRepo 已设置")
+	}
+	return m
 }
 
 // GetHistory 从 ConversationRecordRepository 获取会话历史记录
 func (m *Manager) GetHistory(ctx context.Context, sessionKey string, maxMessages int) []map[string]any {
 	if m.convRepo == nil {
-		m.logger.Warn("ConversationRecordRepository not set, returning empty history")
+		m.logger.Warn("ConversationRecordRepository not set, returning empty history",
+			zap.String("session_key", sessionKey))
 		return nil
 	}
+
+	m.logger.Debug("开始加载会话历史",
+		zap.String("session_key", sessionKey),
+		zap.Int("max_messages", maxMessages))
 
 	// 从数据库查询最近的对话记录
 	records, err := m.convRepo.FindBySessionKey(ctx, sessionKey, &models.QueryOptions{
 		OrderBy: "timestamp",
-		Order:   "ASC",
+		Order:   "DESC",
 		Limit:   maxMessages * 2,
 	})
 	if err != nil {
 		m.logger.Error("Failed to find conversation by session key",
-			zap.String("sessionKey", sessionKey),
+			zap.String("session_key", sessionKey),
 			zap.Error(err))
 		return nil
 	}
 
-	// 筛选出2小时之内的消息
-	cutoffTime := time.Now().Add(-2 * time.Hour)
-	var filteredRecords []models.ConversationRecord
-	for _, record := range records {
-		if record.Timestamp.After(cutoffTime) {
-			filteredRecords = append(filteredRecords, record)
-		}
+	m.logger.Debug("从数据库查询到对话记录",
+		zap.String("session_key", sessionKey),
+		zap.Int("total_records", len(records)))
+
+	// 使用所有查询到的记录（移除2小时时间限制，以支持加载历史对话）
+	// 注意：查询使用 DESC 排序，最新的在前
+	filteredRecords := records
+
+	// 限制消息数量（取最新的 maxMessages 条，即前 maxMessages 条）
+	if len(filteredRecords) > maxMessages {
+		filteredRecords = filteredRecords[:maxMessages]
 	}
 
-	// 限制消息数量（取最近的 maxMessages 条）
-	if len(filteredRecords) > maxMessages {
-		filteredRecords = filteredRecords[len(filteredRecords)-maxMessages:]
+	// 反转顺序，使消息按时间正序排列（最旧的在前，最新的在后）
+	for i, j := 0, len(filteredRecords)-1; i < j; i, j = i+1, j-1 {
+		filteredRecords[i], filteredRecords[j] = filteredRecords[j], filteredRecords[i]
 	}
 
 	// 转换为 map 格式
@@ -166,6 +181,10 @@ func (m *Manager) GetHistory(ctx context.Context, sessionKey string, maxMessages
 			"content": record.Content,
 		})
 	}
+
+	m.logger.Info("会话历史加载完成",
+		zap.String("session_key", sessionKey),
+		zap.Int("loaded_messages", len(history)))
 
 	return history
 }
