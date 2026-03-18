@@ -205,6 +205,7 @@ func (g *Gateway) registerChannelsFromDB() {
 				Addr:        cfg.Addr,
 				Path:        cfg.Path,
 				ChannelCode: ch.ChannelCode,
+				ChannelID:   ch.ID,
 				AgentCode:   ch.AgentCode,
 			}
 			wsChannel := websocket.NewChannel(wsConfig, g.MessageBus, g.Logger)

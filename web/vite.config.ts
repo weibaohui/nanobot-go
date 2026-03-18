@@ -7,12 +7,12 @@ export default defineConfig({
   server: {
     proxy: {
       '/ws/chat': {
-        target: 'ws://localhost:8080',
+        target: 'ws://localhost:8081',
         ws: true,
         changeOrigin: true,
       },
       '/api': {
-        target: 'http://localhost:8080',
+        target: 'http://localhost:8081',
         changeOrigin: true,
       },
     },

@@ -93,32 +93,39 @@ const Chat: React.FC = () => {
     setMessages(prev => {
       const lastMsg = prev[prev.length - 1];
 
-      // 如果是结束标记
-      if (payload.is_end) {
-        if (lastMsg?.role === 'assistant' && lastMsg.isStreaming) {
-          return [
-            ...prev.slice(0, -1),
-            { ...lastMsg, isStreaming: false }
-          ];
-        }
-        return prev;
-      }
-
       // 追加到现有消息或创建新消息
       if (lastMsg?.role === 'assistant' && lastMsg.isStreaming) {
         // 追加到现有消息
         return [
           ...prev.slice(0, -1),
-          { ...lastMsg, content: lastMsg.content + payload.content }
+          { ...lastMsg, content: lastMsg.content + payload.content, isStreaming: !payload.is_end }
         ];
+      } else if (lastMsg?.role === 'assistant' && !lastMsg.isStreaming) {
+        // 如果最后一条已经是完整的 assistant 消息，且内容相同，则跳过（避免重复）
+        if (lastMsg.content === payload.content) {
+          return prev;
+        }
+        // 否则创建新消息
+        if (payload.content) {
+          return [...prev, {
+            id: Date.now().toString(),
+            role: 'assistant',
+            content: payload.content,
+            isStreaming: !payload.is_end
+          }];
+        }
+        return prev;
       } else {
-        // 新消息开始
-        return [...prev, {
-          id: Date.now().toString(),
-          role: 'assistant',
-          content: payload.content,
-          isStreaming: true
-        }];
+        // 新消息（如果有内容）
+        if (payload.content) {
+          return [...prev, {
+            id: Date.now().toString(),
+            role: 'assistant',
+            content: payload.content,
+            isStreaming: !payload.is_end
+          }];
+        }
+        return prev;
       }
     });
 
@@ -143,20 +150,26 @@ const Chat: React.FC = () => {
     antMessage.error(error.message);
   }, []);
 
+  // 判断是否启用 WebSocket 连接
+  // 非管理员：只要有渠道就启用
+  // 管理员：必须选择渠道和用户才启用
+  const isWebSocketEnabled = isAdmin ? !!selectedChannel && !!selectedUser : !!selectedChannel;
+
   // WebSocket 连接
   const { isConnected, isConnecting, sendMessage, connect } = useWebSocket({
     channelCode: selectedChannel,
     token,
+    enabled: isWebSocketEnabled,
     onMessage: handleMessage,
     onError: handleError,
   });
 
-  // 当渠道改变时重新连接
+  // 当渠道或用户选择改变时，如果启用了 WebSocket，则重新连接
   useEffect(() => {
-    if (selectedChannel) {
+    if (isWebSocketEnabled) {
       connect();
     }
-  }, [selectedChannel, connect]);
+  }, [selectedChannel, selectedUser, isWebSocketEnabled, connect]);
 
   // 发送消息
   const handleSend = () => {
@@ -230,10 +243,9 @@ const Chat: React.FC = () => {
         {/* 用户选择器 - 仅管理员可见 */}
         {isAdmin && (
           <Select
-            placeholder="选择用户身份（可选，默认为当前用户）"
+            placeholder="选择用户身份（必选）"
             value={selectedUser || undefined}
             onChange={setSelectedUser}
-            allowClear
             style={{ width: '100%' }}
             options={users.map(u => ({
               label: `${u.display_name || u.username} (${u.user_code})`,
@@ -243,7 +255,15 @@ const Chat: React.FC = () => {
         )}
 
         {/* 连接状态 */}
-        {!isConnected && selectedChannel && (
+        {isAdmin && !selectedUser && selectedChannel && (
+          <Alert
+            message="请选择用户以开始对话"
+            type="info"
+            showIcon
+            banner
+          />
+        )}
+        {!isConnected && isWebSocketEnabled && (
           <Alert
             message="连接断开，正在尝试重连..."
             type="warning"

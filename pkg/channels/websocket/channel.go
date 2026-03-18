@@ -200,6 +200,15 @@ func (c *Channel) handleUserMessage(conn *Connection, msg *Message) {
 	// 使用连接的用户代码（从 JWT 获取）
 	payload.UserCode = conn.UserCode()
 
+	// 如果前端没有传递 session_id，使用连接已有的或生成新的
+	if payload.SessionID == "" {
+		payload.SessionID = conn.SessionID()
+		if payload.SessionID == "" {
+			// 生成新的 session ID：使用连接 ID 作为唯一标识
+			payload.SessionID = conn.ID()
+		}
+	}
+
 	// 更新消息的 payload
 	payloadBytes, _ := json.Marshal(payload)
 	msg.Payload = payloadBytes
@@ -213,13 +222,12 @@ func (c *Channel) handleUserMessage(conn *Connection, msg *Message) {
 	}
 
 	// 保存会话 ID 到连接（用于后续消息路由）
-	if inbound.ChatID != "" {
-		conn.SetSessionID(inbound.ChatID)
-	}
+	conn.SetSessionID(inbound.ChatID)
 
 	// 添加到元数据，用于后续路由回此连接
 	inbound.Metadata["conn_id"] = conn.ID()
 	inbound.Metadata["user_code"] = conn.UserCode()
+	inbound.Metadata["channel_id"] = c.config.ChannelID
 
 	// 发布到消息总线
 	c.bus.PublishInbound(inbound)
@@ -233,7 +241,8 @@ func (c *Channel) handleUserMessage(conn *Connection, msg *Message) {
 // subscribeOutbound 订阅出站消息
 func (c *Channel) subscribeOutbound() {
 	// 订阅流式消息（用于实时响应）
-	c.bus.SubscribeStream(c.name, func(chunk *bus.StreamChunk) error {
+	// 注意：使用 ChannelCode 而不是 c.name，因为消息总线分发时使用的是 ChannelCode
+	c.bus.SubscribeStream(c.config.ChannelCode, func(chunk *bus.StreamChunk) error {
 		// 检查消息是否属于当前渠道
 		if chunk.Channel != c.config.ChannelCode {
 			return nil
@@ -247,13 +256,22 @@ func (c *Channel) subscribeOutbound() {
 			return err
 		}
 
-		// 发送到会话对应的用户
-		c.connManager.SendToUser(chunk.ChatID, data)
+		// 流式消息目前缺少 user_code，需要额外存储映射
+		// 临时方案：尝试用 ChatID 查找，如果失败则广播
+		sent := c.connManager.SendToUser(chunk.ChatID, data)
+		if sent == 0 {
+			// 可能是 ChatID 与 userCode 不匹配，广播给所有连接
+			c.logger.Debug("流式消息未找到对应用户，尝试广播",
+				zap.String("chat_id", chunk.ChatID),
+			)
+			c.connManager.Broadcast(data)
+		}
 		return nil
 	})
 
 	// 订阅普通出站消息
-	c.bus.SubscribeOutbound(c.name, func(msg *bus.OutboundMessage) error {
+	// 注意：使用 ChannelCode 而不是 c.name，因为消息总线分发时使用的是 ChannelCode
+	c.bus.SubscribeOutbound(c.config.ChannelCode, func(msg *bus.OutboundMessage) error {
 		// 检查消息是否属于当前渠道
 		if msg.Channel != c.config.ChannelCode {
 			return nil
@@ -267,11 +285,26 @@ func (c *Channel) subscribeOutbound() {
 			return err
 		}
 
-		// 发送到目标 ChatID（作为用户标识）
-		if msg.ChatID != "" {
-			c.connManager.SendToUser(msg.ChatID, data)
+		// 从 metadata 获取 user_code，用于路由到正确的连接
+		userCode := ""
+		if msg.Metadata != nil {
+			if code, ok := msg.Metadata["user_code"].(string); ok {
+				userCode = code
+			}
+		}
+
+		// 发送到目标用户
+		if userCode != "" {
+			sent := c.connManager.SendToUser(userCode, data)
+			c.logger.Debug("发送出站消息",
+				zap.String("user_code", userCode),
+				zap.Int("sent_count", sent),
+			)
 		} else {
-			// 广播给所有连接
+			// 没有 user_code，广播给所有连接
+			c.logger.Warn("出站消息缺少 user_code，将广播给所有连接",
+				zap.String("chat_id", msg.ChatID),
+			)
 			c.connManager.Broadcast(data)
 		}
 

@@ -29,6 +29,7 @@ export interface SystemPayload {
 export interface UseWebSocketOptions {
   channelCode: string;
   token: string;
+  enabled?: boolean; // 是否启用连接（默认为 true）
   onMessage?: (msg: WebSocketMessage) => void;
   onError?: (error: Error) => void;
   onConnect?: () => void;
@@ -44,7 +45,7 @@ export interface UseWebSocketReturn {
 }
 
 export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
-  const { channelCode, token, onMessage, onError, onConnect, onDisconnect } = options;
+  const { channelCode, token, enabled = true, onMessage, onError, onConnect, onDisconnect } = options;
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
@@ -65,6 +66,10 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
   }, []);
 
   const connect = useCallback(() => {
+    if (!enabled) {
+      console.log('[WebSocket] 连接被禁用');
+      return;
+    }
     if (!channelCode || !token) {
       console.warn('[WebSocket] 缺少 channelCode 或 token');
       return;
@@ -146,7 +151,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
       console.error('[WebSocket] 创建连接失败:', error);
       onError?.(new Error('创建 WebSocket 连接失败'));
     }
-  }, [channelCode, token, onMessage, onError, onConnect, onDisconnect, clearTimers]);
+  }, [channelCode, token, enabled, onMessage, onError, onConnect, onDisconnect, clearTimers]);
 
   const disconnect = useCallback(() => {
     clearTimers();
@@ -179,12 +184,17 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
   }, []);
 
   // 组件挂载时连接，卸载时断开
+  // 当 enabled 变为 false 时断开连接，变为 true 时连接
   useEffect(() => {
-    connect();
+    if (enabled) {
+      connect();
+    } else {
+      disconnect();
+    }
     return () => {
       disconnect();
     };
-  }, [connect, disconnect]);
+  }, [connect, disconnect, enabled]);
 
   return {
     isConnected,
