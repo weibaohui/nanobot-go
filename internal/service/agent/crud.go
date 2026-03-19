@@ -50,16 +50,38 @@ func (s *service) CreateAgent(userCode string, req CreateAgentRequest) (*models.
 		historyMessages = 10
 	}
 
+	// 如果个性化配置为空，使用 OpenClaw 默认配置
+	identityContent := req.IdentityContent
+	if identityContent == "" {
+		identityContent = DefaultIdentityContent
+	}
+	soulContent := req.SoulContent
+	if soulContent == "" {
+		soulContent = DefaultSoulContent
+	}
+	agentsContent := req.AgentsContent
+	if agentsContent == "" {
+		agentsContent = DefaultAgentsContent
+	}
+	userContent := req.UserContent
+	if userContent == "" {
+		userContent = DefaultUserContent
+	}
+	toolsContent := req.ToolsContent
+	if toolsContent == "" {
+		toolsContent = DefaultToolsContent
+	}
+
 	agent := &models.Agent{
 		UserCode:              userCode,
 		AgentCode:             agentCode,
 		Name:                  req.Name,
 		Description:           req.Description,
-		IdentityContent:       req.IdentityContent,
-		SoulContent:           req.SoulContent,
-		AgentsContent:         req.AgentsContent,
-		UserContent:           req.UserContent,
-		ToolsContent:          req.ToolsContent,
+		IdentityContent:       identityContent,
+		SoulContent:           soulContent,
+		AgentsContent:         agentsContent,
+		UserContent:           userContent,
+		ToolsContent:          toolsContent,
 		SkillsList:            string(skillsJSON),
 		ToolsList:             string(toolsJSON),
 		Model:                 req.Model,
