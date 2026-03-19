@@ -1,7 +1,7 @@
 #!/bin/bash
 # API 性能测试脚本
 
-BASE_URL="http://localhost:8081"
+BASE_URL="http://localhost:8080"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'

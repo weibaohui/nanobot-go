@@ -11,12 +11,16 @@ import (
 type MessageType string
 
 const (
-	MessageTypePing    MessageType = "ping"    // 心跳请求
-	MessageTypePong    MessageType = "pong"    // 心跳响应
-	MessageTypeMessage MessageType = "message" // 用户消息
-	MessageTypeChunk   MessageType = "chunk"   // AI 流式回复片段
-	MessageTypeError   MessageType = "error"   // 错误消息
-	MessageTypeSystem  MessageType = "system"  // 系统消息
+	MessageTypePing           MessageType = "ping"            // 心跳请求
+	MessageTypePong           MessageType = "pong"            // 心跳响应
+	MessageTypeMessage        MessageType = "message"         // 用户消息
+	MessageTypeChunk          MessageType = "chunk"           // AI 流式回复片段
+	MessageTypeError          MessageType = "error"           // 错误消息
+	MessageTypeSystem         MessageType = "system"          // 系统消息
+	MessageTypeTaskCreated    MessageType = "task_created"    // 任务创建
+	MessageTypeTaskUpdated    MessageType = "task_updated"    // 任务更新
+	MessageTypeTaskCompleted  MessageType = "task_completed"  // 任务完成
+	MessageTypeTaskLog        MessageType = "task_log"        // 任务日志
 )
 
 // Message 通用消息结构
@@ -51,6 +55,43 @@ type SystemPayload struct {
 	Type      string `json:"type,omitempty"`      // 系统消息类型，如 "session_created"
 	SessionID string `json:"session_id,omitempty"`
 	Message   string `json:"message,omitempty"`
+}
+
+// TaskCreatedPayload 任务创建事件负载
+type TaskCreatedPayload struct {
+	ID        string `json:"id"`
+	Status    string `json:"status"`
+	Work      string `json:"work"`
+	Channel   string `json:"channel,omitempty"`
+	ChatID    string `json:"chat_id,omitempty"`
+	CreatedAt string `json:"created_at"`
+	CreatedBy string `json:"created_by,omitempty"`
+}
+
+// TaskUpdatedPayload 任务更新事件负载
+type TaskUpdatedPayload struct {
+	ID        string   `json:"id"`
+	Status    string   `json:"status"`
+	Result    string   `json:"result,omitempty"`
+	Logs      []string `json:"logs,omitempty"`
+	UpdatedAt string   `json:"updated_at"`
+}
+
+// TaskCompletedPayload 任务完成事件负载
+type TaskCompletedPayload struct {
+	ID              string   `json:"id"`
+	Status          string   `json:"status"`
+	Result          string   `json:"result,omitempty"`
+	Logs            []string `json:"logs,omitempty"`
+	CompletedAt     string   `json:"completed_at"`
+	DurationSeconds int      `json:"duration_seconds"`
+}
+
+// TaskLogPayload 任务日志事件负载
+type TaskLogPayload struct {
+	ID        string `json:"id"`
+	Log       string `json:"log"`
+	Timestamp string `json:"timestamp"`
 }
 
 // NewPingMessage 创建心跳请求消息
@@ -142,6 +183,46 @@ func FromStreamChunk(chunk *bus.StreamChunk) *Message {
 // FromOutboundMessage 将 MessageBus 出站消息转换为 WebSocket 消息
 func FromOutboundMessage(msg *bus.OutboundMessage) *Message {
 	return NewChunkMessage(msg.Content, msg.ChatID, true)
+}
+
+// NewTaskCreatedMessage 创建任务创建消息
+func NewTaskCreatedMessage(payload *TaskCreatedPayload) *Message {
+	payloadBytes, _ := json.Marshal(payload)
+	return &Message{
+		Type:      MessageTypeTaskCreated,
+		Payload:   payloadBytes,
+		Timestamp: time.Now().UnixMilli(),
+	}
+}
+
+// NewTaskUpdatedMessage 创建任务更新消息
+func NewTaskUpdatedMessage(payload *TaskUpdatedPayload) *Message {
+	payloadBytes, _ := json.Marshal(payload)
+	return &Message{
+		Type:      MessageTypeTaskUpdated,
+		Payload:   payloadBytes,
+		Timestamp: time.Now().UnixMilli(),
+	}
+}
+
+// NewTaskCompletedMessage 创建任务完成消息
+func NewTaskCompletedMessage(payload *TaskCompletedPayload) *Message {
+	payloadBytes, _ := json.Marshal(payload)
+	return &Message{
+		Type:      MessageTypeTaskCompleted,
+		Payload:   payloadBytes,
+		Timestamp: time.Now().UnixMilli(),
+	}
+}
+
+// NewTaskLogMessage 创建任务日志消息
+func NewTaskLogMessage(payload *TaskLogPayload) *Message {
+	payloadBytes, _ := json.Marshal(payload)
+	return &Message{
+		Type:      MessageTypeTaskLog,
+		Payload:   payloadBytes,
+		Timestamp: time.Now().UnixMilli(),
+	}
 }
 
 // mustMarshal 辅助函数：将对象序列化为 JSON，忽略错误

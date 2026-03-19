@@ -317,6 +317,7 @@ const Chat: React.FC = () => {
               onChange={setSelectedUser}
               style={{ width: 220 }}
               dropdownStyle={{ background: '#202123' }}
+              popupClassName="user-select-dropdown"
               options={users.map(u => ({
                 label: `${u.display_name || u.username} (${u.user_code})`,
                 value: u.user_code,
@@ -534,6 +535,12 @@ const Chat: React.FC = () => {
         }
         ::-webkit-scrollbar-thumb:hover {
           background: rgba(255,255,255,0.3);
+        }
+        .user-select-dropdown .ant-select-item {
+          color: #fff;
+        }
+        .user-select-dropdown .ant-select-item-option-selected {
+          background: rgba(255,255,255,0.15);
         }
       `}</style>
     </div>

@@ -39,7 +39,7 @@ dev:
 	@echo "========================================="
 	@echo "  启动 Nanobot 开发环境"
 	@echo "========================================="
-	@echo "  后端 API: http://localhost:8081"
+	@echo "  后端 API: http://localhost:8080"
 	@echo "  前端界面: http://localhost:5173"
 	@echo "  按 Ctrl+C 停止所有服务"
 	@echo "========================================="
@@ -50,7 +50,7 @@ dev:
 
 # 启动后端开发服务器
 dev-backend:
-	go run ./cmd/nanobot gateway --api --api-port=8081
+	go run ./cmd/nanobot gateway --api --api-port=8080
 
 # 启动前端开发服务器
 dev-web:

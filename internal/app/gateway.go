@@ -14,6 +14,7 @@ import (
 	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/internal/api"
 	"github.com/weibaohui/nanobot-go/internal/models"
+	tasksvc "github.com/weibaohui/nanobot-go/internal/service/task"
 	"github.com/weibaohui/nanobot-go/pkg/agent"
 	"github.com/weibaohui/nanobot-go/pkg/agent/provider"
 	"github.com/weibaohui/nanobot-go/pkg/bus"
@@ -100,6 +101,8 @@ func (g *Gateway) StartAPIServer() {
 	// 注入 TaskManager（如果存在）
 	if g.Loop != nil {
 		g.Providers.TaskManager = g.Loop.GetTaskManager()
+		// 初始化 TaskService
+		g.Providers.TaskService = tasksvc.NewService(g.Providers.TaskManager)
 	}
 
 	apiAddr := ":" + strconv.Itoa(g.apiPort)
@@ -109,6 +112,11 @@ func (g *Gateway) StartAPIServer() {
 	wsHandler := NewWebSocketHandler(g, g.Logger)
 	g.APIServer.SetWebSocketHandler(wsHandler)
 	g.Logger.Info("WebSocket 处理器已注册")
+
+	// 注册 Task WebSocket 处理器
+	taskWSHandler := api.NewTaskWebSocketHandler(g.Logger)
+	g.APIServer.SetTaskWebSocketHandler(taskWSHandler)
+	g.Logger.Info("Task WebSocket 处理器已注册")
 
 	if err := g.APIServer.Start(); err != nil {
 		g.Logger.Error("启动 API 服务器失败", zap.Error(err))

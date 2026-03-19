@@ -3,7 +3,7 @@
 
 set -e
 
-BASE_URL="http://localhost:8081"
+BASE_URL="http://localhost:8080"
 FRONTEND_URL="http://localhost:5173"
 
 RED='\033[0;31m'

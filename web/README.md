@@ -35,7 +35,7 @@ npm run build
 ## 环境变量
 
 ```bash
-VITE_API_URL=http://localhost:8081/api/v1
+VITE_API_URL=http://localhost:8080/api/v1
 ```
 
 ## 项目结构

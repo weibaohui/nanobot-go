@@ -168,6 +168,11 @@ func (t *Task) ToInfo() *Info {
 func (t *Task) ToPersistedTask() *PersistedTask {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	return t.toPersistedTaskInternal()
+}
+
+// toPersistedTaskInternal 内部方法，不获取锁，调用者必须持有锁
+func (t *Task) toPersistedTaskInternal() *PersistedTask {
 	return &PersistedTask{
 		ID:          t.id,
 		Work:        t.work,
@@ -178,4 +183,13 @@ func (t *Task) ToPersistedTask() *PersistedTask {
 		CreatedAt:   t.createdAt,
 		CompletedAt: time.Now(),
 	}
+}
+
+// appendLogInternal 内部方法，不获取锁，调用者必须持有锁
+func (t *Task) appendLogInternal(message string) {
+	entry := fmt.Sprintf("%s %s", time.Now().Format("2006-01-02 15:04:05"), message)
+	if len(t.lastLogs) >= t.logCapacity {
+		t.lastLogs = t.lastLogs[1:]
+	}
+	t.lastLogs = append(t.lastLogs, entry)
 }

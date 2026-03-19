@@ -104,6 +104,7 @@ func (l *Loop) createBackgroundAgentTaskManager() *task.Manager {
 		MaxIterations:   l.maxIterations,
 		Sessions:        l.sessions,
 		HookManager:     l.hookManager,
+		EventBus:        l.bus, // 传递EventBus用于WebSocket推送
 		OnTaskComplete: func(channel, chatID, taskID string, status task.Status, result string) {
 			// 任务完成时发送通知消息
 			statusText := map[task.Status]string{

@@ -1,7 +1,7 @@
 #!/bin/bash
 # API 端到端测试脚本
 
-BASE_URL="http://localhost:8081"
+BASE_URL="http://localhost:8080"
 
 # 颜色定义
 RED='\033[0;31m'
