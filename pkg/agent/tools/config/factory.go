@@ -12,7 +12,6 @@ import (
 type Tools struct {
 	ReadAgentConfigTool   *ReadAgentConfigTool
 	UpdateAgentConfigTool *UpdateAgentConfigTool
-	ManageAgentMemoryTool *ManageAgentMemoryTool
 }
 
 // NewTools 创建配置工具集合
@@ -20,7 +19,6 @@ func NewTools(agentService agentsvc.Service) *Tools {
 	return &Tools{
 		ReadAgentConfigTool:   NewReadAgentConfigTool(agentService),
 		UpdateAgentConfigTool: NewUpdateAgentConfigTool(agentService),
-		ManageAgentMemoryTool: NewManageAgentMemoryTool(agentService),
 	}
 }
 
@@ -37,7 +35,6 @@ func (t *Tools) All() []interface {
 	}{
 		t.ReadAgentConfigTool,
 		t.UpdateAgentConfigTool,
-		t.ManageAgentMemoryTool,
 	}
 }
 
@@ -49,9 +46,4 @@ func (t *Tools) Read() *ReadAgentConfigTool {
 // Update 返回更新工具
 func (t *Tools) Update() *UpdateAgentConfigTool {
 	return t.UpdateAgentConfigTool
-}
-
-// Memory 返回记忆管理工具
-func (t *Tools) Memory() *ManageAgentMemoryTool {
-	return t.ManageAgentMemoryTool
 }

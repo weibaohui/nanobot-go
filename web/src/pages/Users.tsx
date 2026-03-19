@@ -15,7 +15,7 @@ import {
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, KeyOutlined, MessageOutlined } from '@ant-design/icons';
 import { Tooltip } from 'antd';
-import { usersApi, authApi, conversationsApi, streamMemoriesApi } from '../api';
+import { usersApi, authApi, conversationsApi } from '../api';
 import type { User, CreateUserRequest, ConversationRecord } from '../types';
 import dayjs from 'dayjs';
 
@@ -35,9 +35,6 @@ const Users: React.FC = () => {
   const [conversationRecords, setConversationRecords] = useState<ConversationRecord[]>([]);
   const [selectedUserForConversation, setSelectedUserForConversation] = useState<User | null>(null);
   const [selectedDate, setSelectedDate] = useState(dayjs().subtract(1, 'day'));
-  const [organizeLoading, setOrganizeLoading] = useState(false);
-  const [organizeUserCode, setOrganizeUserCode] = useState('');
-  const [organizeDate, setOrganizeDate] = useState(dayjs().subtract(1, 'day'));
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -115,38 +112,6 @@ const Users: React.FC = () => {
       message.error('获取用户对话失败');
     } finally {
       setConversationLoading(false);
-    }
-  };
-
-  const handleOrganizeMemory = async () => {
-    if (conversationRecords.length === 0) {
-      message.warning('当前没有对话记录可整理');
-      return;
-    }
-    if (!organizeUserCode) {
-      message.warning('请输入用户编码');
-      return;
-    }
-
-    setOrganizeLoading(true);
-    try {
-      const conversationIDs = conversationRecords.map(r => String(r.id));
-      const contents = conversationRecords.map(r =>
-        `[${r.role}] ${r.content?.substring(0, 200)}${r.content?.length > 200 ? '...' : ''}`
-      );
-
-      await streamMemoriesApi.build({
-        user_code: organizeUserCode,
-        date: organizeDate.format('YYYY-MM-DD'),
-        conversation_ids: conversationIDs,
-        contents: contents,
-      });
-
-      message.success('短期记忆整理成功');
-    } catch (error: any) {
-      message.error(error?.response?.data?.error || '整理失败');
-    } finally {
-      setOrganizeLoading(false);
     }
   };
 

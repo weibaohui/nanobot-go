@@ -21,10 +21,6 @@ type Agent struct {
 	UserContent     string `gorm:"type:text" json:"user_content"`     // USER.md - 用户信息
 	ToolsContent    string `gorm:"type:text" json:"tools_content"`    // TOOLS.md - 工具本地备注
 
-	// 长期记忆
-	MemoryContent string `gorm:"type:text" json:"memory_content"` // MEMORY.md - 长期记忆内容
-	MemorySummary string `gorm:"type:text" json:"memory_summary"` // 记忆摘要
-
 	// 能力配置
 	SkillsList string `gorm:"type:text" json:"skills_list"` // 可用技能列表，JSON 数组
 	ToolsList  string `gorm:"type:text" json:"tools_list"`  // 可用工具列表，JSON 数组

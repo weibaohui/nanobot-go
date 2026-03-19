@@ -49,14 +49,6 @@ func GetSessionsPath() string {
 	return dir
 }
 
-// GetMemoryPath 获取内存目录
-// 固定路径：程序所在目录/data/memory
-func GetMemoryPath(workspace string) string {
-	dir := filepath.Join(GetDataDir(), "memory")
-	os.MkdirAll(dir, 0755)
-	return dir
-}
-
 // GetSkillsPath 获取技能目录
 func GetSkillsPath(workspace string) string {
 	ws := GetWorkspacePath(workspace)

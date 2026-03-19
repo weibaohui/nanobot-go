@@ -32,7 +32,6 @@ type Gateway struct {
 	SessionManager *session.Manager
 	Providers      *api.Providers
 	APIServer      *api.Server
-	Memory         *MemoryComponents
 	Hook           *HookComponents
 	Loop           *agent.Loop
 	ChannelManager *channels.Manager
@@ -113,14 +112,6 @@ func (g *Gateway) StartAPIServer() {
 	if err := g.APIServer.Start(); err != nil {
 		g.Logger.Error("启动 API 服务器失败", zap.Error(err))
 	}
-}
-
-// InitMemory 初始化记忆模块
-func (g *Gateway) InitMemory() {
-	if g.DB == nil || g.DB.DB == nil {
-		return
-	}
-	g.Memory = InitMemory(g.Config, g.DB.DB.DB(), g.Logger)
 }
 
 // InitHookSystem 初始化 Hook 系统
@@ -226,14 +217,6 @@ func (g *Gateway) Start() error {
 	// 启动消息分发器
 	g.MessageBus.StartDispatcher(ctx)
 
-	// 启动记忆升级定时任务
-	if g.Config.Memory.Enabled && g.Memory != nil && g.Memory.UpgradeJob != nil {
-		go g.runMemoryUpgradeJob(ctx)
-		g.Logger.Info("记忆升级定时任务已启动",
-			zap.String("time_window", g.Config.Memory.Scheduled.TimeWindow),
-		)
-	}
-
 	// 启动所有渠道
 	if err := g.ChannelManager.StartAll(ctx); err != nil {
 		return fmt.Errorf("启动渠道失败: %w", err)
@@ -275,24 +258,6 @@ func (g *Gateway) Start() error {
 
 	g.Shutdown()
 	return nil
-}
-
-// runMemoryUpgradeJob 运行记忆升级定时任务
-func (g *Gateway) runMemoryUpgradeJob(ctx context.Context) {
-	ticker := time.NewTicker(1 * time.Hour)
-	defer ticker.Stop()
-
-	// 立即执行一次
-	g.Memory.UpgradeJob.Run()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			g.Memory.UpgradeJob.Run()
-		}
-	}
 }
 
 // Shutdown 关闭网关

@@ -70,7 +70,6 @@ func (l *Loop) registerDefaultTools() {
 		configTools := config.NewTools(l.agentService)
 		l.tools.Register(configTools.ReadAgentConfigTool)
 		l.tools.Register(configTools.UpdateAgentConfigTool)
-		l.tools.Register(configTools.ManageAgentMemoryTool)
 	}
 
 	// 注册 use_mcp 工具（用于按需加载 MCP Server）
