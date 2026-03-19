@@ -28,7 +28,6 @@ import {
   MessageOutlined,
   FilterOutlined,
   ClearOutlined,
-  FileTextOutlined,
 } from '@ant-design/icons';
 import { conversationsApi } from '../api';
 import type { ConversationRecord } from '../types';

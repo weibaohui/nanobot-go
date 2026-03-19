@@ -12,8 +12,6 @@ import {
   MenuUnfoldOutlined,
   CommentOutlined,
   TeamOutlined,
-  ThunderboltOutlined,
-  DatabaseOutlined,
   ApiOutlined,
   LogoutOutlined,
   ToolOutlined,
