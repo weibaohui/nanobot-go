@@ -172,8 +172,6 @@ const Users: React.FC = () => {
                 const yesterday = dayjs().subtract(1, 'day');
                 setSelectedUserForConversation(record);
                 setSelectedDate(yesterday);
-                setOrganizeDate(yesterday);
-                setOrganizeUserCode(record.user_code || record.username);
                 fetchUserConversations(record, yesterday);
                 setConversationModalVisible(true);
               }}
@@ -306,16 +304,7 @@ const Users: React.FC = () => {
           setSelectedUserForConversation(null);
         }}
         footer={
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Button
-              type="primary"
-              icon={<MessageOutlined />}
-              loading={organizeLoading}
-              disabled={conversationRecords.length === 0}
-              onClick={handleOrganizeMemory}
-            >
-              整理为记忆 ({conversationRecords.length})
-            </Button>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <Button onClick={() => setConversationModalVisible(false)}>关闭</Button>
           </div>
         }
@@ -329,7 +318,6 @@ const Users: React.FC = () => {
               onChange={(date) => {
                 if (date && selectedUserForConversation) {
                   setSelectedDate(date);
-                  setOrganizeDate(date);
                   fetchUserConversations(selectedUserForConversation, date);
                 }
               }}
