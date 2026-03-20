@@ -1,18 +1,15 @@
 package api
 
 import (
-	"github.com/weibaohui/nanobot-go/pkg/agent/provider"
 	"github.com/weibaohui/nanobot-go/pkg/agent/task"
 	"github.com/weibaohui/nanobot-go/config"
 	"github.com/weibaohui/nanobot-go/internal/repository"
 	"github.com/weibaohui/nanobot-go/internal/service"
 	"github.com/weibaohui/nanobot-go/internal/service/codelookup"
 	"github.com/weibaohui/nanobot-go/internal/service/conversation"
-	ms "github.com/weibaohui/nanobot-go/internal/service/memory"
 	mcpsvc "github.com/weibaohui/nanobot-go/internal/service/mcp"
 	skillsvc "github.com/weibaohui/nanobot-go/internal/service/skill"
 	tasksvc "github.com/weibaohui/nanobot-go/internal/service/task"
-	memservice "github.com/weibaohui/nanobot-go/internal/memory/service"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -38,8 +35,6 @@ type Providers struct {
 	CronJobService            CronJobService
 	ConversationRecordService ConversationRecordService
 	ConversationService       conversation.Service
-	StreamMemoryService       ms.StreamMemoryService
-	LongTermMemoryService     ms.LongTermMemoryService
 	SessionManager            SessionManager
 	MCPServerRepo             repository.MCPServerRepository
 	AgentMCPBindingRepo       repository.AgentMCPBindingRepository
@@ -70,28 +65,6 @@ func NewProviders(db *gorm.DB, cfg *config.Config, logger *zap.Logger) *Provider
 	cronJobService := service.NewCronJobService(db, codeLookupService)
 	conversationRecordService := conversation.NewRecordServiceAdapter(convRepo)
 
-	// 创建 LLM 客户端和 summarizer（用于短期记忆生成摘要）
-	// 使用公共函数从数据库直接创建 ChatModelAdapter
-	var summarizer memservice.MemorySummarizer
-	if cfg != nil && logger != nil {
-		// 使用公共函数直接创建 ChatModelAdapter
-		adapter, err := provider.NewChatModelAdapterFromDB(db, logger, nil)
-		if err != nil {
-			logger.Warn("创建 ChatModelAdapter 失败，记忆总结功能将不可用", zap.Error(err))
-		} else {
-			// 获取 adapter 内部的 ChatModel
-			llmClient := memservice.NewEinoLLMClient(adapter.GetChatModel(), logger)
-			summarizer = memservice.NewMemorySummarizer(
-				llmClient,
-				cfg.Memory.Summarization.ConversationPrompt,
-				cfg.Memory.Summarization.LongTermPrompt,
-			)
-		}
-	}
-
-	streamMemoryService := ms.NewStreamMemoryService(db, summarizer)
-	longTermMemoryService := ms.NewLongTermMemoryService(db)
-
 	// 创建新的对话服务（支持统计功能）
 	convService := conversation.NewService(convRepo)
 
@@ -119,8 +92,6 @@ func NewProviders(db *gorm.DB, cfg *config.Config, logger *zap.Logger) *Provider
 		CronJobService:            cronJobService,
 		ConversationRecordService: conversationRecordService,
 		ConversationService:       convService,
-		StreamMemoryService:       streamMemoryService,
-		LongTermMemoryService:     longTermMemoryService,
 		MCPServerRepo:             mcpServerRepo,
 		AgentMCPBindingRepo:       agentMCPBindingRepo,
 		MCPService:                mcpService,

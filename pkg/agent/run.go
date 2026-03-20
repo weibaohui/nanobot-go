@@ -247,7 +247,6 @@ func (l *Loop) loadChannelAgentConfig(ctx context.Context, msg *bus.InboundMessa
 		AgentsContent:   agentConfig.AgentsContent,
 		ToolsContent:    agentConfig.ToolsContent,
 		UserContent:     agentConfig.UserContent,
-		MemoryContent:   agentConfig.MemoryContent,
 		HistoryMessages: agentConfig.HistoryMessages,
 	}
 	l.context.SetAgentConfig(config)

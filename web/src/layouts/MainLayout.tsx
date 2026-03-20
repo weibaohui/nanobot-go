@@ -12,8 +12,6 @@ import {
   MenuUnfoldOutlined,
   CommentOutlined,
   TeamOutlined,
-  ThunderboltOutlined,
-  DatabaseOutlined,
   ApiOutlined,
   LogoutOutlined,
   ToolOutlined,
@@ -74,8 +72,6 @@ const MainLayout: React.FC = () => {
     { key: '/tasks', icon: <UnorderedListOutlined />, label: '后台任务' },
     { key: '/conversations', icon: <CommentOutlined />, label: '对话记录' },
     { key: '/sessions', icon: <TeamOutlined />, label: '会话管理' },
-    { key: '/stream-memories', icon: <ThunderboltOutlined />, label: '短期记忆' },
-    { key: '/long-term-memories', icon: <DatabaseOutlined />, label: '长期记忆' },
     { key: '/users', icon: <UserOutlined />, label: '用户' },
   ];
 

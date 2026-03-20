@@ -11,7 +11,6 @@ import (
 	"gorm.io/gorm/logger"
 
 	"github.com/weibaohui/nanobot-go/config"
-	memorymodels "github.com/weibaohui/nanobot-go/internal/memory/models"
 	"github.com/weibaohui/nanobot-go/internal/models"
 )
 
@@ -156,10 +155,6 @@ func (c *Client) InitSchema() error {
 		return fmt.Errorf("创建 conversation_records 表失败: %w", err)
 	}
 
-	// 自动迁移记忆模块表结构
-	if err := c.db.AutoMigrate(&memorymodels.StreamMemory{}, &memorymodels.LongTermMemory{}); err != nil {
-		return fmt.Errorf("创建记忆模块表失败: %w", err)
-	}
 
 	// 自动迁移 MCP 相关表
 	if err := c.db.AutoMigrate(&models.MCPServer{}, &models.AgentMCPBinding{}, &models.MCPToolModel{}, &models.MCPToolLog{}); err != nil {

@@ -12,8 +12,6 @@ import Users from './pages/Users';
 import Conversations from './pages/Conversations';
 import ConversationStats from './pages/ConversationStats';
 import Sessions from './pages/Sessions';
-import StreamMemories from './pages/StreamMemories';
-import LongTermMemories from './pages/LongTermMemories';
 import MCPServers from './pages/MCPServers';
 import Login from './pages/Login';
 import Skills from './pages/Skills';
@@ -82,8 +80,6 @@ const App: React.FC = () => {
             <Route path="conversations" element={<Conversations />} />
             <Route path="conversations/stats" element={<ConversationStats />} />
             <Route path="sessions" element={<Sessions />} />
-            <Route path="stream-memories" element={<StreamMemories />} />
-            <Route path="long-term-memories" element={<LongTermMemories />} />
             <Route path="mcp-servers" element={<MCPServers />} />
             <Route path="skills" element={<Skills />} />
             <Route path="tasks" element={<Tasks />} />

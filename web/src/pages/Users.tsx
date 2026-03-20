@@ -15,7 +15,7 @@ import {
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, KeyOutlined, MessageOutlined } from '@ant-design/icons';
 import { Tooltip } from 'antd';
-import { usersApi, authApi, conversationsApi, streamMemoriesApi } from '../api';
+import { usersApi, authApi, conversationsApi } from '../api';
 import type { User, CreateUserRequest, ConversationRecord } from '../types';
 import dayjs from 'dayjs';
 
@@ -35,9 +35,6 @@ const Users: React.FC = () => {
   const [conversationRecords, setConversationRecords] = useState<ConversationRecord[]>([]);
   const [selectedUserForConversation, setSelectedUserForConversation] = useState<User | null>(null);
   const [selectedDate, setSelectedDate] = useState(dayjs().subtract(1, 'day'));
-  const [organizeLoading, setOrganizeLoading] = useState(false);
-  const [organizeUserCode, setOrganizeUserCode] = useState('');
-  const [organizeDate, setOrganizeDate] = useState(dayjs().subtract(1, 'day'));
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -118,38 +115,6 @@ const Users: React.FC = () => {
     }
   };
 
-  const handleOrganizeMemory = async () => {
-    if (conversationRecords.length === 0) {
-      message.warning('当前没有对话记录可整理');
-      return;
-    }
-    if (!organizeUserCode) {
-      message.warning('请输入用户编码');
-      return;
-    }
-
-    setOrganizeLoading(true);
-    try {
-      const conversationIDs = conversationRecords.map(r => String(r.id));
-      const contents = conversationRecords.map(r =>
-        `[${r.role}] ${r.content?.substring(0, 200)}${r.content?.length > 200 ? '...' : ''}`
-      );
-
-      await streamMemoriesApi.build({
-        user_code: organizeUserCode,
-        date: organizeDate.format('YYYY-MM-DD'),
-        conversation_ids: conversationIDs,
-        contents: contents,
-      });
-
-      message.success('短期记忆整理成功');
-    } catch (error: any) {
-      message.error(error?.response?.data?.error || '整理失败');
-    } finally {
-      setOrganizeLoading(false);
-    }
-  };
-
   const columns = [
     { title: 'ID', dataIndex: 'id', width: 60 },
     { title: '用户编码', dataIndex: 'user_code', ellipsis: true },
@@ -207,8 +172,6 @@ const Users: React.FC = () => {
                 const yesterday = dayjs().subtract(1, 'day');
                 setSelectedUserForConversation(record);
                 setSelectedDate(yesterday);
-                setOrganizeDate(yesterday);
-                setOrganizeUserCode(record.user_code || record.username);
                 fetchUserConversations(record, yesterday);
                 setConversationModalVisible(true);
               }}
@@ -341,16 +304,7 @@ const Users: React.FC = () => {
           setSelectedUserForConversation(null);
         }}
         footer={
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Button
-              type="primary"
-              icon={<MessageOutlined />}
-              loading={organizeLoading}
-              disabled={conversationRecords.length === 0}
-              onClick={handleOrganizeMemory}
-            >
-              整理为记忆 ({conversationRecords.length})
-            </Button>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <Button onClick={() => setConversationModalVisible(false)}>关闭</Button>
           </div>
         }
@@ -364,7 +318,6 @@ const Users: React.FC = () => {
               onChange={(date) => {
                 if (date && selectedUserForConversation) {
                   setSelectedDate(date);
-                  setOrganizeDate(date);
                   fetchUserConversations(selectedUserForConversation, date);
                 }
               }}

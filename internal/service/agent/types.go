@@ -53,7 +53,6 @@ type AgentConfig struct {
 	AgentsContent   string  `json:"agents_content"`
 	UserContent     string  `json:"user_content"`
 	ToolsContent    string  `json:"tools_content"`
-	MemoryContent   string  `json:"memory_content"` // 长期记忆内容
 	Model           string  `json:"model"`
 	MaxTokens       int     `json:"max_tokens"`
 	Temperature     float64 `json:"temperature"`
@@ -76,14 +75,6 @@ type Service interface {
 	GetAgentConfigByCode(agentCode string) (*AgentConfig, error)
 	UpdateAgentConfig(agentID uint, config *AgentConfig) error
 	UpdateAgentConfigByCode(agentCode string, config *AgentConfig) error
-
-	// 记忆管理
-	GetMemory(agentID uint) (string, error)
-	GetMemoryByCode(agentCode string) (string, error)
-	UpdateMemory(agentID uint, content string) error
-	UpdateMemoryByCode(agentCode string, content string) error
-	GetMemorySummary(agentID uint) (string, error)
-	UpdateMemorySummary(agentID uint, summary string) error
 
 	// 能力管理
 	GetAvailableSkills(agentID uint) ([]string, error)

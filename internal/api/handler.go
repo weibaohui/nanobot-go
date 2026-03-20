@@ -1,7 +1,6 @@
 package api
 
 import (
-	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -29,8 +28,6 @@ type Handler struct {
 	cronJobService            CronJobService
 	conversationRecordService ConversationRecordService
 	conversationService       conversation.Service
-	streamMemoryService       StreamMemoryService
-	longTermMemoryService     LongTermMemoryService
 	sessionManager            SessionManager
 	mcpService                MCPService
 	skillService              skillsvc.Service
@@ -48,8 +45,6 @@ func NewHandler(
 	cronJobService CronJobService,
 	conversationRecordService ConversationRecordService,
 	conversationService conversation.Service,
-	streamMemoryService StreamMemoryService,
-	longTermMemoryService LongTermMemoryService,
 	sessionManager SessionManager,
 	mcpService MCPService,
 	skillService skillsvc.Service,
@@ -65,8 +60,6 @@ func NewHandler(
 		cronJobService:            cronJobService,
 		conversationRecordService: conversationRecordService,
 		conversationService:       conversationService,
-		streamMemoryService:       streamMemoryService,
-		longTermMemoryService:     longTermMemoryService,
 		sessionManager:            sessionManager,
 		mcpService:                mcpService,
 		skillService:              skillService,
@@ -138,8 +131,8 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 				h.handleSessionByKey(c)
 			})
 			sessions.POST("/:id/cancel", h.cancelSession)
-		sessions.GET("/:id/active", h.checkSessionActive)
-	}
+			sessions.GET("/:id/active", h.checkSessionActive)
+		}
 
 		// Provider API
 		providers := authorized.Group("/providers")
@@ -178,34 +171,8 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 			conversations.DELETE("/:id", h.deleteConversationRecord)
 			conversations.GET("/session/:sessionKey", h.handleConversationBySession)
 			conversations.GET("/trace/:traceID", h.handleConversationByTrace)
-		conversations.GET("/user/:userCode/date/:date", h.handleConversationByUserAndDate)
+			conversations.GET("/user/:userCode/date/:date", h.handleConversationByUserAndDate)
 			conversations.GET("/stats", h.handleConversationStats)
-		}
-
-		// Short-term Memory API
-		streamMemories := authorized.Group("/stream-memories")
-		{
-			streamMemories.GET("", h.handleStreamMemories)
-			streamMemories.GET("/:id", h.handleStreamMemoryByID)
-			streamMemories.POST("", h.createStreamMemory)
-			streamMemories.PUT("/:id", h.updateStreamMemory)
-			streamMemories.DELETE("/:id", h.deleteStreamMemory)
-			streamMemories.GET("/unprocessed", h.handleUnprocessedMemories)
-		streamMemories.POST("/build", h.handleBuildStreamMemory)
-		streamMemories.POST("/upgrade", h.handleUpgradeMemories)
-		}
-
-		// Long-term Memory API
-		longTermMemories := authorized.Group("/long-term-memories")
-		{
-			longTermMemories.GET("", h.handleLongTermMemories)
-			longTermMemories.GET("/:id", h.handleLongTermMemoryByID)
-			longTermMemories.GET("/date/:date", h.handleLongTermMemoryByDate)
-			longTermMemories.POST("", h.createLongTermMemory)
-			longTermMemories.PUT("/:id", h.updateLongTermMemory)
-			longTermMemories.DELETE("/:id", h.deleteLongTermMemory)
-			longTermMemories.GET("/search", h.searchLongTermMemories)
-			longTermMemories.GET("/recent", h.getRecentLongTermMemories)
 		}
 
 		// MCP Server API
@@ -301,13 +268,3 @@ type SuccessResponse struct {
 	Data    interface{} `json:"data,omitempty"`
 }
 
-// writeJSON writes JSON response (kept for backward compatibility)
-func writeJSON(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-}
-
-// writeError writes error response (kept for backward compatibility)
-func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, ErrorResponse{Error: message})
-}

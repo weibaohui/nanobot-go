@@ -30,7 +30,6 @@ type AgentConfig struct {
 	AgentsContent   string // AGENTS.md 内容
 	ToolsContent    string // TOOLS.md 内容
 	UserContent     string // USER.md 内容
-	MemoryContent   string // 长期记忆内容（来自数据库 agents.memory_content）
 
 	// 运行时配置
 	HistoryMessages int // 携带的历史对话消息数量（默认10，范围0-50）
@@ -142,12 +141,6 @@ func (c *ContextBuilder) BuildSystemPromptWithMode(mode BootstrapMode) string {
 		parts = append(parts, bootstrap)
 	}
 
-	// 内存上下文 - 优先从数据库加载，其次从文件系统
-	memory := c.getMemoryContext()
-	if memory != "" {
-		parts = append(parts, "# 内存\n\n"+memory)
-	}
-
 	// 始终加载的技能
 	alwaysSkills := c.skills.GetAlwaysSkills()
 	if len(alwaysSkills) > 0 {
@@ -196,7 +189,6 @@ func (c *ContextBuilder) getIdentity() string {
 - 搜索网络和获取网页
 - 向用户发送消息到聊天渠道
 - 加载并使用技能（use_skill 工具）
-- 管理长期记忆（manage_agent_memory 工具）
 
 ## 当前时间
 %s (%s)
@@ -204,26 +196,11 @@ func (c *ContextBuilder) getIdentity() string {
 ## 运行环境
 %s %s, Go %s
 
-## 记忆管理
-当你需要记住重要信息时，使用 manage_agent_memory 工具：
-- action: "read" - 读取当前记忆内容
-- action: "append" - 追加新的记忆内容
-- action: "clear" - 清空所有记忆
-
-重要: 当回答直接问题或对话时，直接回复文本。
+重要:当回答直接问题或对话时，直接回复文本。
 只有当你需要向特定聊天渠道（如 WhatsApp）发送消息时才使用 'message' 工具。
 对于普通对话，只需回复文本 - 不要调用 message 工具。
 
 始终保持有帮助、准确和简洁。使用工具时，逐步思考：你知道什么、你需要什么、以及为什么选择这个工具。`, now, tz, system, runtime.GOARCH, goVersion)
-}
-
-// getMemoryContext 获取记忆上下文
-// 从数据库 Agent 配置加载
-func (c *ContextBuilder) getMemoryContext() string {
-	if c.agentConfig != nil && c.agentConfig.MemoryContent != "" {
-		return "## 长期记忆\n" + c.agentConfig.MemoryContent
-	}
-	return ""
 }
 
 // loadBootstrapFiles 加载引导文件
