@@ -274,7 +274,56 @@ const Conversations: React.FC = () => {
       roots.push(node);
     });
 
-    return roots;
+    // 处理工具调用和结果的关联：将 tool_result 附加到对应的 tool 节点下
+    const processed = new Set<number>();
+    const newRoots: TraceNode[] = [];
+
+    const processNode = (node: TraceNode) => {
+      if (processed.has(node.record.id)) return;
+      processed.add(node.record.id);
+
+      // 如果是 tool 节点，查找其后续的 tool_result 作为子节点
+      if (node.record.role === 'tool') {
+        const toolIndex = sorted.findIndex(r => r.id === node.record.id);
+        if (toolIndex >= 0) {
+          // 查找紧跟在 tool 后面的 tool_result（通常是同一个 span_id 或下一个记录）
+          for (let i = toolIndex + 1; i < sorted.length; i++) {
+            const nextRecord = sorted[i];
+            // 只找紧邻的 tool_result，遇到其他角色停止
+            if (nextRecord.role === 'tool_result') {
+              const resultNode = nodeMap.get(nextRecord.id);
+              if (resultNode && !processed.has(nextRecord.id)) {
+                node.children = node.children || [];
+                node.children.push(resultNode);
+                processed.add(nextRecord.id);
+              }
+            } else if (nextRecord.role !== 'tool' && nextRecord.role !== 'system') {
+              // 遇到非工具相关角色，停止查找
+              break;
+            }
+          }
+        }
+      }
+
+      // 递归处理子节点
+      if (node.children) {
+        node.children = node.children.filter(child => !processed.has(child.record.id));
+        node.children.forEach(processNode);
+      }
+
+      newRoots.push(node);
+    };
+
+    roots.forEach(processNode);
+
+    // 返回未被处理的节点（已处理的已经在树中）
+    return newRoots.filter(node => {
+      // 检查是否已经在某个节点的 children 中
+      const isInChildren = newRoots.some(root =>
+        root !== node && root.children?.some(child => child.record.id === node.record.id)
+      );
+      return !isInChildren;
+    });
   };
 
   // 计算链路统计
