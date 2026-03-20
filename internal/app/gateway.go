@@ -117,6 +117,12 @@ func (g *Gateway) StartAPIServer() {
 	g.APIServer.SetTaskWebSocketHandler(taskWSHandler)
 	g.Logger.Info("Task WebSocket 处理器已注册")
 
+	// 订阅任务事件并通过 WebSocket 广播
+	g.MessageBus.SubscribeTaskEvent(func(eventType string, payload map[string]any) {
+		data, _ := json.Marshal(payload)
+		taskWSHandler.Broadcast(data)
+	})
+
 	if err := g.APIServer.Start(); err != nil {
 		g.Logger.Error("启动 API 服务器失败", zap.Error(err))
 	}
