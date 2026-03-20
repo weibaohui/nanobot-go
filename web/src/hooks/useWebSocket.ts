@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import type { TaskStatus } from '../types';
 
 // WebSocket 消息类型
-export type WebSocketMessageType = 'ping' | 'pong' | 'message' | 'chunk' | 'error' | 'system';
+export type WebSocketMessageType =
+  | 'ping' | 'pong' | 'message' | 'chunk' | 'error' | 'system'
+  | 'task_created' | 'task_updated' | 'task_completed' | 'task_log';
 
 export interface WebSocketMessage {
   type: WebSocketMessageType;
@@ -26,6 +29,34 @@ export interface SystemPayload {
   message?: string;
 }
 
+// Task 事件 Payload 类型
+export interface TaskCreatedPayload {
+  id: string;
+  status: TaskStatus;
+  work: string;
+  channel?: string;
+  chat_id?: string;
+  created_at: string;
+  created_by?: string;
+}
+
+export interface TaskUpdatedPayload {
+  id: string;
+  status: TaskStatus;
+  result?: string;
+  logs?: string[];
+  updated_at: string;
+}
+
+export interface TaskCompletedPayload {
+  id: string;
+  status: 'finished' | 'failed' | 'stopped';
+  result?: string;
+  logs?: string[];
+  completed_at: string;
+  duration_seconds: number;
+}
+
 export interface UseWebSocketOptions {
   channelCode: string;
   token: string;
@@ -34,6 +65,10 @@ export interface UseWebSocketOptions {
   onError?: (error: Error) => void;
   onConnect?: () => void;
   onDisconnect?: () => void;
+  // Task 事件回调
+  onTaskCreated?: (payload: TaskCreatedPayload) => void;
+  onTaskUpdated?: (payload: TaskUpdatedPayload) => void;
+  onTaskCompleted?: (payload: TaskCompletedPayload) => void;
 }
 
 export interface UseWebSocketReturn {
@@ -45,7 +80,18 @@ export interface UseWebSocketReturn {
 }
 
 export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
-  const { channelCode, token, enabled = true, onMessage, onError, onConnect, onDisconnect } = options;
+  const {
+    channelCode,
+    token,
+    enabled = true,
+    onMessage,
+    onError,
+    onConnect,
+    onDisconnect,
+    onTaskCreated,
+    onTaskUpdated,
+    onTaskCompleted,
+  } = options;
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
@@ -113,6 +159,19 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
           // 处理心跳响应
           if (msg.type === 'pong') {
             return;
+          }
+
+          // 处理 Task 事件
+          switch (msg.type) {
+            case 'task_created':
+              onTaskCreated?.(msg.payload as TaskCreatedPayload);
+              break;
+            case 'task_updated':
+              onTaskUpdated?.(msg.payload as TaskUpdatedPayload);
+              break;
+            case 'task_completed':
+              onTaskCompleted?.(msg.payload as TaskCompletedPayload);
+              break;
           }
 
           onMessage?.(msg);

@@ -6,6 +6,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/weibaohui/nanobot-go/pkg/agent/hooks"
+	"github.com/weibaohui/nanobot-go/pkg/bus"
 	"github.com/weibaohui/nanobot-go/pkg/session"
 	"go.uber.org/zap"
 )
@@ -51,6 +52,7 @@ type ManagerConfig struct {
 	Sessions              *session.Manager
 	OnTaskComplete        func(channel, chatID, taskID string, status Status, result string)
 	HookManager           *hooks.HookManager
+	EventBus              *bus.MessageBus // 任务事件总线，用于WebSocket推送
 }
 
 // ContextBuilder 上下文构建器接口

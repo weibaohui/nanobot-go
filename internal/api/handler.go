@@ -210,8 +210,10 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 		tasks := authorized.Group("/tasks")
 		{
 			tasks.GET("", h.listTasks)
+			tasks.POST("", h.createTask)
 			tasks.GET("/:id", h.getTask)
 			tasks.POST("/:id/stop", h.stopTask)
+			tasks.POST("/:id/retry", h.retryTask)
 		}
 	}
 }

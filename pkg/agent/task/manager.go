@@ -38,6 +38,7 @@ type Manager struct {
 	mu                sync.RWMutex
 	runningTasks      map[string]*Task
 	persistence       *Persistence
+	eventPublisher    *EventPublisher // 任务事件发布器
 }
 
 // NewManager 创建后台任务管理器
@@ -95,6 +96,9 @@ func NewManager(cfg *ManagerConfig) (*Manager, error) {
 	m.persistence = NewPersistence(tasksDir, logger, &m.taskCounter)
 	m.persistence.LoadCounter()
 
+	// 初始化事件发布器
+	m.eventPublisher = NewEventPublisher(cfg.EventBus, logger)
+
 	return m, nil
 }
 
@@ -104,7 +108,7 @@ func (m *Manager) SetRegisteredTools(names []string) {
 }
 
 // StartTask 启动任务
-func (m *Manager) StartTask(ctx context.Context, work, channel, chatID string) (string, Status, error) {
+func (m *Manager) StartTask(ctx context.Context, work, channel, chatID string, createdBy ...string) (string, Status, error) {
 	if work == "" {
 		return "", "", fmt.Errorf("任务内容不能为空")
 	}
@@ -120,7 +124,11 @@ func (m *Manager) StartTask(ctx context.Context, work, channel, chatID string) (
 	m.runningTasks[taskID] = task
 	m.mu.Unlock()
 
-	go m.runTask(ctx, task, channel, chatID)
+	creator := ""
+	if len(createdBy) > 0 {
+		creator = createdBy[0]
+	}
+	go m.runTask(ctx, task, channel, chatID, creator)
 
 	return taskID, StatusRunning, nil
 }
@@ -210,15 +218,23 @@ func (m *Manager) ListTasks() ([]*Info, error) {
 	return results, nil
 }
 
-func (m *Manager) runTask(ctx context.Context, task *Task, channel, chatID string) {
+func (m *Manager) runTask(ctx context.Context, task *Task, channel, chatID string, createdBy string) {
+	startTime := time.Now()
+
 	execCtx, cancel := m.buildTaskContext(ctx)
 	task.SetCancel(cancel)
 	task.SetStatus(StatusRunning)
 	task.AppendLog("任务启动")
 
+	// 发布任务创建事件
+	if m.eventPublisher != nil {
+		m.eventPublisher.PublishTaskCreated(task, createdBy)
+	}
+
 	result, err := m.executeTask(execCtx, task.Work(), channel, chatID)
 
 	// 在锁内准备需要的数据，然后释放锁再调用可能获取 m.mu 的函数
+	// 注意：这里直接访问字段而不是调用方法，因为方法内部也会加锁，会导致死锁
 	task.mu.Lock()
 	var (
 		status        Status
@@ -227,33 +243,33 @@ func (m *Manager) runTask(ctx context.Context, task *Task, channel, chatID strin
 		persistedTask *PersistedTask
 		notifyResult  string
 	)
-	if task.IsStopRequested() || execCtx.Err() == context.Canceled {
+	if task.stopRequested || execCtx.Err() == context.Canceled {
 		task.status = StatusStopped
-		task.AppendLog("任务已停止")
-		task.CloseDone()
+		task.appendLogInternal("任务已停止")
+		close(task.done)
 		status = task.status
 		taskID = task.id
 		shouldPersist = true
-		persistedTask = task.ToPersistedTask()
+		persistedTask = task.toPersistedTaskInternal()
 		notifyResult = ""
 	} else if err != nil {
 		task.status = StatusFailed
-		task.AppendLog(fmt.Sprintf("任务失败: %v", err))
-		task.CloseDone()
+		task.appendLogInternal(fmt.Sprintf("任务失败: %v", err))
+		close(task.done)
 		status = task.status
 		taskID = task.id
 		shouldPersist = true
-		persistedTask = task.ToPersistedTask()
+		persistedTask = task.toPersistedTaskInternal()
 		notifyResult = result
 	} else {
 		task.status = StatusFinished
 		task.result = result
-		task.AppendLog("任务完成")
-		task.CloseDone()
+		task.appendLogInternal("任务完成")
+		close(task.done)
 		status = task.status
 		taskID = task.id
 		shouldPersist = true
-		persistedTask = task.ToPersistedTask()
+		persistedTask = task.toPersistedTaskInternal()
 		notifyResult = result
 	}
 	task.mu.Unlock()
@@ -262,6 +278,13 @@ func (m *Manager) runTask(ctx context.Context, task *Task, channel, chatID strin
 	if shouldPersist {
 		m.persistence.AppendTaskToFile(persistedTask)
 	}
+
+	// 发布任务完成事件
+	if m.eventPublisher != nil {
+		duration := time.Since(startTime)
+		m.eventPublisher.PublishTaskCompleted(task, duration)
+	}
+
 	if m.onTaskComplete != nil {
 		m.onTaskComplete(channel, chatID, taskID, status, notifyResult)
 	}

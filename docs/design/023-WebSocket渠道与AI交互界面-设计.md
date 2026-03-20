@@ -108,7 +108,7 @@ type Channel struct {
 
 // Config WebSocket 渠道配置
 type Config struct {
-    Addr string `json:"addr"`  // 监听地址，如 ":8081"
+    Addr string `json:"addr"`  // 监听地址，如 ":8080"
     Path string `json:"path"`  // WebSocket 路径，如 "/ws/chat"
 }
 ```
@@ -788,7 +788,7 @@ const handleError = (error: WebSocketError) => {
 
 ```bash
 # WebSocket 配置（可选，默认使用配置文件）
-WEBSOCKET_ADDR=:8081
+WEBSOCKET_ADDR=:8080
 WEBSOCKET_PATH=/ws/chat
 WEBSOCKET_MAX_CONNECTIONS=1000
 ```

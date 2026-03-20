@@ -9,7 +9,7 @@ exclude_dir = ["tmp", "vendor","bin","web"]
 
 
 # 这是现在唯一可靠的运行方式
-full_bin = "./tmp/nanobot gateway --api --api-port=8081"
+full_bin = "./tmp/nanobot gateway --api --api-port=8080"
 
 [log]
 time = true

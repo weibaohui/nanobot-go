@@ -23,12 +23,13 @@ type WebSocketHandler interface {
 
 // Server API 服务器
 type Server struct {
-	handler   *Handler
-	server    *http.Server
-	logger    *zap.Logger
-	router    *gin.Engine
-	providers *Providers
-	wsHandler WebSocketHandler
+	handler         *Handler
+	server          *http.Server
+	logger          *zap.Logger
+	router          *gin.Engine
+	providers       *Providers
+	wsHandler       WebSocketHandler
+	taskWSHandler   *TaskWebSocketHandler
 }
 
 // NewServer 创建 API 服务器
@@ -119,4 +120,17 @@ func (s *Server) SetWebSocketHandler(handler WebSocketHandler) {
 	s.wsHandler = handler
 	// 注册 WebSocket 路由
 	s.router.GET("/ws/chat", handler.Handle)
+}
+
+// SetTaskWebSocketHandler 设置 Task WebSocket 处理器
+func (s *Server) SetTaskWebSocketHandler(handler *TaskWebSocketHandler) {
+	s.taskWSHandler = handler
+	// 注册 Task WebSocket 路由
+	s.router.GET("/ws/tasks", handler.Handle)
+}
+
+// GetTaskWebSocketHandler 获取 Task WebSocket 处理器
+// 用于从其他模块广播消息
+func (s *Server) GetTaskWebSocketHandler() *TaskWebSocketHandler {
+	return s.taskWSHandler
 }

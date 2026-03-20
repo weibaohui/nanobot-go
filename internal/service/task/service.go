@@ -1,7 +1,9 @@
 package task
 
 import (
+	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/weibaohui/nanobot-go/pkg/agent/task"
@@ -17,10 +19,26 @@ var (
 type Service interface {
 	// ListTasks 获取所有任务列表
 	ListTasks() ([]*TaskResponse, error)
+	// ListTasksWithFilter 带筛选的任务列表
+	ListTasksWithFilter(filter *TaskFilter) ([]*TaskResponse, error)
 	// GetTask 获取任务详情
 	GetTask(id string) (*TaskDetailResponse, error)
+	// CreateTask 手动创建任务
+	CreateTask(work, createdBy string) (*TaskResponse, error)
 	// StopTask 停止任务
 	StopTask(id string) (*TaskResponse, error)
+	// RetryTask 重试任务
+	RetryTask(id, createdBy string) (*TaskResponse, error)
+}
+
+// TaskFilter 任务筛选条件
+type TaskFilter struct {
+	Status    []string  // 状态列表
+	Since     time.Time // 起始时间
+	Until     time.Time // 结束时间
+	Keyword   string    // 关键词
+	CreatedBy string    // 创建者
+	IsAdmin   bool      // 是否管理员
 }
 
 // TaskResponse 任务 API 响应结构
@@ -110,6 +128,120 @@ func (s *service) StopTask(id string) (*TaskResponse, error) {
 		ID:     id,
 		Status: string(status),
 	}, nil
+}
+
+// CreateTask 手动创建任务
+func (s *service) CreateTask(work, createdBy string) (*TaskResponse, error) {
+	if s.manager == nil {
+		return nil, ErrManagerNotInitialized
+	}
+
+	if work == "" {
+		return nil, errors.New("任务内容不能为空")
+	}
+
+	ctx := context.Background()
+	taskID, status, err := s.manager.StartTask(ctx, work, "manual", "", createdBy)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TaskResponse{
+		ID:        taskID,
+		Status:    string(status),
+		Work:      work,
+		Channel:   "manual",
+		CreatedAt: time.Now().Format(time.RFC3339),
+	}, nil
+}
+
+// RetryTask 重试任务
+func (s *service) RetryTask(id, createdBy string) (*TaskResponse, error) {
+	if s.manager == nil {
+		return nil, ErrManagerNotInitialized
+	}
+
+	// 获取原任务信息
+	info, err := s.manager.GetTask(id)
+	if err != nil {
+		return nil, err
+	}
+	if info == nil {
+		return nil, ErrTaskNotFound
+	}
+
+	// 只能重试已完成、失败或已停止的任务
+	if info.Status != task.StatusFinished && info.Status != task.StatusFailed && info.Status != task.StatusStopped {
+		return nil, errors.New("只能重试已完成、失败或已停止的任务")
+	}
+
+	// 创建新任务，使用相同的内容
+	ctx := context.Background()
+	newTaskID, status, err := s.manager.StartTask(ctx, info.Work, "manual", "", createdBy)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TaskResponse{
+		ID:        newTaskID,
+		Status:    string(status),
+		Work:      info.Work,
+		Channel:   "manual",
+		CreatedAt: time.Now().Format(time.RFC3339),
+	}, nil
+}
+
+// ListTasksWithFilter 带筛选的任务列表
+func (s *service) ListTasksWithFilter(filter *TaskFilter) ([]*TaskResponse, error) {
+	tasks, err := s.ListTasks()
+	if err != nil {
+		return nil, err
+	}
+
+	// 应用筛选条件
+	var results []*TaskResponse
+	for _, t := range tasks {
+		// 状态筛选
+		if len(filter.Status) > 0 {
+			matched := false
+			for _, s := range filter.Status {
+				if strings.ToLower(t.Status) == strings.ToLower(s) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				continue
+			}
+		}
+
+		// 时间范围筛选
+		if !filter.Since.IsZero() || !filter.Until.IsZero() {
+			createdAt, _ := time.Parse(time.RFC3339, t.CreatedAt)
+			if !filter.Since.IsZero() && createdAt.Before(filter.Since) {
+				continue
+			}
+			if !filter.Until.IsZero() && createdAt.After(filter.Until) {
+				continue
+			}
+		}
+
+		// 关键词筛选（匹配任务内容）
+		if filter.Keyword != "" {
+			if !strings.Contains(strings.ToLower(t.Work), strings.ToLower(filter.Keyword)) {
+				continue
+			}
+		}
+
+		// 创建者筛选（非管理员只能看到自己的）
+		if !filter.IsAdmin && filter.CreatedBy != "" {
+			// TODO: 需要存储任务的创建者信息，当前暂时不处理
+		}
+
+		results = append(results, t)
+	}
+
+	return results, nil
 }
 
 // convertToTaskResponse 将 task.Info 转换为 TaskResponse
