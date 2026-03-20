@@ -201,13 +201,33 @@ const Conversations: React.FC = () => {
   // 构建链路树
   const buildTraceTree = (records: ConversationRecord[]): TraceNode[] => {
     const nodeMap = new Map<number, TraceNode>();
-    const spanToIdMap = new Map<string, number[]>();
-    const roots: TraceNode[] = [];
 
-    // 按时间排序
+    const eventPriority: Record<string, number> = {
+      llm_call_end: 10,
+      tool_completed: 20,
+    };
+    const rolePriority: Record<string, number> = {
+      tool: 10,
+      tool_result: 20,
+    };
+    const compareByOrder = (a: ConversationRecord, b: ConversationRecord) => {
+      const timeDiff = new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+      if (timeDiff !== 0) return timeDiff;
+      const eventDiff = (eventPriority[a.event_type || ''] || 1000) - (eventPriority[b.event_type || ''] || 1000);
+      if (eventDiff !== 0) return eventDiff;
+      const roleDiff = (rolePriority[a.role || ''] || 1000) - (rolePriority[b.role || ''] || 1000);
+      if (roleDiff !== 0) return roleDiff;
+      return a.id - b.id;
+    };
+
+    // 按时间排序（与“查看对话”一致）
     const sorted = [...records].sort(
-      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      compareByOrder
     );
+    const indexById = new Map<number, number>();
+    sorted.forEach((record, index) => {
+      indexById.set(record.id, index);
+    });
 
     // 创建所有节点，使用 id 作为 key
     sorted.forEach((record, index) => {
@@ -244,86 +264,75 @@ const Conversations: React.FC = () => {
         duration,
         children: [],
       });
-
-      // 记录 span_id 到 id 的映射（可能有多个记录有相同的 span_id）
-      if (record.span_id) {
-        const ids = spanToIdMap.get(record.span_id) || [];
-        ids.push(record.id);
-        spanToIdMap.set(record.span_id, ids);
-      }
     });
+    const roots = sorted
+      .map(record => nodeMap.get(record.id))
+      .filter((node): node is TraceNode => !!node);
 
-    // 建立父子关系
-    sorted.forEach(record => {
-      const node = nodeMap.get(record.id);
-      if (!node) return;
-
-      if (record.parent_span_id) {
-        // 找到 parent_span_id 对应的节点（取第一个）
-        const parentIds = spanToIdMap.get(record.parent_span_id);
-        if (parentIds && parentIds.length > 0) {
-          const parent = nodeMap.get(parentIds[0]);
-          if (parent) {
-            parent.children = parent.children || [];
-            parent.children.push(node);
-            return;
-          }
-        }
+    const detachNode = (targetId: number) => {
+      const rootIndex = roots.findIndex(node => node.record.id === targetId);
+      if (rootIndex >= 0) {
+        roots.splice(rootIndex, 1);
       }
-      // 没有 parent 或者是根节点
-      roots.push(node);
-    });
-
-    // 处理工具调用和结果的关联：将 tool_result 附加到对应的 tool 节点下
-    const processed = new Set<number>();
-    const newRoots: TraceNode[] = [];
-
-    const processNode = (node: TraceNode) => {
-      if (processed.has(node.record.id)) return;
-      processed.add(node.record.id);
-
-      // 如果是 tool 节点，查找其后续的 tool_result 作为子节点
-      if (node.record.role === 'tool') {
-        const toolIndex = sorted.findIndex(r => r.id === node.record.id);
-        if (toolIndex >= 0) {
-          // 查找紧跟在 tool 后面的 tool_result（通常是同一个 span_id 或下一个记录）
-          for (let i = toolIndex + 1; i < sorted.length; i++) {
-            const nextRecord = sorted[i];
-            // 只找紧邻的 tool_result，遇到其他角色停止
-            if (nextRecord.role === 'tool_result') {
-              const resultNode = nodeMap.get(nextRecord.id);
-              if (resultNode && !processed.has(nextRecord.id)) {
-                node.children = node.children || [];
-                node.children.push(resultNode);
-                processed.add(nextRecord.id);
-              }
-            } else if (nextRecord.role !== 'tool' && nextRecord.role !== 'system') {
-              // 遇到非工具相关角色，停止查找
-              break;
-            }
-          }
-        }
-      }
-
-      // 递归处理子节点
-      if (node.children) {
-        node.children = node.children.filter(child => !processed.has(child.record.id));
-        node.children.forEach(processNode);
-      }
-
-      newRoots.push(node);
+      nodeMap.forEach(node => {
+        if (!node.children || node.children.length === 0) return;
+        node.children = node.children.filter(child => child.record.id !== targetId);
+      });
     };
 
-    roots.forEach(processNode);
+    sorted.forEach((record, index) => {
+      if (record.role !== 'tool_result') return;
+      const resultNode = nodeMap.get(record.id);
+      if (!resultNode) return;
 
-    // 返回未被处理的节点（已处理的已经在树中）
-    return newRoots.filter(node => {
-      // 检查是否已经在某个节点的 children 中
-      const isInChildren = newRoots.some(root =>
-        root !== node && root.children?.some(child => child.record.id === node.record.id)
-      );
-      return !isInChildren;
+      let targetToolRecord: ConversationRecord | undefined;
+      for (let i = index - 1; i >= 0; i -= 1) {
+        const candidate = sorted[i];
+        if (candidate.role !== 'tool') continue;
+        if (record.parent_span_id && candidate.span_id === record.parent_span_id) {
+          targetToolRecord = candidate;
+          break;
+        }
+        if (record.span_id && candidate.span_id === record.span_id) {
+          targetToolRecord = candidate;
+          break;
+        }
+      }
+
+      if (!targetToolRecord) {
+        for (let i = index - 1; i >= 0; i -= 1) {
+          if (sorted[i].role === 'tool') {
+            targetToolRecord = sorted[i];
+            break;
+          }
+        }
+      }
+
+      if (!targetToolRecord) return;
+      const toolNode = nodeMap.get(targetToolRecord.id);
+      if (!toolNode) return;
+      const toolIndex = indexById.get(toolNode.record.id);
+      const resultIndex = indexById.get(resultNode.record.id);
+      if (toolIndex === undefined || resultIndex === undefined || toolIndex >= resultIndex) return;
+
+      detachNode(resultNode.record.id);
+      toolNode.children = toolNode.children || [];
+      if (!toolNode.children.some(child => child.record.id === resultNode.record.id)) {
+        toolNode.children.push(resultNode);
+      }
     });
+
+    const sortTreeNodes = (nodes: TraceNode[]) => {
+      nodes.sort((a, b) => compareByOrder(a.record, b.record));
+      nodes.forEach(node => {
+        if (node.children && node.children.length > 0) {
+          sortTreeNodes(node.children);
+        }
+      });
+    };
+
+    sortTreeNodes(roots);
+    return roots;
   };
 
   // 计算链路统计
