@@ -98,6 +98,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const heartbeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reconnectCountRef = useRef(0);
+  const manualCloseRef = useRef(false);
   const maxReconnectCount = 5;
 
   const clearTimers = useCallback(() => {
@@ -112,6 +113,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
   }, []);
 
   const connect = useCallback(() => {
+    manualCloseRef.current = false;
     if (!enabled) {
       console.log('[WebSocket] 连接被禁用');
       return;
@@ -139,6 +141,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
 
       ws.onopen = () => {
         console.log('[WebSocket] 连接成功');
+        manualCloseRef.current = false;
         setIsConnected(true);
         setIsConnecting(false);
         reconnectCountRef.current = 0;
@@ -193,6 +196,11 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
         onDisconnect?.();
         clearTimers();
 
+        if (manualCloseRef.current) {
+          manualCloseRef.current = false;
+          return;
+        }
+
         // 自动重连
         if (reconnectCountRef.current < maxReconnectCount) {
           reconnectCountRef.current++;
@@ -215,6 +223,9 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
   const disconnect = useCallback(() => {
     clearTimers();
     reconnectCountRef.current = maxReconnectCount; // 阻止自动重连
+    manualCloseRef.current = true;
+    setIsConnected(false);
+    setIsConnecting(false);
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
