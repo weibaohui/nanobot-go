@@ -6,7 +6,6 @@ import (
 	"github.com/weibaohui/nanobot-go/pkg/agent/hooks"
 	"github.com/weibaohui/nanobot-go/pkg/agent/hooks/events"
 	"github.com/weibaohui/nanobot-go/pkg/agent/interrupt"
-	"github.com/weibaohui/nanobot-go/pkg/agent/task"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/mcp"
 	"github.com/weibaohui/nanobot-go/pkg/bus"
@@ -42,7 +41,6 @@ type Loop struct {
 
 	interruptManager *interrupt.Manager
 	masterAgent      *MasterAgent
-	taskManager      *task.Manager
 }
 
 // LoopConfig Loop 配置
@@ -110,22 +108,12 @@ func NewLoop(cfg *LoopConfig) *Loop {
 
 	loop.registerDefaultTools()
 
-	loop.taskManager = loop.createBackgroundAgentTaskManager()
-	if loop.taskManager != nil {
-		adapter := task.NewAdapter(loop.taskManager)
-		loop.registerTaskTools(adapter)
-	}
-
 	ctx := context.Background()
 	toolNames := loop.tools.GetToolNames(ctx)
 	logger.Info("已注册工具",
 		zap.Int("数量", len(toolNames)),
 		zap.Strings("工具列表", toolNames),
 	)
-
-	if loop.taskManager != nil {
-		loop.taskManager.SetRegisteredTools(toolNames)
-	}
 
 	adapter, err := NewChatModelAdapter(logger, loop.configLoader, loop.sessions)
 	if err != nil {
@@ -176,9 +164,4 @@ func (l *Loop) GetMasterAgent() *MasterAgent {
 		l.logger.Warn("GetMasterAgent() 被调用但 MasterAgent 未初始化")
 	}
 	return l.masterAgent
-}
-
-// GetTaskManager 获取任务管理器
-func (l *Loop) GetTaskManager() *task.Manager {
-	return l.taskManager
 }

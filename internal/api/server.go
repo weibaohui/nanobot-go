@@ -7,7 +7,6 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	tasksvc "github.com/weibaohui/nanobot-go/internal/service/task"
 	"go.uber.org/zap"
 )
 
@@ -23,26 +22,16 @@ type WebSocketHandler interface {
 
 // Server API 服务器
 type Server struct {
-	handler         *Handler
-	server          *http.Server
-	logger          *zap.Logger
-	router          *gin.Engine
-	providers       *Providers
-	wsHandler       WebSocketHandler
-	taskWSHandler   *TaskWebSocketHandler
+	handler   *Handler
+	server    *http.Server
+	logger    *zap.Logger
+	router    *gin.Engine
+	providers *Providers
+	wsHandler WebSocketHandler
 }
 
 // NewServer 创建 API 服务器
 func NewServer(addr string, providers *Providers, logger *zap.Logger) *Server {
-	// 创建 TaskService（优先复用已注入的 TaskService，否则从 TaskManager 创建）
-	var taskService TaskService
-	if providers.TaskService != nil {
-		taskService = providers.TaskService
-	} else if providers.TaskManager != nil {
-		taskService = tasksvc.NewService(providers.TaskManager)
-		providers.TaskService = taskService
-	}
-
 	handler := NewHandler(
 		providers.UserService,
 		providers.AgentService,
@@ -55,7 +44,6 @@ func NewServer(addr string, providers *Providers, logger *zap.Logger) *Server {
 		providers.SessionManager,
 		providers.MCPService,
 		providers.SkillService,
-		taskService,
 		providers.CodeLookupService,
 	)
 
@@ -120,17 +108,4 @@ func (s *Server) SetWebSocketHandler(handler WebSocketHandler) {
 	s.wsHandler = handler
 	// 注册 WebSocket 路由
 	s.router.GET("/ws/chat", handler.Handle)
-}
-
-// SetTaskWebSocketHandler 设置 Task WebSocket 处理器
-func (s *Server) SetTaskWebSocketHandler(handler *TaskWebSocketHandler) {
-	s.taskWSHandler = handler
-	// 注册 Task WebSocket 路由
-	s.router.GET("/ws/tasks", handler.Handle)
-}
-
-// GetTaskWebSocketHandler 获取 Task WebSocket 处理器
-// 用于从其他模块广播消息
-func (s *Server) GetTaskWebSocketHandler() *TaskWebSocketHandler {
-	return s.taskWSHandler
 }

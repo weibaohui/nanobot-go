@@ -15,7 +15,6 @@ import Sessions from './pages/Sessions';
 import MCPServers from './pages/MCPServers';
 import Login from './pages/Login';
 import Skills from './pages/Skills';
-import Tasks from './pages/Tasks';
 import Chat from './pages/Chat';
 import { isAuthenticated, authApi, setCurrentUser, getCurrentUserCode } from './api';
 
@@ -82,7 +81,6 @@ const App: React.FC = () => {
             <Route path="sessions" element={<Sessions />} />
             <Route path="mcp-servers" element={<MCPServers />} />
             <Route path="skills" element={<Skills />} />
-            <Route path="tasks" element={<Tasks />} />
             <Route path="chat" element={<Chat />} />
           </Route>
 

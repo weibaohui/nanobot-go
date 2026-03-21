@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/weibaohui/nanobot-go/pkg/agent/task"
 	"github.com/weibaohui/nanobot-go/pkg/bus"
 	"go.uber.org/zap"
 )
@@ -242,87 +240,6 @@ func (c *Channel) handleUserMessage(conn *Connection, msg *Message) {
 
 // subscribeOutbound 订阅出站消息
 func (c *Channel) subscribeOutbound() {
-	// 订阅系统消息（用于任务事件广播）
-	// 使用 "system" 作为特殊 channel 接收全局广播消息
-	c.bus.SubscribeOutbound("system", func(msg *bus.OutboundMessage) error {
-		// 检查是否是任务事件
-		if msg.Metadata == nil {
-			return nil
-		}
-
-		eventType, ok := msg.Metadata["event_type"].(string)
-		if !ok || eventType != "task" {
-			return nil
-		}
-
-		taskEvent, ok := msg.Metadata["task_event"].(*task.TaskEvent)
-		if !ok {
-			return nil
-		}
-
-		// 将任务事件转换为 WebSocket 消息并广播
-		var wsMsg *Message
-		switch taskEvent.Type {
-		case task.TaskEventCreated:
-			if payload, ok := taskEvent.Payload.(task.TaskCreatedPayload); ok {
-				wsMsg = NewTaskCreatedMessage(
-					&TaskCreatedPayload{
-						ID:        payload.ID,
-						Status:    string(payload.Status),
-						Work:      payload.Work,
-						Channel:   payload.Channel,
-						ChatID:    payload.ChatID,
-						CreatedAt: payload.CreatedAt.Format(time.RFC3339),
-						CreatedBy: payload.CreatedBy,
-					})
-			}
-		case task.TaskEventUpdated:
-			if payload, ok := taskEvent.Payload.(task.TaskUpdatedPayload); ok {
-				wsMsg = NewTaskUpdatedMessage(
-					&TaskUpdatedPayload{
-						ID:        payload.ID,
-						Status:    string(payload.Status),
-						Result:    payload.Result,
-						Logs:      payload.Logs,
-						UpdatedAt: payload.UpdatedAt.Format(time.RFC3339),
-					})
-			}
-		case task.TaskEventCompleted:
-			if payload, ok := taskEvent.Payload.(task.TaskCompletedPayload); ok {
-				wsMsg = NewTaskCompletedMessage(
-					&TaskCompletedPayload{
-						ID:              payload.ID,
-						Status:          string(payload.Status),
-						Result:          payload.Result,
-						Logs:            payload.Logs,
-						CompletedAt:     payload.CompletedAt.Format(time.RFC3339),
-						DurationSeconds: payload.DurationSeconds,
-					})
-			}
-		case task.TaskEventLog:
-			if payload, ok := taskEvent.Payload.(task.TaskLogPayload); ok {
-				wsMsg = NewTaskLogMessage(
-					&TaskLogPayload{
-						ID:        payload.ID,
-						Log:       payload.Log,
-						Timestamp: payload.Timestamp.Format(time.RFC3339),
-					})
-			}
-		}
-
-		if wsMsg != nil {
-			data, err := json.Marshal(wsMsg)
-			if err != nil {
-				c.logger.Error("序列化任务事件失败", zap.Error(err))
-				return err
-			}
-			// 广播给所有连接
-			c.connManager.Broadcast(data)
-		}
-
-		return nil
-	})
-
 	// 订阅流式消息（用于实时响应）
 	// 注意：使用 ChannelCode 而不是 c.name，因为消息总线分发时使用的是 ChannelCode
 	c.bus.SubscribeStream(c.config.ChannelCode, func(chunk *bus.StreamChunk) error {

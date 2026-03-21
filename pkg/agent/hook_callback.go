@@ -13,7 +13,7 @@ import (
 )
 
 // CreateHookCallback 创建一个将事件转发到 HookManager 的回调函数
-// 用于在 interruptible.BuildChatModelAdapter 和 task_manager.executeTask 中避免代码重复
+// 用于在 interruptible.BuildChatModelAdapter 中避免代码重复
 func CreateHookCallback(hookManager *hooks.HookManager, logger *zap.Logger) HookCallback {
 	if hookManager == nil {
 		return nil

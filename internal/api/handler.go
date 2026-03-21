@@ -31,7 +31,6 @@ type Handler struct {
 	sessionManager            SessionManager
 	mcpService                MCPService
 	skillService              skillsvc.Service
-	taskService               TaskService
 	codeLookupService         CodeLookupService
 }
 
@@ -48,7 +47,6 @@ func NewHandler(
 	sessionManager SessionManager,
 	mcpService MCPService,
 	skillService skillsvc.Service,
-	taskService TaskService,
 	codeLookupService CodeLookupService,
 ) *Handler {
 	return &Handler{
@@ -63,7 +61,6 @@ func NewHandler(
 		sessionManager:            sessionManager,
 		mcpService:                mcpService,
 		skillService:              skillService,
-		taskService:               taskService,
 		codeLookupService:         codeLookupService,
 	}
 }
@@ -204,16 +201,6 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 		{
 			skills.GET("", h.listSkills)
 			skills.GET("/:name", h.getSkill)
-		}
-
-		// Tasks API
-		tasks := authorized.Group("/tasks")
-		{
-			tasks.GET("", h.listTasks)
-			tasks.POST("", h.createTask)
-			tasks.GET("/:id", h.getTask)
-			tasks.POST("/:id/stop", h.stopTask)
-			tasks.POST("/:id/retry", h.retryTask)
 		}
 	}
 }
