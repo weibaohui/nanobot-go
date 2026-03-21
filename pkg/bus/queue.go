@@ -13,6 +13,9 @@ type OutboundCallback func(msg *OutboundMessage) error
 // StreamCallback 是流式消息的回调函数类型
 type StreamCallback func(chunk *StreamChunk) error
 
+// TaskEventCallback 是任务事件的回调函数类型
+type TaskEventCallback func(eventType string, payload map[string]any)
+
 // MessageBus 是解耦渠道和代理核心的异步消息总线
 type MessageBus struct {
 	inbound             chan *InboundMessage
@@ -20,6 +23,7 @@ type MessageBus struct {
 	stream              chan *StreamChunk
 	outboundSubscribers map[string][]OutboundCallback
 	streamSubscribers   map[string][]StreamCallback
+	taskEventSubscribers []TaskEventCallback
 	mu                  sync.RWMutex
 	running             bool
 	logger              *zap.Logger
@@ -36,6 +40,7 @@ func NewMessageBus(logger *zap.Logger) *MessageBus {
 		stream:              make(chan *StreamChunk, 1000), // 流式消息需要更大的缓冲
 		outboundSubscribers: make(map[string][]OutboundCallback),
 		streamSubscribers:   make(map[string][]StreamCallback),
+		taskEventSubscribers: []TaskEventCallback{},
 		logger:              logger,
 	}
 }
@@ -82,6 +87,17 @@ func (b *MessageBus) PublishStream(chunk *StreamChunk) {
 	}
 }
 
+// PublishTaskEvent 发布任务事件
+func (b *MessageBus) PublishTaskEvent(eventType string, payload map[string]any) {
+	b.mu.RLock()
+	subscribers := b.taskEventSubscribers
+	b.mu.RUnlock()
+
+	for _, callback := range subscribers {
+		callback(eventType, payload)
+	}
+}
+
 // SubscribeOutbound 订阅特定渠道的出站消息
 func (b *MessageBus) SubscribeOutbound(channel string, callback OutboundCallback) {
 	b.mu.Lock()
@@ -94,6 +110,13 @@ func (b *MessageBus) SubscribeStream(channel string, callback StreamCallback) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.streamSubscribers[channel] = append(b.streamSubscribers[channel], callback)
+}
+
+// SubscribeTaskEvent 订阅任务事件
+func (b *MessageBus) SubscribeTaskEvent(callback TaskEventCallback) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.taskEventSubscribers = append(b.taskEventSubscribers, callback)
 }
 
 // StartDispatcher 启动出站消息分发器

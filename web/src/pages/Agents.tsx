@@ -292,9 +292,13 @@ const Agents: React.FC = () => {
     },
     {
       title: '操作',
-      width: screens.xs ? 100 : 250,
+      width: screens.xs ? 100 : 300,
       render: (_: any, record: Agent) => (
-        <Space size="small" orientation={screens.xs ? 'vertical' : 'horizontal'}>
+        <Space
+          size={[4, 4]}
+          direction={screens.xs ? 'vertical' : 'horizontal'}
+          wrap
+        >
           <Button
             type="text"
             icon={<EditOutlined />}
@@ -450,7 +454,7 @@ const Agents: React.FC = () => {
           columns={columns}
           dataSource={agents}
           loading={loading}
-          scroll={{ x: screens.xs ? 400 : undefined }}
+          scroll={{ x: screens.xs ? 520 : 'max-content' }}
           size={screens.xs ? 'small' : 'middle'}
         />
       </Card>

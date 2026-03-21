@@ -158,16 +158,9 @@ func (p *EventPublisher) publish(event *TaskEvent) {
 		return
 	}
 
-	// 使用MessageBus的PublishOutbound方法，通过特殊的channel广播任务事件
-	// 使用metadata传递事件类型和完整数据
-	msg := &bus.OutboundMessage{
-		Channel: "system", // 使用system channel广播给所有连接
-		ChatID:  "",
-		Content: "", // 任务事件不通过content传递
-		Metadata: map[string]any{
-			"event_type": "task",
-			"task_event": event,
-		},
-	}
-	p.bus.PublishOutbound(msg)
+	// 使用 MessageBus 的 PublishTaskEvent 方法分发任务事件
+	payload := make(map[string]any)
+	payload["event_type"] = event.Type
+	payload["task_event"] = event
+	p.bus.PublishTaskEvent(string(event.Type), payload)
 }
