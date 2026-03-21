@@ -133,9 +133,16 @@ const Providers: React.FC = () => {
     setModels(models.filter((_, i) => i !== index));
   };
 
-  const handleSetDefaultModel = (modelId: string) => {
-    setDefaultModel(modelId);
-    message.success('已设为默认模型');
+  const handleSetDefaultModel = async (modelId: string) => {
+    if (!editingProvider) return;
+    try {
+      await providersApi.update(editingProvider.id, { default_model: modelId });
+      setDefaultModel(modelId);
+      message.success('已设为默认模型');
+      fetchProviders();
+    } catch (error) {
+      message.error('设置默认模型失败');
+    }
   };
 
   // 嵌入模型配置相关方法
