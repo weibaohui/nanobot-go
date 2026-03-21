@@ -32,24 +32,8 @@ const AVAILABLE_SKILLS = [
   { value: 'weather', label: 'weather - 天气查询', description: '查询天气信息' },
 ];
 
-// 可用工具列表
-const AVAILABLE_TOOLS = [
-  { value: 'readfile', label: 'readfile - 读取文件', description: '读取文件内容' },
-  { value: 'writefile', label: 'writefile - 写入文件', description: '写入文件内容' },
-  { value: 'editfile', label: 'editfile - 编辑文件', description: '编辑文件内容' },
-  { value: 'listdir', label: 'listdir - 列出目录', description: '列出目录内容' },
-  { value: 'exec', label: 'exec - 执行命令', description: '执行 Shell 命令' },
-  { value: 'websearch', label: 'websearch - 网页搜索', description: '搜索网页内容' },
-  { value: 'webfetch', label: 'webfetch - 网页获取', description: '获取网页内容' },
-  { value: 'message', label: 'message - 发送消息', description: '发送消息到渠道' },
-  { value: 'cron', label: 'cron - 定时任务', description: '管理定时任务' },
-  { value: 'askuser', label: 'askuser - 询问用户', description: '向用户提问' },
-  { value: 'skill', label: 'skill - 技能调用', description: '调用技能' },
-  { value: 'task_start', label: 'task_start - 启动任务', description: '启动后台任务' },
-  { value: 'task_get', label: 'task_get - 获取任务', description: '获取任务状态' },
-  { value: 'task_stop', label: 'task_stop - 停止任务', description: '停止后台任务' },
-  { value: 'task_list', label: 'task_list - 列出任务', description: '列出所有任务' },
-];
+// 可用工具列表（从后端API获取，动态）
+// const AVAILABLE_TOOLS = [] // 已移除，现在从后端API获取
 
 const { useBreakpoint } = Grid;
 const { Title } = Typography;
@@ -91,6 +75,9 @@ const Agents: React.FC = () => {
   const [mcpLoading, setMcpLoading] = useState(false);
   const [mcpForm] = Form.useForm();
 
+  // 可用工具列表
+  const [availableTools, setAvailableTools] = useState<{ value: string; label: string; description: string }[]>([]);
+
   const fetchAgents = async () => {
     setLoading(true);
     try {
@@ -105,8 +92,18 @@ const Agents: React.FC = () => {
     }
   };
 
+  const fetchAvailableTools = async () => {
+    try {
+      const res = await agentsApi.getAvailableTools();
+      setAvailableTools((res as any)?.items || []);
+    } catch (error) {
+      console.error('获取可用工具列表失败', error);
+    }
+  };
+
   useEffect(() => {
     fetchAgents();
+    fetchAvailableTools();
   }, []);
 
   const handleCreate = async (values: CreateAgentRequest) => {
@@ -597,7 +594,7 @@ const Agents: React.FC = () => {
                       <Select
                         mode="multiple"
                         placeholder="选择工具"
-                        options={AVAILABLE_TOOLS}
+                        options={availableTools}
                         style={{ width: '100%' }}
                         allowClear
                       />

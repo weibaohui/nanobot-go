@@ -98,6 +98,7 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 			agents.PUT("/:id", h.updateAgentByID)
 			agents.DELETE("/:id", h.deleteAgentByID)
 			agents.GET("/code/:code", h.getAgentByCode)
+			agents.GET("/available-tools", h.listAvailableTools)
 		}
 
 		// Channel API

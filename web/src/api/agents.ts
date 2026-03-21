@@ -53,4 +53,8 @@ export const agentsApi = {
   // 更新模型配置
   updateModelConfig: (id: number, config: { selection_mode: 'auto' | 'specific'; model_id?: string; model_name?: string; max_tokens?: number; temperature?: number }) =>
     client.put<any, ApiResponse<Agent>>(`/agents/${id}/model-config`, config),
+
+  // 获取可用的内置工具列表
+  getAvailableTools: () =>
+    client.get<any, ApiResponse<ListResponse<{ value: string; label: string; description: string }>>>('/agents/available-tools'),
 };
