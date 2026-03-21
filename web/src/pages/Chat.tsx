@@ -55,6 +55,7 @@ const MarkdownContent: React.FC<{ content: string }> = ({ content }) => {
 const Chat: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
+  const [socketNotice, setSocketNotice] = useState('');
   const [selectedUser, setSelectedUser] = useState<string>('');
   const [sessionId, setSessionId] = useState<string>('');
   const [selectedChannel, setSelectedChannel] = useState<string>('');
@@ -113,7 +114,7 @@ const Chat: React.FC = () => {
         handleChunk(msg.payload as ChunkPayload);
         break;
       case 'error':
-        antMessage.error(msg.payload?.message || '发生错误');
+        setSocketNotice(msg.payload?.message || '发生错误');
         break;
       case 'system':
         handleSystemMessage(msg.payload as SystemPayload);
@@ -169,7 +170,7 @@ const Chat: React.FC = () => {
   };
 
   const handleError = useCallback((error: Error) => {
-    antMessage.error(error.message);
+    setSocketNotice(error.message);
   }, []);
 
   const isWebSocketEnabled = isAdmin ? !!selectedChannel && !!selectedUser : !!selectedChannel;
@@ -181,6 +182,12 @@ const Chat: React.FC = () => {
     onMessage: handleMessage,
     onError: handleError,
   });
+
+  useEffect(() => {
+    if (isConnected) {
+      setSocketNotice('');
+    }
+  }, [isConnected]);
 
   useEffect(() => {
     if (isWebSocketEnabled) {
@@ -511,6 +518,13 @@ const Chat: React.FC = () => {
           <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>
             按 Enter 发送，Shift + Enter 换行
           </Text>
+          {socketNotice && (
+            <div style={{ marginTop: '6px' }}>
+              <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: '11px' }}>
+                {socketNotice}
+              </Text>
+            </div>
+          )}
         </div>
       </div>
 
