@@ -58,24 +58,37 @@ dev-web:
 
 # 停止所有 nanobot 进程
 stop:
-	@echo "正在停止所有 nanobot 相关进程..."
-	@echo "  - 停止 go run nanobot..."
-	@ps -ef | grep "go run ./cmd/nanobot" | grep -v grep | awk '{print $$2}' | xargs -I {} kill -9 {} 2>/dev/null || true
-	@echo "  - 停止 nanobot gateway 二进制..."
-	@ps -ef | grep "nanobot gateway" | grep -v grep | awk '{print $$2}' | xargs -I {} kill -9 {} 2>/dev/null || true
-	@echo "  - 停止 make dev 相关 shell..."
-	@ps -ef | grep -E "make dev|trap.*kill 0" | grep -v grep | awk '{print $$2}' | xargs -I {} kill -9 {} 2>/dev/null || true
-	@echo "  - 停止 node/vite..."
-	@pgrep -f "vite" | xargs -I {} kill -9 {} 2>/dev/null || true
-	@echo "  - 停止 esbuild..."
-	@pgrep -f "esbuild.*nanobot" | xargs -I {} kill -9 {} 2>/dev/null || true
+	@echo "正在按端口精准停止 nanobot 开发进程..."
+	@for port in 8080 5173; do \
+		pids=$$(lsof -ti tcp:$$port -sTCP:LISTEN 2>/dev/null || true); \
+		if [ -n "$$pids" ]; then \
+			echo "  - 停止端口 $$port 的进程: $$pids"; \
+			kill $$pids 2>/dev/null || true; \
+			sleep 1; \
+			remaining=$$(lsof -ti tcp:$$port -sTCP:LISTEN 2>/dev/null || true); \
+			if [ -n "$$remaining" ]; then \
+				echo "  - 端口 $$port 仍被占用，强制停止: $$remaining"; \
+				kill -9 $$remaining 2>/dev/null || true; \
+			fi; \
+		else \
+			echo "  - 端口 $$port 未发现监听进程"; \
+		fi; \
+	done
 	@sleep 1
-	@remaining=$$(ps -ef | grep -E "(nanobot|go run.*nanobot)" | grep -v grep | wc -l); \
-	if [ $$remaining -eq 0 ]; then \
-		echo "已停止所有 nanobot 进程"; \
+	@remaining_ports=""; \
+	for port in 8080 5173; do \
+		if lsof -ti tcp:$$port -sTCP:LISTEN >/dev/null 2>&1; then \
+			remaining_ports="$$remaining_ports $$port"; \
+		fi; \
+	done; \
+	if [ -z "$$remaining_ports" ]; then \
+		echo "已停止目标端口(8080/5173)的进程"; \
 	else \
-		echo "警告: 仍有 $$remaining 个进程在运行"; \
-		ps -ef | grep -E "(nanobot|go run.*nanobot)" | grep -v grep; \
+		echo "警告: 以下端口仍被占用:$$remaining_ports"; \
+		for port in $$remaining_ports; do \
+			echo "  - 端口 $$port 占用进程:"; \
+			lsof -nP -iTCP:$$port -sTCP:LISTEN; \
+		done; \
 	fi
 
 # 运行测试
