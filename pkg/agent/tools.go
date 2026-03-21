@@ -1,8 +1,6 @@
 package agent
 
 import (
-	"fmt"
-
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/askuser"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/config"
 	toolcron "github.com/weibaohui/nanobot-go/pkg/agent/tools/cron"
@@ -13,8 +11,6 @@ import (
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/message"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/readfile"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/skill"
-	tasktool "github.com/weibaohui/nanobot-go/pkg/agent/tools/task"
-	"github.com/weibaohui/nanobot-go/pkg/agent/task"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/webfetch"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/websearch"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/writefile"
@@ -78,49 +74,4 @@ func (l *Loop) registerDefaultTools() {
 		l.tools.Register(mcp.NewCallMCPTool(l.mcpManager))
 		l.logger.Info("MCP 工具已注册", zap.Strings("tools", []string{"use_mcp", "call_mcp_tool"}))
 	}
-}
-
-// registerTaskTools 注册后台任务工具
-func (l *Loop) registerTaskTools(manager tasktool.Manager) {
-	if manager == nil {
-		return
-	}
-	l.tools.Register(&tasktool.StartTool{Manager: manager, Logger: l.logger})
-	l.tools.Register(&tasktool.GetTool{Manager: manager, Logger: l.logger})
-	l.tools.Register(&tasktool.StopTool{Manager: manager, Logger: l.logger})
-	l.tools.Register(&tasktool.ListTool{Manager: manager, Logger: l.logger})
-}
-
-// createBackgroundAgentTaskManager 创建任务管理器
-func (l *Loop) createBackgroundAgentTaskManager() *task.Manager {
-	taskManager, err := task.NewManager(&task.ManagerConfig{
-		ConfigLoader:    l.configLoader,
-		Workspace:       l.workspace,
-		Tools:           l.tools.GetTools(),
-		Logger:          l.logger,
-		Context:         l.context,
-		CheckpointStore: l.interruptManager.GetCheckpointStore(),
-		MaxIterations:   l.maxIterations,
-		Sessions:        l.sessions,
-		HookManager:     l.hookManager,
-		EventBus:        l.bus, // 传递EventBus用于WebSocket推送
-		OnTaskComplete: func(channel, chatID, taskID string, status task.Status, result string) {
-			// 任务完成时发送通知消息
-			statusText := map[task.Status]string{
-				task.StatusFinished: "完成",
-				task.StatusFailed:   "失败",
-				task.StatusStopped:  "已停止",
-			}[status]
-			msg := fmt.Sprintf("后台任务 %s\n状态: %s\n任务ID: %s", statusText, statusText, taskID)
-			if result != "" && status == task.StatusFinished {
-				msg = fmt.Sprintf("后台任务完成\n任务ID: %s\n\n%s", taskID, result)
-			}
-			l.bus.PublishOutbound(bus.NewOutboundMessage(channel, chatID, msg))
-		},
-	})
-	if err != nil {
-		l.logger.Error("创建任务管理器失败", zap.Error(err))
-		return nil
-	}
-	return taskManager
 }
