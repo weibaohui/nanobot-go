@@ -8,13 +8,11 @@ import (
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/exec"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/listdir"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/mcp"
-	"github.com/weibaohui/nanobot-go/pkg/agent/tools/message"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/readfile"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/skill"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/webfetch"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/websearch"
 	"github.com/weibaohui/nanobot-go/pkg/agent/tools/writefile"
-	"github.com/weibaohui/nanobot-go/pkg/bus"
 	"go.uber.org/zap"
 )
 
@@ -37,14 +35,6 @@ func (l *Loop) registerDefaultTools() {
 	// Web 工具
 	l.tools.Register(&websearch.Tool{MaxResults: 5})
 	l.tools.Register(&webfetch.Tool{MaxChars: 50000})
-
-	// 消息工具
-	l.tools.Register(&message.Tool{SendCallback: func(msg any) error {
-		if outMsg, ok := msg.(*bus.OutboundMessage); ok {
-			l.bus.PublishOutbound(outMsg)
-		}
-		return nil
-	}})
 
 	// Cron 工具
 	if l.cronService != nil {
