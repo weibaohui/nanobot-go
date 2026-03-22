@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	agentsvc "github.com/weibaohui/nanobot-go/internal/service/agent"
+	"github.com/weibaohui/nanobot-go/pkg/agent"
 )
 
 // getAgentByID 获取指定 Agent
@@ -129,4 +130,31 @@ func (h *Handler) getAgentByCode(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, agent)
+}
+
+// ToolInfo 工具信息
+type ToolInfo struct {
+	Value       string `json:"value"`
+	Label       string `json:"label"`
+	Description string `json:"description"`
+}
+
+// listAvailableTools 获取可用的内置工具列表
+func (h *Handler) listAvailableTools(c *gin.Context) {
+	tools := agent.AvailableTools()
+
+	// 转换为 API 响应格式
+	response := make([]ToolInfo, len(tools))
+	for i, t := range tools {
+		response[i] = ToolInfo{
+			Value:       t.Value,
+			Label:       t.Label,
+			Description: t.Description,
+		}
+	}
+
+	c.JSON(http.StatusOK, ListResponse{
+		Items: response,
+		Total: int64(len(response)),
+	})
 }

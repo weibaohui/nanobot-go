@@ -4,7 +4,7 @@ import {
   Button,
   Space,
   Tag,
-  Modal,
+  Drawer,
   Form,
   Input,
   Select,
@@ -14,8 +14,8 @@ import {
   Card,
   Grid,
   Typography,
-  Collapse,
   Divider,
+  Tabs,
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, FileTextOutlined, ToolOutlined, ThunderboltOutlined, ApiOutlined } from '@ant-design/icons';
 import { agentsApi, mcpServersApi, getCurrentUserCode } from '../api';
@@ -32,24 +32,8 @@ const AVAILABLE_SKILLS = [
   { value: 'weather', label: 'weather - 天气查询', description: '查询天气信息' },
 ];
 
-// 可用工具列表
-const AVAILABLE_TOOLS = [
-  { value: 'readfile', label: 'readfile - 读取文件', description: '读取文件内容' },
-  { value: 'writefile', label: 'writefile - 写入文件', description: '写入文件内容' },
-  { value: 'editfile', label: 'editfile - 编辑文件', description: '编辑文件内容' },
-  { value: 'listdir', label: 'listdir - 列出目录', description: '列出目录内容' },
-  { value: 'exec', label: 'exec - 执行命令', description: '执行 Shell 命令' },
-  { value: 'websearch', label: 'websearch - 网页搜索', description: '搜索网页内容' },
-  { value: 'webfetch', label: 'webfetch - 网页获取', description: '获取网页内容' },
-  { value: 'message', label: 'message - 发送消息', description: '发送消息到渠道' },
-  { value: 'cron', label: 'cron - 定时任务', description: '管理定时任务' },
-  { value: 'askuser', label: 'askuser - 询问用户', description: '向用户提问' },
-  { value: 'skill', label: 'skill - 技能调用', description: '调用技能' },
-  { value: 'task_start', label: 'task_start - 启动任务', description: '启动后台任务' },
-  { value: 'task_get', label: 'task_get - 获取任务', description: '获取任务状态' },
-  { value: 'task_stop', label: 'task_stop - 停止任务', description: '停止后台任务' },
-  { value: 'task_list', label: 'task_list - 列出任务', description: '列出所有任务' },
-];
+// 可用工具列表（从后端API获取，动态）
+// const AVAILABLE_TOOLS = [] // 已移除，现在从后端API获取
 
 const { useBreakpoint } = Grid;
 const { Title } = Typography;
@@ -85,12 +69,14 @@ const Agents: React.FC = () => {
   const [form] = Form.useForm();
 
   // MCP 绑定相关状态
-  const [mcpModalVisible, setMcpModalVisible] = useState(false);
   const [mcpBindingAgent, setMcpBindingAgent] = useState<Agent | null>(null);
   const [mcpBindings, setMcpBindings] = useState<AgentMCPBinding[]>([]);
   const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
   const [mcpLoading, setMcpLoading] = useState(false);
   const [mcpForm] = Form.useForm();
+
+  // 可用工具列表
+  const [availableTools, setAvailableTools] = useState<{ value: string; label: string; description: string }[]>([]);
 
   const fetchAgents = async () => {
     setLoading(true);
@@ -106,8 +92,18 @@ const Agents: React.FC = () => {
     }
   };
 
+  const fetchAvailableTools = async () => {
+    try {
+      const res = await agentsApi.getAvailableTools();
+      setAvailableTools((res as any)?.items || []);
+    } catch (error) {
+      console.error('获取可用工具列表失败', error);
+    }
+  };
+
   useEffect(() => {
     fetchAgents();
+    fetchAvailableTools();
   }, []);
 
   const handleCreate = async (values: CreateAgentRequest) => {
@@ -310,20 +306,13 @@ const Agents: React.FC = () => {
                 skills_list: safeParseArray(record.skills_list),
                 tools_list: safeParseArray(record.tools_list),
               });
+              // 加载 MCP 绑定
+              loadMcpBindings(record);
               setModalVisible(true);
             }}
           >
             {screens.xs ? '' : '编辑'}
           </Button>
-          {!screens.xs && (
-            <Button
-              type="text"
-              icon={<ApiOutlined />}
-              onClick={() => openMCPModal(record)}
-            >
-              MCP
-            </Button>
-          )}
           {!record.is_default && !screens.xs && (
             <Button type="text" onClick={() => handleSetDefault(record)}>
               默认
@@ -348,12 +337,9 @@ const Agents: React.FC = () => {
     },
   ];
 
-  const modalWidth = screens.xs ? '100%' : screens.sm ? 600 : 800;
-
   // MCP 绑定相关函数
-  const openMCPModal = async (agent: Agent) => {
+  const loadMcpBindings = async (agent: Agent) => {
     setMcpBindingAgent(agent);
-    setMcpModalVisible(true);
     setMcpLoading(true);
     try {
       const [bindingsRes, serversRes] = await Promise.all([
@@ -459,137 +445,266 @@ const Agents: React.FC = () => {
         />
       </Card>
 
-      <Modal
+      <Drawer
         title={editingAgent ? '编辑 Agent' : '新建 Agent'}
+        placement="right"
         open={modalVisible}
-        onCancel={() => {
+        onClose={() => {
           setModalVisible(false);
           setEditingAgent(null);
           form.resetFields();
         }}
-        onOk={() => form.submit()}
-        width={modalWidth}
-        style={{ top: screens.xs ? 0 : 100 }}
-        styles={{ body: { padding: screens.xs ? 12 : 24 } }}
+        width={screens.xs ? '100%' : 680}
+        styles={{ body: { padding: 0 } }}
         destroyOnHidden
+        extra={
+          <Space>
+            <Button onClick={() => {
+              setModalVisible(false);
+              setEditingAgent(null);
+              form.resetFields();
+            }}>
+              取消
+            </Button>
+            <Button type="primary" onClick={() => form.submit()}>
+              {editingAgent ? '更新' : '创建'}
+            </Button>
+          </Space>
+        }
       >
         <Form
           form={form}
           layout="vertical"
           onFinish={editingAgent ? handleUpdate : handleCreate}
+          style={{ height: '100%' }}
         >
-          <Form.Item
-            name="name"
-            label="名称"
-            rules={[{ required: true, message: '请输入名称' }]}
-          >
-            <Input placeholder="Agent 名称" />
-          </Form.Item>
-
-          <Form.Item name="description" label="描述">
-            <Input.TextArea rows={2} placeholder="Agent 描述" />
-          </Form.Item>
-
-          <Form.Item
-            name="model_selection_mode"
-            label="模型选择模式"
-            initialValue="auto"
-          >
-            <Select>
-              <Select.Option value="auto">自动选择</Select.Option>
-              <Select.Option value="specific">指定模型</Select.Option>
-            </Select>
-          </Form.Item>
-
-          <Form.Item
-            noStyle
-            shouldUpdate={(prev, curr) =>
-              prev.model_selection_mode !== curr.model_selection_mode
-            }
-          >
-            {({ getFieldValue }) =>
-              getFieldValue('model_selection_mode') === 'specific' ? (
-                <>
-                  <Form.Item
-                    name="model_id"
-                    label="模型 ID"
-                    rules={[{ required: true, message: '请输入模型 ID' }]}
-                  >
-                    <Input placeholder="如: claude-opus-4" />
-                  </Form.Item>
-                  <Form.Item name="model_name" label="模型名称">
-                    <Input placeholder="如: Claude Opus 4" />
-                  </Form.Item>
-                </>
-              ) : null
-            }
-          </Form.Item>
-
-          <Form.Item name="max_tokens" label="Max Tokens" initialValue={4096}>
-            <Input type="number" />
-          </Form.Item>
-
-          <Form.Item name="temperature" label="Temperature" initialValue={0.7}>
-            <Input type="number" step={0.1} min={0} max={2} />
-          </Form.Item>
-
-          <Form.Item name="max_iterations" label="Max Iterations" initialValue={15}>
-            <Input type="number" />
-          </Form.Item>
-
-          <Form.Item name="is_default" valuePropName="checked" initialValue={false}>
-            <Switch checkedChildren="默认" unCheckedChildren="非默认" />
-          </Form.Item>
-
-          <Divider>
-            <ThunderboltOutlined /> 技能配置
-          </Divider>
-
-          <Form.Item
-            name="skills_list"
-            label="可用技能"
-            initialValue={[]}
-            extra="选择该 Agent 可以使用的技能"
-          >
-            <Select
-              mode="multiple"
-              placeholder="选择技能"
-              options={AVAILABLE_SKILLS}
-              style={{ width: '100%' }}
-              allowClear
-            />
-          </Form.Item>
-
-          <Divider>
-            <ToolOutlined /> 工具配置
-          </Divider>
-
-          <Form.Item
-            name="tools_list"
-            label="可用工具"
-            initialValue={[]}
-            extra="选择该 Agent 可以使用的工具"
-          >
-            <Select
-              mode="multiple"
-              placeholder="选择工具"
-              options={AVAILABLE_TOOLS}
-              style={{ width: '100%' }}
-              allowClear
-            />
-          </Form.Item>
-
-          <Collapse
-            ghost
+          <Tabs
+            defaultActiveKey="basic"
+            style={{ height: '100%' }}
+            tabBarStyle={{ padding: '0 24px', margin: 0 }}
             items={[
               {
-                key: '1',
-                label: <span><FileTextOutlined /> 配置文件编辑</span>,
+                key: 'basic',
+                label: '基础信息',
                 children: (
-                  <>
+                  <div style={{ padding: '0 24px 24px', overflow: 'auto' }}>
+                    <Form.Item
+                      name="name"
+                      label="名称"
+                      rules={[{ required: true, message: '请输入名称' }]}
+                    >
+                      <Input placeholder="Agent 名称" />
+                    </Form.Item>
+
+                    <Form.Item name="description" label="描述">
+                      <Input.TextArea rows={2} placeholder="Agent 描述" />
+                    </Form.Item>
+
+                    <Divider style={{ margin: '12px 0' }}>
+                      <ThunderboltOutlined /> 模型配置
+                    </Divider>
+
+                    <Form.Item
+                      name="model_selection_mode"
+                      label="模型选择模式"
+                      initialValue="auto"
+                    >
+                      <Select>
+                        <Select.Option value="auto">自动选择</Select.Option>
+                        <Select.Option value="specific">指定模型</Select.Option>
+                      </Select>
+                    </Form.Item>
+
+                    <Form.Item
+                      noStyle
+                      shouldUpdate={(prev, curr) =>
+                        prev.model_selection_mode !== curr.model_selection_mode
+                      }
+                    >
+                      {({ getFieldValue }) =>
+                        getFieldValue('model_selection_mode') === 'specific' ? (
+                          <Space direction="vertical" style={{ width: '100%' }}>
+                            <Form.Item
+                              name="model_id"
+                              label="模型 ID"
+                              rules={[{ required: true, message: '请输入模型 ID' }]}
+                            >
+                              <Input placeholder="如: claude-opus-4" />
+                            </Form.Item>
+                            <Form.Item name="model_name" label="模型名称">
+                              <Input placeholder="如: Claude Opus 4" />
+                            </Form.Item>
+                          </Space>
+                        ) : null
+                      }
+                    </Form.Item>
+
+                    <Space direction="horizontal" style={{ display: 'flex' }}>
+                      <Form.Item name="max_tokens" label="Max Tokens" initialValue={4096} style={{ width: 120 }}>
+                        <Input type="number" />
+                      </Form.Item>
+                      <Form.Item name="temperature" label="Temperature" initialValue={0.7} style={{ width: 120 }}>
+                        <Input type="number" step={0.1} min={0} max={2} />
+                      </Form.Item>
+                      <Form.Item name="max_iterations" label="Max Iterations" initialValue={15} style={{ width: 120 }}>
+                        <Input type="number" />
+                      </Form.Item>
+                    </Space>
+
+                    <Form.Item name="is_default" valuePropName="checked" initialValue={false}>
+                      <Switch checkedChildren="默认" unCheckedChildren="非默认" />
+                    </Form.Item>
+                  </div>
+                ),
+              },
+              {
+                key: 'skills',
+                label: '技能工具',
+                children: (
+                  <div style={{ padding: '0 24px 24px', overflow: 'auto' }}>
+                    <Divider style={{ margin: '12px 0' }}>
+                      <ThunderboltOutlined /> 技能配置
+                    </Divider>
+
+                    <Form.Item
+                      name="skills_list"
+                      label="可用技能"
+                      initialValue={[]}
+                      extra="选择该 Agent 可以使用的技能"
+                    >
+                      <Select
+                        mode="multiple"
+                        placeholder="选择技能"
+                        options={AVAILABLE_SKILLS}
+                        style={{ width: '100%' }}
+                        allowClear
+                      />
+                    </Form.Item>
+
+                    <Divider style={{ margin: '12px 0' }}>
+                      <ToolOutlined /> 工具配置
+                    </Divider>
+
+                    <Form.Item
+                      name="tools_list"
+                      label="可用工具"
+                      initialValue={[]}
+                      extra="选择该 Agent 可以使用的工具"
+                    >
+                      <Select
+                        mode="multiple"
+                        placeholder="选择工具"
+                        options={availableTools}
+                        style={{ width: '100%' }}
+                        allowClear
+                      />
+                    </Form.Item>
+
+                    <Divider style={{ margin: '12px 0' }}>
+                      <ApiOutlined /> MCP Server 绑定
+                    </Divider>
+
+                    <div style={{ marginBottom: 16 }}>
+                      <Space.Compact style={{ width: '100%' }}>
+                        <Form
+                          form={mcpForm}
+                          onFinish={handleCreateMcpBinding}
+                          style={{ flex: 1, display: 'flex', gap: 8 }}
+                        >
+                          <Form.Item
+                            name="mcp_server_id"
+                            rules={[{ required: true, message: '请选择 MCP Server' }]}
+                            style={{ flex: 1, marginBottom: 0 }}
+                          >
+                            <Select
+                              placeholder="选择 MCP Server"
+                              options={mcpServers
+                                .filter(s => !mcpBindings.some(b => b.mcp_server_id === s.id))
+                                .map(s => ({ value: s.id, label: `${s.name} (${s.code})` }))}
+                            />
+                          </Form.Item>
+                          <Button type="primary" onClick={() => mcpForm.submit()}>
+                            绑定
+                          </Button>
+                        </Form>
+                      </Space.Compact>
+                    </div>
+
+                    <Table
+                      dataSource={mcpBindings}
+                      rowKey="id"
+                      loading={mcpLoading}
+                      size="small"
+                      pagination={false}
+                      scroll={{ x: 400 }}
+                      columns={[
+                        {
+                          title: 'MCP Server',
+                          render: (_, record: AgentMCPBinding) => (
+                            <span>{record.mcp_server?.name || record.mcp_server_id}</span>
+                          ),
+                        },
+                        {
+                          title: '状态',
+                          width: 80,
+                          render: (_, record: AgentMCPBinding) => (
+                            <Tag color={record.is_active ? 'success' : 'default'}>
+                              {record.is_active ? '启用' : '禁用'}
+                            </Tag>
+                          ),
+                        },
+                        {
+                          title: '自动加载',
+                          width: 80,
+                          render: (_, record: AgentMCPBinding) => (
+                            <Switch
+                              size="small"
+                              checked={record.auto_load}
+                              checkedChildren="自"
+                              unCheckedChildren="懒"
+                              onChange={() => handleToggleAutoLoad(record)}
+                            />
+                          ),
+                        },
+                        {
+                          title: '操作',
+                          width: 120,
+                          render: (_, record: AgentMCPBinding) => (
+                            <Space size="small">
+                              <Switch
+                                size="small"
+                                checked={record.is_active}
+                                onChange={() => handleToggleMcpBinding(record)}
+                              />
+                              <Popconfirm
+                                title="确认解绑"
+                                description="确定要解绑这个 MCP Server 吗？"
+                                onConfirm={() => handleDeleteMcpBinding(record.id)}
+                              >
+                                <Button type="text" danger size="small">
+                                  解绑
+                                </Button>
+                              </Popconfirm>
+                            </Space>
+                          ),
+                        },
+                      ]}
+                    />
+                  </div>
+                ),
+              },
+              {
+                key: 'personality',
+                label: '人格属性',
+                children: (
+                  <div style={{ padding: '0 24px 24px', overflow: 'auto' }}>
+                    <Divider style={{ margin: '12px 0' }}>
+                      <FileTextOutlined /> 配置文件编辑
+                    </Divider>
+
                     <Form.Item name="identity_content" label="IDENTITY.md">
                       <Input.TextArea
-                        rows={6}
+                        rows={5}
                         placeholder="Agent 身份定义..."
                         style={{ fontFamily: 'monospace', fontSize: '12px' }}
                       />
@@ -597,152 +712,44 @@ const Agents: React.FC = () => {
 
                     <Form.Item name="soul_content" label="SOUL.md">
                       <Input.TextArea
-                        rows={6}
+                        rows={5}
                         placeholder="Agent 灵魂/核心定义..."
                         style={{ fontFamily: 'monospace', fontSize: '12px' }}
                       />
                     </Form.Item>
 
-                    <Form.Item name="agents_content" label="AGENTS.md">
-                      <Input.TextArea
-                        rows={6}
-                        placeholder="可用 Agents 定义..."
-                        style={{ fontFamily: 'monospace', fontSize: '12px' }}
-                      />
-                    </Form.Item>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <Form.Item name="agents_content" label="AGENTS.md">
+                        <Input.TextArea
+                          rows={4}
+                          placeholder="可用 Agents 定义..."
+                          style={{ fontFamily: 'monospace', fontSize: '12px' }}
+                        />
+                      </Form.Item>
 
-                    <Form.Item name="tools_content" label="TOOLS.md">
-                      <Input.TextArea
-                        rows={6}
-                        placeholder="可用工具定义..."
-                        style={{ fontFamily: 'monospace', fontSize: '12px' }}
-                      />
-                    </Form.Item>
+                      <Form.Item name="tools_content" label="TOOLS.md">
+                        <Input.TextArea
+                          rows={4}
+                          placeholder="可用工具定义..."
+                          style={{ fontFamily: 'monospace', fontSize: '12px' }}
+                        />
+                      </Form.Item>
+                    </div>
 
                     <Form.Item name="user_content" label="USER.md">
                       <Input.TextArea
-                        rows={6}
+                        rows={4}
                         placeholder="用户信息/上下文..."
                         style={{ fontFamily: 'monospace', fontSize: '12px' }}
                       />
                     </Form.Item>
-                  </>
+                  </div>
                 ),
               },
             ]}
           />
         </Form>
-      </Modal>
-
-      {/* MCP 绑定配置 Modal */}
-      <Modal
-        title={`配置 MCP - ${mcpBindingAgent?.name || ''}`}
-        open={mcpModalVisible}
-        onCancel={() => {
-          setMcpModalVisible(false);
-          setMcpBindingAgent(null);
-          setMcpBindings([]);
-          setMcpServers([]);
-          mcpForm.resetFields();
-        }}
-        footer={null}
-        width={screens.xs ? '100%' : 600}
-      >
-        <div style={{ marginBottom: 16 }}>
-          <Title level={5}>添加 MCP Server 绑定</Title>
-          <Form
-            form={mcpForm}
-            layout="inline"
-            onFinish={handleCreateMcpBinding}
-            style={{ display: 'flex', gap: 8 }}
-          >
-            <Form.Item
-              name="mcp_server_id"
-              rules={[{ required: true, message: '请选择 MCP Server' }]}
-              style={{ flex: 1, marginBottom: 0 }}
-            >
-              <Select
-                placeholder="选择 MCP Server"
-                options={mcpServers
-                  .filter(s => !mcpBindings.some(b => b.mcp_server_id === s.id))
-                  .map(s => ({ value: s.id, label: `${s.name} (${s.code})` }))}
-                style={{ width: '100%' }}
-              />
-            </Form.Item>
-            <Button type="primary" onClick={() => mcpForm.submit()}>
-              绑定
-            </Button>
-          </Form>
-        </div>
-
-        <Divider />
-
-        <div>
-          <Title level={5}>已绑定的 MCP Servers</Title>
-          <Table
-            dataSource={mcpBindings}
-            rowKey="id"
-            loading={mcpLoading}
-            size="small"
-            pagination={false}
-            columns={[
-              {
-                title: 'MCP Server',
-                render: (_, record: AgentMCPBinding) => (
-                  <span>{record.mcp_server?.name || record.mcp_server_id}</span>
-                ),
-              },
-              {
-                title: '状态',
-                width: 80,
-                render: (_, record: AgentMCPBinding) => (
-                  <Tag color={record.is_active ? 'success' : 'default'}>
-                    {record.is_active ? '启用' : '禁用'}
-                  </Tag>
-                ),
-              },
-              {
-                title: '自动加载',
-                width: 100,
-                render: (_, record: AgentMCPBinding) => (
-                  <Tag color={record.auto_load ? 'blue' : 'default'}>
-                    {record.auto_load ? '是' : '否'}
-                  </Tag>
-                ),
-              },
-              {
-                title: '操作',
-                width: 200,
-                render: (_, record: AgentMCPBinding) => (
-                  <Space size="small">
-                    <Switch
-                      size="small"
-                      checked={record.is_active}
-                      onChange={() => handleToggleMcpBinding(record)}
-                    />
-                    <Switch
-                      size="small"
-                      checked={record.auto_load}
-                      checkedChildren="自加载"
-                      unCheckedChildren="懒加载"
-                      onChange={() => handleToggleAutoLoad(record)}
-                    />
-                    <Popconfirm
-                      title="确认解绑"
-                      description="确定要解绑这个 MCP Server 吗？"
-                      onConfirm={() => handleDeleteMcpBinding(record.id)}
-                    >
-                      <Button type="text" danger size="small">
-                        解绑
-                      </Button>
-                    </Popconfirm>
-                  </Space>
-                ),
-              },
-            ]}
-          />
-        </div>
-      </Modal>
+      </Drawer>
     </div>
   );
 };
